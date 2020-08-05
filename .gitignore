@@ -1,0 +1,5 @@
+# Files and directories to exclude from Git repository
+*~
+__pycache__/
+*.py[cod]
+*$py.class
