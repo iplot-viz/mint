@@ -238,12 +238,12 @@ class App(QDialog):
                 break
             if qplot=="New":
                 print("new 11")
-                self.mycanvas.appendVariables(qvar,pulses,0,0,1,qtrans,self.ualias)
+                self.mycanvas.appendSignals(qvar,pulses,0,0,1,qtrans,self.ualias)
                 self.mycanvas.setAppearanceByIdx(j,qvar,'symbol',"+")
                 self.mycanvas.setPlotPpByIdx(j,'title','plot title AA')
                 j=j+1
             else:
-                self.mycanvas.appendVariables(qvar,pulses,0,0,0,qtrans,self.ualias)
+                self.mycanvas.appendSignals(qvar,pulses,0,0,0,qtrans,self.ualias)
         return j
     def writeSigStatus(self):
         return self.mycanvas.getSignalStatuses()
@@ -265,7 +265,7 @@ class App(QDialog):
         #self.mycanvas.plot(udahost,varname,pulsenb,0,0,self.funcdict[myproc])
         #self.mycanvas.setTitle("Example of data from DIIID")
         #self.mycanvas.setAppearanceByIdx(self,0,signame,propn,propv)
-        self.mycanvas.FetchAndPlotD()
+        self.mycanvas.fetchAndPlotD()
         self.mycanvas.setTitle("Example of data from DIIID")
         #self.mycanvas.show()
         #if self.mycanvas.errcode==-1:

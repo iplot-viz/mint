@@ -4,7 +4,6 @@ from matplotlib.backends.qt_compat import QtCore, QtWidgets, is_pyqt5
 from iterplot.canvas import MyCanvasFactory as ipc
 from iterplot.windows import plotQtWindow  as pw
 
-from matplotlib.backends.qt_compat import QtCore, QtWidgets, is_pyqt5
 
 
 
@@ -24,13 +23,13 @@ def plotData(host,varname,pulsenb,nbp=1000):
     mycanvas.initLayout(1,7,5,True)
     mycanvas.addNewDS(uproto,host,uport,ualias)
     ###varname,pulsenb,startTime,endTime,isnew,procname,data source name
-    mycanvas.appendVariables(varname,pulses,0,0,1,None,ualias)
+    mycanvas.appendSignals(varname,pulses,0,0,1,None,ualias)
     mycanvas.setAppearanceByIdx(0,varname,'symbol',"+")
     mycanvas.setPlotPpByIdx(0,'title','data from DIIID')
     
 
     mycanvas.setTitle("Example of using ITER data plot")
-    mycanvas.FetchAndPlotD()
+    mycanvas.fetchAndPlotD()
     #mycanvas.show()
     #mycanvas.activateWindow()
     #mycanvas.raise_()
