@@ -1,7 +1,0 @@
-There are 2 applications
-iterplotExample embeds in Qt single context the iter plot lib
-you can invoke it as follow <uda host> <variable name> <pulse nb>
-python iterplotExample.py 10.153.0.204 MAG_G1_TX1/VFIVOLT 175147
-
-pyqt5MatplotLibTable is a proto for the iterplot lib focused is on 1-D, to be called with no arguments
-
