@@ -65,7 +65,6 @@ class UDAVariablesTable(QWidget):
             if len(stack_val) > 2 and stack_val[2]:
                 stack_num = int(stack_val[2])
 
-            print("VALS",col_num,row_num,stack_num)
             return signals, int(col_num), int(row_num), int(stack_num)
         else:
             return None, 0, 0, 0
