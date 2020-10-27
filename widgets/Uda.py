@@ -45,7 +45,6 @@ class UDAVariablesTable(QWidget):
 
     def _create_signals(self, row, time_model):
         if row and row[0]:
-            # signal = UDAPulse(da, "MAG_G5_TX1/IP", int(time_model[0]))
             if 'pulsenb' in time_model:
                 signals = [UDAPulse(self.data_access, row[0], int(e)) for e in time_model['pulsenb']]
             else:
