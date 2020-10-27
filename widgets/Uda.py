@@ -44,15 +44,29 @@ class UDAVariablesTable(QWidget):
         context_menu.popup(event.globalPos())
 
     def _create_signals(self, row, time_model):
-        if row and row[0] and len(row[1].split('.')) == 3:
+        if row and row[0]:
             # signal = UDAPulse(da, "MAG_G5_TX1/IP", int(time_model[0]))
             if 'pulsenb' in time_model:
                 signals = [UDAPulse(self.data_access, row[0], int(e)) for e in time_model['pulsenb']]
             else:
                 signals = [UDAPulse(self.data_access, row[0], pulsenb=None, **time_model)]
 
-            col_num, row_num, stack = row[1].split('.')
-            return signals, int(col_num), int(row_num), int(stack)
+            stack_val = row[1].split('.')
+            col_num = 1
+            row_num = 1
+            stack_num = 1
+
+            if len(stack_val) > 0 and stack_val[0]:
+                col_num = int(stack_val[0])
+
+            if len(stack_val) > 1 and stack_val[1]:
+                row_num = int(stack_val[1])
+
+            if len(stack_val) > 2 and stack_val[2]:
+                stack_num = int(stack_val[2])
+
+            print("VALS",col_num,row_num,stack_num)
+            return signals, int(col_num), int(row_num), int(stack_num)
         else:
             return None, 0, 0, 0
 
