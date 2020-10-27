@@ -1,10 +1,11 @@
 import typing
 from functools import partial
 
+import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtWidgets import QAction, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QRadioButton, \
-    QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QAction, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, \
+    QRadioButton, QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QVBoxLayout, QWidget
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
@@ -22,19 +23,21 @@ class UDAVariablesTable(QWidget):
 
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
-        self.table = QTableWidget()
-        self.table.setRowCount(10)
-        self.table.setColumnCount(5)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.horizontalHeader().setSectionsMovable(True)
-
         self.table_model = PlotsModel(header, initial_model=model)
 
-        table_view = QTableView()
-        table_view.setModel(self.table_model)
+        uda_table_view = QTableView()
+        uda_table_view.setModel(self.table_model)
+
+        uda_toolbar = UDAVairablesToolbar(table_view=uda_table_view)
+
+        uda_tab = QWidget()
+        uda_tab.setLayout(QVBoxLayout())
+        uda_tab.layout().setContentsMargins(QMargins())
+        uda_tab.layout().addWidget(uda_toolbar)
+        uda_tab.layout().addWidget(uda_table_view)
 
         tabwidget = QTabWidget()
-        tabwidget.addTab(table_view, "Data")
+        tabwidget.addTab(uda_tab, "Data")
 
         self.layout().addWidget(tabwidget)
 
@@ -131,6 +134,42 @@ class PlotsModel(QAbstractTableModel):
     def _add_empty_row(self):
         self.model.append(["" for e in range(self.columns)])
         self.layoutChanged.emit()
+
+    def setModel(self, model):
+        self.removeRows(0, self.rowCount(QModelIndex()))
+        self.model = model
+        self._add_empty_row()
+
+
+class UDAVairablesToolbar(QWidget):
+
+    def __init__(self, parent=None, table_view=None):
+        super().__init__(parent)
+        self.table_view = table_view
+
+        self.setLayout(QHBoxLayout())
+        self.layout().setContentsMargins(QMargins())
+
+        tb = QToolBar()
+        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV",self.do_import)
+        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DialogSaveButton")), "Save CSV", self.do_export)
+
+        self.layout().addWidget(tb)
+
+    def do_export(self):
+        file = QFileDialog.getSaveFileName(self, "Save CSV")
+        if file and file[0]:
+            df = pandas.DataFrame(self.table_view.model().model[:-1])
+            df.to_csv(file[0], header=self.table_view.model().column_names, index=False)
+
+    def do_import(self):
+        file = QFileDialog.getOpenFileName(self, "Open CSV")
+        if file and file[0]:
+            df = pandas.read_csv(file[0])
+            print(df.values.tolist())
+            if not df.empty:
+                self.table_view.model().setModel(df.values.tolist())
+
 
 
 class UDARangeSelector(QWidget):
