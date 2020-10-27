@@ -40,9 +40,16 @@ if __name__ == '__main__':
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-21T14:30:52.195Z", "2020-10-21T14:50:55.195Z"]}
     }
 
+    pan_model2 = {
+        "table": [
+            ["UTIL-SYSM-COM-4503-UT:SRV3601-NRBPS", "1.1.1"]
+        ],
+        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-14T14:30:52.195Z", "2020-10-21T14:50:55.195Z"]}
+    }
+
     empty_model = {}
 
-    model = pan_model
+    model = pan_model2
 
     variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = UDARangeSelector(model=model.get("range"))
