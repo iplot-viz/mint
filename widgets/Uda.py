@@ -4,8 +4,10 @@ from functools import partial
 import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QAction, QActionGroup, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, \
     QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QVBoxLayout, QWidget
+from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
@@ -85,7 +87,8 @@ class UDAVariablesTable(QWidget):
                 for row in range(max(rows.keys())):
                     plot = None
                     if row+1 in rows.keys():
-                        plot = self.plot_class()
+                        plot = self.plot_class(axes=[LinearAxis(is_date=True),LinearAxis()])
+
                         for stack, signals in rows[row+1].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -383,5 +386,31 @@ class MainMenu(QMenuBar):
 
         file_menu = self.addMenu("File")
         help_menu = self.addMenu("Help")
+
+        about_action = QAction("About", self)
+        about_action.setShortcuts(QKeySequence.New)
+        about_action.setStatusTip("About this app")
+
+        lr_group = QActionGroup(self)
+        lr_group.setExclusive(True)
+
+
+        left_action = QAction("Left",self)
+        left_action.setChecked(False)
+        left_action.setCheckable(True)
+        left_action.setActionGroup(lr_group)
+
+        right_action = QAction("Right", self)
+        right_action.setCheckable(True)
+        right_action.setChecked(True)
+        right_action.setActionGroup(lr_group)
+
+        # lr_group.addAction(left_action)
+        # lr_group.addAction(right_action)
+
+        help_menu.addAction(left_action)
+        help_menu.addAction(right_action)
+        help_menu.addSection("Testsection")
+        help_menu.addAction(about_action)
 
 
