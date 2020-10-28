@@ -4,6 +4,8 @@
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import os
 import sys
+import time
+from threading import Thread
 
 from PyQt5.QtCore import QMargins, Qt
 from PyQt5.QtGui import QIcon
@@ -49,7 +51,7 @@ if __name__ == '__main__':
 
     empty_model = {}
 
-    model = pan_model2
+    model = stack_model
 
     variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = UDARangeSelector(model=model.get("range"))

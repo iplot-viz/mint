@@ -4,8 +4,8 @@ from functools import partial
 import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtWidgets import QAction, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, \
-    QRadioButton, QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QAction, QActionGroup, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, \
+    QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QVBoxLayout, QWidget
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
@@ -291,6 +291,7 @@ class UDARangeSelector(QWidget):
             return {"relative": options[relative_time.currentIndex()][0]}
 
         return UDARangeSelector.RELATIVE_TIME, "Relative", form, ret,
+
 
 #TODO: Crosshair should be separated as a checkbox, see: IDV-28
 class PlotToolbar(QGroupBox):
