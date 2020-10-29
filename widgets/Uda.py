@@ -49,12 +49,14 @@ class UDAVariablesTable(QWidget):
             selected_rows = [e.row() for e in self.uda_table_view.selectionModel().selectedIndexes()]
             print("Removing row!", selected_rows)
             for row in selected_rows:
+                # self.table_model.model.remove(self.table_model.model[row])
+                # self.table_model.model.pop()
                 self.table_model.removeRow(row)
+                print("MODEL",self.table_model.model)
 
-        delete_action = QAction("Remove",self)
+
 
         context_menu = QMenu(self)
-        # context_menu.addAction(delete_action)
         context_menu.addAction(self.style().standardIcon(getattr(QStyle, "SP_TrashIcon")), "Remove", remove_row)
         context_menu.popup(event.globalPos())
 
@@ -144,11 +146,22 @@ class PlotsModel(QAbstractTableModel):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self.column_names[section] if section < len(self.column_names) else "N/A"
 
+
+
     def _add_empty_row(self):
         self.model.append(["" for e in range(self.columns)])
         self.layoutChanged.emit()
 
     """Pad each array row with empty strings to self.columns length """
+
+    def removeRow(self, row: int, parent=QModelIndex()) -> bool:
+        if row < len(self.model):
+            self.model.remove(self.model[row])
+            self.layoutChanged.emit()
+            return True
+        else:
+            return False
+
     def _expandModel(self, source):
         if source is not None:
             for row in source:
