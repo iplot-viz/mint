@@ -47,14 +47,8 @@ class UDAVariablesTable(QWidget):
 
         def remove_row():
             selected_rows = [e.row() for e in self.uda_table_view.selectionModel().selectedIndexes()]
-            print("Removing row!", selected_rows)
-            for row in selected_rows:
-                # self.table_model.model.remove(self.table_model.model[row])
-                # self.table_model.model.pop()
+            for row in reversed(sorted(selected_rows)):
                 self.table_model.removeRow(row)
-                print("MODEL",self.table_model.model)
-
-
 
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(getattr(QStyle, "SP_TrashIcon")), "Remove", remove_row)
@@ -132,7 +126,6 @@ class PlotsModel(QAbstractTableModel):
         if role == Qt.EditRole:
             self.model[index.row()][index.column()] = value
 
-            print(self.model)
             if index.row() == len(self.model) - 1:
                 self._add_empty_row()
 
@@ -200,7 +193,6 @@ class UDAVairablesToolbar(QWidget):
         file = QFileDialog.getOpenFileName(self, "Open CSV")
         if file and file[0]:
             df = pandas.read_csv(file[0])
-            print(df.values.tolist())
             if not df.empty:
                 self.table_view.model().setModel(df.values.tolist())
 
