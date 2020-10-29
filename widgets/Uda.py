@@ -110,9 +110,9 @@ class PlotsModel(QAbstractTableModel):
 
     def __init__(self, column_names, initial_model=[]):
         super().__init__()
-        self.model = initial_model or []
         self.column_names = column_names
         self.columns = len(self.column_names)
+        self.model = self._expandModel(initial_model or [])
         self._add_empty_row()
 
     def columnCount(self, parent):
@@ -148,9 +148,17 @@ class PlotsModel(QAbstractTableModel):
         self.model.append(["" for e in range(self.columns)])
         self.layoutChanged.emit()
 
+    """Pad each array row with empty strings to self.columns length """
+    def _expandModel(self, source):
+        if source is not None:
+            for row in source:
+                if len(row) < self.columns:
+                    row += [''] * (self.columns - len(row))
+        return source
+
     def setModel(self, model):
         self.removeRows(0, self.rowCount(QModelIndex()))
-        self.model = model
+        self.model = self._expandModel(model)
         self._add_empty_row()
 
 
