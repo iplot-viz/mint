@@ -27,16 +27,16 @@ class UDAVariablesTable(QWidget):
         self.layout().setContentsMargins(QMargins())
         self.table_model = PlotsModel(header, initial_model=model)
 
-        uda_table_view = QTableView()
-        uda_table_view.setModel(self.table_model)
+        self.uda_table_view = QTableView()
+        self.uda_table_view.setModel(self.table_model)
 
-        uda_toolbar = UDAVairablesToolbar(table_view=uda_table_view)
+        uda_toolbar = UDAVairablesToolbar(table_view=self.uda_table_view)
 
         uda_tab = QWidget()
         uda_tab.setLayout(QVBoxLayout())
         uda_tab.layout().setContentsMargins(QMargins())
         uda_tab.layout().addWidget(uda_toolbar)
-        uda_tab.layout().addWidget(uda_table_view)
+        uda_tab.layout().addWidget(self.uda_table_view)
 
         tabwidget = QTabWidget()
         tabwidget.addTab(uda_tab, "Data")
@@ -44,8 +44,18 @@ class UDAVariablesTable(QWidget):
         self.layout().addWidget(tabwidget)
 
     def contextMenuEvent(self, event: QtGui.QContextMenuEvent) -> None:
+
+        def remove_row():
+            selected_rows = [e.row() for e in self.uda_table_view.selectionModel().selectedIndexes()]
+            print("Removing row!", selected_rows)
+            for row in selected_rows:
+                self.table_model.removeRow(row)
+
+        delete_action = QAction("Remove",self)
+
         context_menu = QMenu(self)
-        context_menu.addAction(QAction("Properties", context_menu))
+        # context_menu.addAction(delete_action)
+        context_menu.addAction(self.style().standardIcon(getattr(QStyle, "SP_TrashIcon")), "Remove", remove_row)
         context_menu.popup(event.globalPos())
 
     def _create_signals(self, row, time_model):
