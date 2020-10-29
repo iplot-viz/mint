@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    header = ["Variable", "Stack"]
+    header = ["Variable", "Stack", "Row span", "Col span"]
 
     stack_model = {
         "table": [
@@ -72,8 +72,8 @@ if __name__ == '__main__':
     left_column.layout().addWidget(variables_table)
     left_column.layout().addWidget(draw_button)
 
-    right_column = MainCanvas(canvas_class=QtMatplotlibCanvas2)
-    # right_column = MainCanvas(canvas_class=QtGnuplotMultiwidgetCanvas)
+    right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2())
+    # right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas())
 
     central_widget = QSplitter()
     central_widget.setContentsMargins(10, 0, 10, 10)

@@ -347,10 +347,10 @@ class PlotToolbar(QGroupBox):
 
 class MainCanvas(QWidget):
 
-    def __init__(self, detached=False, attach_parent=None, canvas_class=QtGnuplotMultiwidgetCanvas):
+    def __init__(self, detached=False, attach_parent=None, plot_canvas=None):
         super().__init__()
         self.setLayout(QVBoxLayout())
-        self.plot_canvas = canvas_class()
+        self.plot_canvas = plot_canvas
         self.toolbar = PlotToolbar()
         self.layout().addWidget(self.toolbar)
         self.layout().addWidget(self.plot_canvas)
