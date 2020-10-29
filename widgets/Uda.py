@@ -124,7 +124,7 @@ class PlotsModel(QAbstractTableModel):
         return len(self.model)
 
     def data(self, index, role):
-        if role == Qt.DisplayRole:
+        if role == Qt.DisplayRole or role == Qt.EditRole:
             return self.model[index.row()][index.column()]
         return QVariant()
 
