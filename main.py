@@ -72,7 +72,7 @@ if __name__ == '__main__':
     left_column.layout().addWidget(variables_table)
     left_column.layout().addWidget(draw_button)
 
-    right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2())
+    right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=False))
     # right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas())
 
     central_widget = QSplitter()
