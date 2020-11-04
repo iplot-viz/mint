@@ -61,7 +61,7 @@ class UDAVariablesTable(QWidget):
             else:
                 signals = [UDAPulse(self.data_access, row[0], pulsenb=None, **time_model)]
 
-            stack_val = row[1].split('.')
+            stack_val = str(row[1]).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
