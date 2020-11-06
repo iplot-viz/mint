@@ -57,7 +57,7 @@ class UDAVariablesTable(QWidget):
     def _create_signals(self, row, time_model):
         if row and row[0]:
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(self.data_access, row[0], int(e)) for e in time_model['pulsenb']]
+                signals = [UDAPulse(self.data_access, row[0], e) for e in time_model['pulsenb']]
             else:
                 signals = [UDAPulse(self.data_access, row[0], pulsenb=None, **time_model)]
 
@@ -266,7 +266,7 @@ class UDARangeSelector(QWidget):
         form.layout().addRow(QLabel("Pulse number"), pulse_number)
 
         def ret():
-            return {"pulsenb": [int(e) for e in model.stringList()[0].split(',')]}
+            return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
 
         return UDARangeSelector.PULSE_NUMBER, "Pulse number", form, ret,
 

@@ -21,7 +21,13 @@ from datetime import timedelta,datetime
 if __name__ == '__main__':
 
     da = DataAccess()
-    da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
+    ###we load the data source conf files
+    ret=da.loadConfig()
+    if ret<1:
+        print ("no data sources found, exiting")
+        sys.exit(-1)
+
+    #da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
     canvasImpl="MATPLOTLIB"
     if len(sys.argv) > 1:
         if sys.argv[1] == 'MATPLOTLIB' or sys.argv[1] == 'GNUPLOT':
