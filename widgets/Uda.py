@@ -340,8 +340,6 @@ class PlotToolbar(QToolBar):
         self.layout().setContentsMargins(QMargins())
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
 
-        # toolbar = QToolBar()
-
         def selectTool(selected):
             self.toolSelected.emit(selected)
 
@@ -375,18 +373,11 @@ class MainCanvas(QMainWindow):
         self.plot_canvas = plot_canvas
         self.toolbar = PlotToolbar()
 
-        # self.setLayout(QVBoxLayout())
-        # self.layout().addWidget(self.toolbar)
-        # self.layout().addWidget(self.plot_canvas)
-        # self.layout().setContentsMargins(QMargins())
-
         self.addToolBar(self.toolbar)
         self.setCentralWidget(self.plot_canvas)
 
         self.detached = False
         self.attach_parent = attach_parent
-        # self.detached_window = QWidget(self.parent())
-        # self.detached_window.setLayout(QVBoxLayout())
         self.detached_window = QMainWindow()
         self.detached_window.setStatusBar(StatusBar())
         self.detached_window.layout().setContentsMargins(QMargins())
@@ -403,8 +394,6 @@ class MainCanvas(QMainWindow):
             else:
                 self.attach_parent = self.parent()
                 self.detached_window.setCentralWidget(self)
-                # self.setParent(self.detached_window)
-                # self.detached_window.layout().addWidget(self)
                 self.detached_window.show()
                 self.detached = True
 
