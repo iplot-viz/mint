@@ -9,18 +9,19 @@ from threading import Thread
 
 from PyQt5.QtCore import QMargins, Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QDockWidget, QHBoxLayout, QPushButton, QSizePolicy, QSplitter, QStyle, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QDockWidget, QHBoxLayout, QMainWindow, QPushButton, QSizePolicy, QSplitter, QStatusBar, QStyle, QVBoxLayout, QWidget
 from dataAccess import DataAccess
 from iplotlib.Signal import UDAPulse
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
+from udaAccess import udaAccess
 
-from widgets.Uda import MainCanvas, MainMenu, PlotToolbar, UDARangeSelector, UDAVariablesTable
+from widgets.Uda import MainCanvas, MainMenu, Multiwindow, PlotToolbar, StatusBar, UDARangeSelector, UDAVariablesTable
 
 
 if __name__ == '__main__':
 
-    da = DataAccess()
+    da = udaAccess()
     da.udahost = os.environ.get('UDA_HOST') or "10.153.0.204"
 
     app = QApplication(sys.argv)
@@ -29,8 +30,8 @@ if __name__ == '__main__':
 
     stack_model = {
         "table": [
-            ["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT01", "1.1.1"]
-            ,["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT02", "1.1.2"]
+            ["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT01", "1.1.1", "1", "2"]
+            ,["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT02", "2.2.2", "1", "1"]
         ],
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-09-18T08:00:00", "2020-09-30T08:00:00"]}
     }
@@ -76,15 +77,15 @@ if __name__ == '__main__':
     # right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas())
 
     central_widget = QSplitter()
-    central_widget.setContentsMargins(10, 0, 10, 10)
+    # central_widget.setContentsMargins(10, 0, 10, 10)
     central_widget.addWidget(left_column)
     central_widget.addWidget(right_column)
 
-    main_widget = QWidget()
-    main_widget.setLayout(QVBoxLayout())
-    main_widget.layout().setContentsMargins(QMargins())
-    main_widget.layout().addWidget(MainMenu())
-    main_widget.layout().addWidget(central_widget)
+
+    main_widget = Multiwindow()
+    main_widget.setMenuBar(MainMenu())
+    main_widget.setCentralWidget(central_widget)
+    main_widget.setStatusBar(StatusBar())
 
     main_widget.show()
     app.setWindowIcon(main_widget.style().standardIcon(getattr(QStyle, "SP_BrowserReload")))
