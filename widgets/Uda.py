@@ -383,6 +383,9 @@ class MainCanvas(QMainWindow):
         self.detached_window.layout().setContentsMargins(QMargins())
         self.detached_window.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
 
+        if hasattr(self.plot_canvas, "process_canvas_toolbar"):
+            self.plot_canvas.process_canvas_toolbar(self.toolbar)
+
         def tool_selected(tool):
             self.plot_canvas.set_mouse_mode(tool)
 
