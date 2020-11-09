@@ -68,8 +68,8 @@ class UDAVariablesTable(QWidget):
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
 
-            row_span = row[2] if len(row[2]) else 1
-            col_span = row[3] if len(row[3]) else 1
+            row_span = str(row[2]) if row[2] else 1
+            col_span = str(row[3]) if row[3] else 1
 
             return signals, int(col_num), int(row_num), int(stack_num), int(row_span), int(col_span)
         else:
@@ -83,22 +83,17 @@ class UDAVariablesTable(QWidget):
                 if colnum not in model:
                     model[colnum] = {}
                 if rownum not in model[colnum]:
-                    model[colnum][rownum] = [row_span,col_span,{}]
+                    model[colnum][rownum] = [row_span, col_span, {}]
                 else:
                     existing = model[colnum][rownum]
-                    print("EXISTING",existing)
                     existing[0] = row_span if row_span > existing[0] else existing[0]
                     existing[1] = col_span if col_span > existing[1] else existing[1]
-
 
                 if stacknum not in model[colnum][rownum][2]:
                     model[colnum][rownum][2][stacknum] = []
                 for signal in signals:
                     model[colnum][rownum][2][stacknum].append(signal)
 
-
-        print("MODEL", model)
-        # return
 
         if model.keys():
             total_cols = max(model.keys())
