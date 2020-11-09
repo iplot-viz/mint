@@ -207,7 +207,7 @@ class UDAVairablesToolbar(QWidget):
     def do_import(self):
         file = QFileDialog.getOpenFileName(self, "Open CSV")
         if file and file[0]:
-            df = pandas.read_csv(file[0])
+            df = pandas.read_csv(file[0], dtype=str, keep_default_na=False)
             if not df.empty:
                 self.table_view.model().set_model(df.values.tolist())
 
