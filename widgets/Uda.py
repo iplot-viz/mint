@@ -1,3 +1,4 @@
+import collections
 import typing
 from functools import partial
 
@@ -5,20 +6,21 @@ import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QAction, QActionGroup, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu, QMenuBar, \
-    QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, \
+    QMainWindow, QMenu, QMenuBar, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStatusBar, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QToolButton, QVBoxLayout, QWidget
 from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+from twisted.names.test.test_dns import RECORD_TYPES
 
 
 class UDAVariablesTable(QWidget):
 
     canvasChanged = pyqtSignal(Canvas)
 
-    def __init__(self, parent=None, data_access=None, model=[], header=[], plot_class=Plot2D):
+    def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=Plot2D):
         super().__init__(parent)
         self.data_access = data_access
         self.plot_class = plot_class
@@ -66,23 +68,37 @@ class UDAVariablesTable(QWidget):
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
 
-            return signals, int(col_num), int(row_num), int(stack_num)
+            row_span = row[2] if len(row[2]) else 1
+            col_span = row[3] if len(row[3]) else 1
+
+            return signals, int(col_num), int(row_num), int(stack_num), int(row_span), int(col_span)
         else:
-            return None, 0, 0, 0
+            return None, 0, 0, 0, 1, 1
 
     def to_canvas(self, time_model):
         model = {}
         for row in self.table_model.model:
-            signals, colnum, rownum, stacknum = self._create_signals(row, time_model)
+            signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
             if signals:
                 if colnum not in model:
                     model[colnum] = {}
                 if rownum not in model[colnum]:
-                    model[colnum][rownum] = {}
-                if stacknum not in model[colnum][rownum]:
-                    model[colnum][rownum][stacknum] = []
+                    model[colnum][rownum] = [row_span,col_span,{}]
+                else:
+                    existing = model[colnum][rownum]
+                    print("EXISTING",existing)
+                    existing[0] = row_span if row_span > existing[0] else existing[0]
+                    existing[1] = col_span if col_span > existing[1] else existing[1]
+
+
+                if stacknum not in model[colnum][rownum][2]:
+                    model[colnum][rownum][2][stacknum] = []
                 for signal in signals:
-                    model[colnum][rownum][stacknum].append(signal)
+                    model[colnum][rownum][2][stacknum].append(signal)
+
+
+        print("MODEL", model)
+        # return
 
         if model.keys():
             total_cols = max(model.keys())
@@ -93,22 +109,24 @@ class UDAVariablesTable(QWidget):
                 for row in range(max(rows.keys())):
                     plot = None
                     if row+1 in rows.keys():
-                        plot = self.plot_class(axes=[LinearAxis(is_date=True),LinearAxis()])
 
-                        for stack, signals in rows[row+1].items():
+                        plot_relative = False
+                        plot = self.plot_class(axes=[LinearAxis(is_date=plot_relative), LinearAxis()], row_span=rows[row+1][0], col_span=rows[row+1][1])
+
+                        for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
                     canvas.add_plot(plot, col=colnum-1)
-                    print("ADDED PLOT: " + str(plot))
             return canvas
+
 
 class PlotsModel(QAbstractTableModel):
 
-    def __init__(self, column_names, initial_model=[]):
+    def __init__(self, column_names, initial_model=None):
         super().__init__()
-        self.column_names = column_names
+        self.column_names = column_names or []
         self.columns = len(self.column_names)
-        self.model = self._expandModel(initial_model or [])
+        self.model = self._expand_model(initial_model or [])
         self._add_empty_row()
 
     def columnCount(self, parent):
@@ -139,13 +157,9 @@ class PlotsModel(QAbstractTableModel):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self.column_names[section] if section < len(self.column_names) else "N/A"
 
-
-
     def _add_empty_row(self):
         self.model.append(["" for e in range(self.columns)])
         self.layoutChanged.emit()
-
-    """Pad each array row with empty strings to self.columns length """
 
     def removeRow(self, row: int, parent=QModelIndex()) -> bool:
         if row < len(self.model):
@@ -155,16 +169,17 @@ class PlotsModel(QAbstractTableModel):
         else:
             return False
 
-    def _expandModel(self, source):
+    """Pad each array row with empty strings to self.columns length """
+    def _expand_model(self, source):
         if source is not None:
             for row in source:
                 if len(row) < self.columns:
                     row += [''] * (self.columns - len(row))
         return source
 
-    def setModel(self, model):
+    def set_model(self, model):
         self.removeRows(0, self.rowCount(QModelIndex()))
-        self.model = self._expandModel(model)
+        self.model = self._expand_model(model)
         self._add_empty_row()
 
 
@@ -178,7 +193,7 @@ class UDAVairablesToolbar(QWidget):
         self.layout().setContentsMargins(QMargins())
 
         tb = QToolBar()
-        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV",self.do_import)
+        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV", self.do_import)
         tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DialogSaveButton")), "Save CSV", self.do_export)
 
         self.layout().addWidget(tb)
@@ -194,8 +209,7 @@ class UDAVairablesToolbar(QWidget):
         if file and file[0]:
             df = pandas.read_csv(file[0])
             if not df.empty:
-                self.table_view.model().setModel(df.values.tolist())
-
+                self.table_view.model().set_model(df.values.tolist())
 
 
 class UDARangeSelector(QWidget):
@@ -206,8 +220,10 @@ class UDARangeSelector(QWidget):
 
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
 
-    def __init__(self, parent=None, model={}):
+    def __init__(self, parent=None, model=None):
         super().__init__(parent)
+        if model is None:
+            model = {}
         self.model = model or {}
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
@@ -270,7 +286,6 @@ class UDARangeSelector(QWidget):
 
         return UDARangeSelector.PULSE_NUMBER, "Pulse number", form, ret,
 
-
     def _createTimeRangeForm(self):
         form = QWidget()
         form.setLayout(QFormLayout())
@@ -319,61 +334,66 @@ class UDARangeSelector(QWidget):
         return UDARangeSelector.RELATIVE_TIME, "Relative", form, ret,
 
 
-#TODO: Crosshair should be separated as a checkbox, see: IDV-28
-class PlotToolbar(QGroupBox):
+class PlotToolbar(QToolBar):
 
     toolSelected = pyqtSignal(str)
     detachPressed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(QMargins())
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
 
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum))
-        self.setLayout(QHBoxLayout())
-
-        self.second_window = None
+        # toolbar = QToolBar()
 
         def selectTool(selected):
             self.toolSelected.emit(selected)
 
-        # crosshair_button = QCheckBox("Crosshair")
-        # self.layout().addWidget(crosshair_button)
+        tool_group = QActionGroup(self)
+        tool_group.setExclusive(True)
 
-        for e in [Canvas.MOUSE_MODE_CROSSHAIR, Canvas.MOUSE_MODE_PAN, Canvas.MOUSE_MODE_ZOOM]:
-            button = QRadioButton(e)
-            button.clicked.connect(partial(selectTool, e))
-            self.layout().addWidget(button)
+        for e in [Canvas.MOUSE_MODE_SELECT, Canvas.MOUSE_MODE_CROSSHAIR, Canvas.MOUSE_MODE_PAN, Canvas.MOUSE_MODE_ZOOM]:
+            tool_action = QAction(e[3:], self)
+            tool_action.setCheckable(True)
+            tool_action.setActionGroup(tool_group)
+            tool_action.triggered.connect(partial(selectTool, e))
+            self.addAction(tool_action)
 
-
-        detach_button = QPushButton("")
-        detach_button.setToolTip("Detach/Reattach this window from the main window")
-        detach_button.setIcon(detach_button.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
+        self.addSeparator()
 
         def detach():
             self.detachPressed.emit()
 
+        detach_action = QAction("Detach", self)
+        detach_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
+        detach_action.triggered.connect(detach)
+        self.addAction(detach_action)
 
-        detach_button.clicked.connect(detach)
-        self.layout().addWidget(detach_button)
+        # self?.layout().addWidget(toolbar)
 
 
-
-class MainCanvas(QWidget):
+class MainCanvas(QMainWindow):
 
     def __init__(self, detached=False, attach_parent=None, plot_canvas=None):
         super().__init__()
-        self.setLayout(QVBoxLayout())
         self.plot_canvas = plot_canvas
         self.toolbar = PlotToolbar()
-        self.layout().addWidget(self.toolbar)
-        self.layout().addWidget(self.plot_canvas)
-        self.layout().setContentsMargins(QMargins())
+
+        # self.setLayout(QVBoxLayout())
+        # self.layout().addWidget(self.toolbar)
+        # self.layout().addWidget(self.plot_canvas)
+        # self.layout().setContentsMargins(QMargins())
+
+        self.addToolBar(self.toolbar)
+        self.setCentralWidget(self.plot_canvas)
 
         self.detached = False
         self.attach_parent = attach_parent
-        self.detached_window = QWidget()
-        # self.detached_window.setStyleSheet("border: 1px solid blue")
-        self.detached_window.setLayout(QVBoxLayout())
+        # self.detached_window = QWidget(self.parent())
+        # self.detached_window.setLayout(QVBoxLayout())
+        self.detached_window = QMainWindow()
+        self.detached_window.setStatusBar(StatusBar())
         self.detached_window.layout().setContentsMargins(QMargins())
         self.detached_window.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
 
@@ -387,18 +407,18 @@ class MainCanvas(QWidget):
                 self.detached = False
             else:
                 self.attach_parent = self.parent()
-                self.setParent(self.detached_window)
-                self.detached_window.layout().addWidget(self)
+                self.detached_window.setCentralWidget(self)
+                # self.setParent(self.detached_window)
+                # self.detached_window.layout().addWidget(self)
                 self.detached_window.show()
                 self.detached = True
 
         self.toolbar.toolSelected.connect(tool_selected)
         self.toolbar.detachPressed.connect(detach)
 
-
-
     def set_canvas(self, canvas):
         self.plot_canvas.set_canvas(canvas)
+
 
 
 class MainMenu(QMenuBar):
@@ -410,15 +430,19 @@ class MainMenu(QMenuBar):
         file_menu = self.addMenu("File")
         help_menu = self.addMenu("Help")
 
-        about_action = QAction("About", self)
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcuts(QKeySequence.Quit)
+        exit_action.triggered.connect(QApplication.closeAllWindows)
+
+        about_action = QAction("About Qt", self)
         about_action.setShortcuts(QKeySequence.New)
-        about_action.setStatusTip("About this app")
+        about_action.setStatusTip("About Qt")
+        about_action.triggered.connect(QApplication.aboutQt)
 
         lr_group = QActionGroup(self)
         lr_group.setExclusive(True)
 
-
-        left_action = QAction("Left",self)
+        left_action = QAction("Left", self)
         left_action.setChecked(False)
         left_action.setCheckable(True)
         left_action.setActionGroup(lr_group)
@@ -428,12 +452,22 @@ class MainMenu(QMenuBar):
         right_action.setChecked(True)
         right_action.setActionGroup(lr_group)
 
-        # lr_group.addAction(left_action)
-        # lr_group.addAction(right_action)
-
         help_menu.addAction(left_action)
         help_menu.addAction(right_action)
         help_menu.addSection("Testsection")
         help_menu.addAction(about_action)
 
+        file_menu.addAction(exit_action)
 
+
+class StatusBar(QStatusBar):
+
+    def __init__(self):
+        super().__init__()
+        self.showMessage("Ready.")
+
+class Multiwindow(QMainWindow):
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        QApplication.closeAllWindows()
+        super().closeEvent(event)
