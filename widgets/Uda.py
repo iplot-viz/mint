@@ -59,9 +59,9 @@ class UDAVariablesTable(QWidget):
     def _create_signals(self, row, time_model):
         if row and row[0]:
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(self.data_access, row[0], e) for e in time_model['pulsenb']]
+                signals = [UDAPulse(self.data_access, row[0], e, ts_relative=True) for e in time_model['pulsenb']]
             else:
-                signals = [UDAPulse(self.data_access, row[0], pulsenb=None, **time_model)]
+                signals = [UDAPulse(self.data_access, row[0], pulsenb=None, ts_relative=False, **time_model)]
 
             stack_val = str(row[1]).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
@@ -77,6 +77,13 @@ class UDAVariablesTable(QWidget):
 
     def to_canvas(self, time_model):
         model = {}
+
+        x_axis_date = False
+        if time_model.get("ts_start") and time_model.get("ts_end"):
+            x_axis_date = True
+
+
+
         for row in self.table_model.model:
             signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
             if signals:
@@ -104,10 +111,8 @@ class UDAVariablesTable(QWidget):
                 for row in range(max(rows.keys())):
                     plot = None
                     if row+1 in rows.keys():
-
-                        plot_relative = False
-                        plot = self.plot_class(axes=[LinearAxis(is_date=plot_relative), LinearAxis()], row_span=rows[row+1][0], col_span=rows[row+1][1])
-
+                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date), LinearAxis()], row_span=rows[row+1][0], col_span=rows[row+1][1])
+                        print("PLOT:",plot,x_axis_date,time_model)
                         for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -329,10 +334,12 @@ class UDARangeSelector(QWidget):
         return UDARangeSelector.RELATIVE_TIME, "Relative", form, ret,
 
 
-class PlotToolbar(QToolBar):
+class CanvasToolbar(QToolBar):
 
     toolSelected = pyqtSignal(str)
     detachPressed = pyqtSignal()
+    undo = pyqtSignal()
+    redo = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -355,12 +362,21 @@ class PlotToolbar(QToolBar):
 
         self.addSeparator()
 
-        def detach():
-            self.detachPressed.emit()
+        undo_action = QAction("Undo", self)
+        undo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_ArrowBack")))
+        undo_action.triggered.connect(self.undo.emit)
+        self.addAction(undo_action)
+
+        redo_action = QAction("Redo", self)
+        redo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_ArrowForward")))
+        redo_action.triggered.connect(self.redo.emit)
+        self.addAction(redo_action)
+
+
 
         detach_action = QAction("Detach", self)
         detach_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
-        detach_action.triggered.connect(detach)
+        detach_action.triggered.connect(self.detachPressed.emit)
         self.addAction(detach_action)
 
         # self?.layout().addWidget(toolbar)
@@ -371,7 +387,7 @@ class MainCanvas(QMainWindow):
     def __init__(self, detached=False, attach_parent=None, plot_canvas=None):
         super().__init__()
         self.plot_canvas = plot_canvas
-        self.toolbar = PlotToolbar()
+        self.toolbar = CanvasToolbar()
 
         self.addToolBar(self.toolbar)
         self.setCentralWidget(self.plot_canvas)
