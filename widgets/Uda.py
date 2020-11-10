@@ -469,6 +469,7 @@ class StatusBar(QStatusBar):
         super().__init__()
         self.showMessage("Ready.")
 
+"""This window closes all other open windows when itself gets closed"""
 class Multiwindow(QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
