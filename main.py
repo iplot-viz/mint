@@ -1,23 +1,14 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import os
 import sys
-import time
-from threading import Thread
+from datetime import datetime, timedelta
 
 import pandas
-from PyQt5.QtCore import QMargins, Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QDockWidget, QHBoxLayout, QPushButton, QSizePolicy, QSplitter, QStyle, QVBoxLayout, QWidget
+from PyQt5.QtCore import QMargins
+from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
 from dataAccess import DataAccess
-from iplotlib.Signal import UDAPulse
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 
 from widgets.Uda import MainCanvas, MainMenu, Multiwindow, StatusBar, UDARangeSelector, UDAVariablesTable
-from datetime import timedelta,datetime
 
 if __name__ == '__main__':
 
