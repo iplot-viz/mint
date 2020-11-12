@@ -22,7 +22,7 @@ class UDAVariablesTable(QWidget):
         super().__init__(parent)
         self.data_access = data_access
         self.plot_class = plot_class
-
+        self.columns={"DATASOURCE":0,"VARIABLE":1,"STACK":2,"ROWSPAN":3,"COLSPAN":4}
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.table_model = PlotsModel(header, initial_model=model)
@@ -57,11 +57,11 @@ class UDAVariablesTable(QWidget):
     def _create_signals(self, row, time_model):
         if row and row[0]:
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(self.data_access, row[0], e) for e in time_model['pulsenb']]
+                signals = [UDAPulse(self.data_access, row[self.columns['DATASOURCE']], row[self.columns['VARIABLE']], e) for e in time_model['pulsenb']]
             else:
-                signals = [UDAPulse(self.data_access, row[0], pulsenb=None, **time_model)]
+                signals = [UDAPulse(self.data_access,row[self.columns['DATASOURCE']],  row[self.columns['VARIABLE']], pulsenb=None, **time_model)]
 
-            stack_val = str(row[1]).split('.')
+            stack_val = str(row[self.columns['STACK']]).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1

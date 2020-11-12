@@ -22,8 +22,9 @@ if __name__ == '__main__':
 
     da = DataAccess()
     ###we load the data source conf files
-    ret=da.loadConfig()
-    if ret<1:
+    listDS=da.loadConfig()
+    defDS = da.getDefaultDSName()
+    if len(listDS)<1:
         print ("no data sources found, exiting")
         sys.exit(-1)
 
@@ -40,26 +41,26 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    header = ["Variable", "Stack", "Row span", "Col span"]
+    header = ["DataSource","Variable", "Stack", "Row span", "Col span"]
 
     stack_model = {
         "table": [
-            ["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT01", "1.1.1"]
-            ,["UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT02", "1.1.2"]
+            [defDS,"UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT01", "1.1.1"]
+            ,[defDS,"UTIL-PHV-P400-BAY3:41PPAC_TC3000-IT02", "1.1.2"]
         ],
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
     }
 
     pan_model = {
         "table": [
-            ["CWS-SCSU-HR00:AISPARE-2169-XI", "1.1.1"]
+            [defDS,"CWS-SCSU-HR00:AISPARE-2169-XI", "1.1.1"]
         ],
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
     }
 
     pan_model2 = {
         "table": [
-            ["UTIL-SYSM-COM-4503-UT:SRV3601-NRBPS", "1.1.1"]
+            [defDS,"UTIL-SYSM-COM-4503-UT:SRV3601-NRBPS", "1.1.1"]
         ],
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
     }
