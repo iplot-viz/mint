@@ -40,7 +40,13 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    header = ["DataSource","Variable", "Stack", "Row span", "Col span"]
+    header = {
+        "DataSource": {"label": "DS"},
+        "Variable": {},
+        "Stack": {},
+        "RowSpan": {"label": "Row span"},
+        "ColSpan": {"label": "Col span"}
+    }
 
 
     model = {

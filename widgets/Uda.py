@@ -24,10 +24,10 @@ class UDAVariablesTable(QWidget):
         super().__init__(parent)
         self.data_access = data_access
         self.plot_class = plot_class
-        self.columns={"DATASOURCE":0,"VARIABLE":1,"STACK":2,"ROWSPAN":3,"COLSPAN":4}
+        self.header = header
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
-        self.table_model = PlotsModel(header, initial_model=model)
+        self.table_model = PlotsModel(self.header, initial_model=model)
 
         self.uda_table_view = QTableView()
         self.uda_table_view.setModel(self.table_model)
@@ -57,19 +57,24 @@ class UDAVariablesTable(QWidget):
         context_menu.popup(event.globalPos())
 
     def _create_signals(self, row, time_model):
-        if row and row[0]:
-            if 'pulsenb' in time_model:
-                signals = [UDAPulse(ds_name="codacuda", varname=row[0], pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
-            else:
-                signals = [UDAPulse(ds_name="codacuda", varname=row[0], pulsenb=None, ts_relative=False, **time_model)]
 
-            stack_val = str(row[1]).split('.')
+        def get_value(data_row, key):
+            return data_row[list(self.header).index(key)]
+
+
+        if row and get_value(row, "DataSource") and get_value(row, "Variable"):
+            if 'pulsenb' in time_model:
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
+            else:
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, **time_model)]
+
+            stack_val = str(get_value(row, "Stack")).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
 
-            row_span = str(row[2]) if row[2] else 1
-            col_span = str(row[3]) if row[3] else 1
+            row_span = str(get_value(row, "RowSpan")) or 1
+            col_span = str(get_value(row, "ColSpan")) or 1
 
             return signals, int(col_num), int(row_num), int(stack_num), int(row_span), int(col_span)
         else:
@@ -122,9 +127,11 @@ class UDAVariablesTable(QWidget):
 
 class PlotsModel(QAbstractTableModel):
 
-    def __init__(self, column_names, initial_model=None):
+    def __init__(self, column_definitions, initial_model=None):
         super().__init__()
-        self.column_names = column_names or []
+        self.column_names = []
+        if column_definitions is not None:
+            self.column_names = [e[1].get("label") or e[0] for e in column_definitions.items()]
         self.columns = len(self.column_names)
         self.model = self._expand_model(initial_model or [])
         self._add_empty_row()
