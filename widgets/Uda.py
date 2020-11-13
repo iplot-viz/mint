@@ -12,8 +12,8 @@ from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
+from qt import QtPlotCanvas
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
-from twisted.names.test.test_dns import RECORD_TYPES
 
 
 class UDAVariablesTable(QWidget):
@@ -59,9 +59,9 @@ class UDAVariablesTable(QWidget):
     def _create_signals(self, row, time_model):
         if row and row[0]:
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(self.data_access, row[0], e, ts_relative=True) for e in time_model['pulsenb']]
+                signals = [UDAPulse(ds_name="codacuda", varname=row[0], pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
             else:
-                signals = [UDAPulse(self.data_access, row[0], pulsenb=None, ts_relative=False, **time_model)]
+                signals = [UDAPulse(ds_name="codacuda", varname=row[0], pulsenb=None, ts_relative=False, **time_model)]
 
             stack_val = str(row[1]).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
@@ -105,6 +105,7 @@ class UDAVariablesTable(QWidget):
         if model.keys():
             total_cols = max(model.keys())
             total_rows = max([max(e.keys()) for e in model.values()])
+            print("Creating canvas with {} rows and {} cols".format(total_cols,total_rows))
             canvas = Canvas(total_rows, total_cols)
 
             for colnum, rows in model.items():
@@ -112,7 +113,6 @@ class UDAVariablesTable(QWidget):
                     plot = None
                     if row+1 in rows.keys():
                         plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date), LinearAxis()], row_span=rows[row+1][0], col_span=rows[row+1][1])
-                        print("PLOT:",plot,x_axis_date,time_model)
                         for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -340,10 +340,11 @@ class CanvasToolbar(QToolBar):
     detachPressed = pyqtSignal()
     undo = pyqtSignal()
     redo = pyqtSignal()
+    export = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setLayout(QVBoxLayout())
+        # self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
 
@@ -363,30 +364,29 @@ class CanvasToolbar(QToolBar):
         self.addSeparator()
 
         undo_action = QAction("Undo", self)
-        undo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_ArrowBack")))
+        undo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaSeekBackward")))
         undo_action.triggered.connect(self.undo.emit)
         self.addAction(undo_action)
 
         redo_action = QAction("Redo", self)
-        redo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_ArrowForward")))
+        redo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaSeekForward")))
         redo_action.triggered.connect(self.redo.emit)
         self.addAction(redo_action)
-
-
 
         detach_action = QAction("Detach", self)
         detach_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
         detach_action.triggered.connect(self.detachPressed.emit)
         self.addAction(detach_action)
 
-        # self?.layout().addWidget(toolbar)
+        self.addAction(self.style().standardIcon(getattr(QStyle, "SP_DriveHDIcon")), "Export", self.export.emit)
 
 
 class MainCanvas(QMainWindow):
 
     def __init__(self, detached=False, attach_parent=None, plot_canvas=None):
         super().__init__()
-        self.plot_canvas = plot_canvas
+        self.plot_canvas: QtPlotCanvas = plot_canvas
+        self.canvas = None
         self.toolbar = CanvasToolbar()
 
         self.addToolBar(self.toolbar)
@@ -418,8 +418,19 @@ class MainCanvas(QMainWindow):
 
         self.toolbar.toolSelected.connect(tool_selected)
         self.toolbar.detachPressed.connect(detach)
+        self.toolbar.undo.connect(self.plot_canvas.back)
+        self.toolbar.redo.connect(self.plot_canvas.forward)
+
+        def export():
+            pass
+            # exported = jsons.dump(self.canvas)
+            # print("Exporting!", exported)
+
+        self.toolbar.export.connect(export)
+
 
     def set_canvas(self, canvas):
+        self.canvas = canvas
         self.plot_canvas.set_canvas(canvas)
 
 

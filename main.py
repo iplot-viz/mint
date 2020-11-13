@@ -5,6 +5,7 @@ import pandas
 from PyQt5.QtCore import QMargins
 from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
 from dataAccess import DataAccess
+from iplotlib.UDAAccess import UDAAccess
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 
@@ -13,6 +14,9 @@ from widgets.Uda import MainCanvas, MainMenu, Multiwindow, StatusBar, UDARangeSe
 if __name__ == '__main__':
 
     da = DataAccess()
+
+    UDAAccess.da = da
+
     ###we load the data source conf files
     ret = da.loadConfig()
     if ret<1:
@@ -29,6 +33,7 @@ if __name__ == '__main__':
     currTimeDelta = datetime.now() - timedelta(days=7)
 
     file_to_import = "csv/deadlock_one.csv"
+    # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = None
 
 
