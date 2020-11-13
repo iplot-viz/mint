@@ -18,8 +18,9 @@ if __name__ == '__main__':
     UDAAccess.da = da
 
     ###we load the data source conf files
-    ret = da.loadConfig()
-    if ret<1:
+    listDS=da.loadConfig()
+    defDS = da.getDefaultDSName()
+    if len(listDS)<1:
         print ("no data sources found, exiting")
         sys.exit(-1)
 
@@ -39,7 +40,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    header = ["Variable", "Stack", "Row span", "Col span"]
+    header = ["DataSource","Variable", "Stack", "Row span", "Col span"]
 
 
     model = {

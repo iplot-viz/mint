@@ -24,7 +24,7 @@ class UDAVariablesTable(QWidget):
         super().__init__(parent)
         self.data_access = data_access
         self.plot_class = plot_class
-
+        self.columns={"DATASOURCE":0,"VARIABLE":1,"STACK":2,"ROWSPAN":3,"COLSPAN":4}
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.table_model = PlotsModel(header, initial_model=model)
