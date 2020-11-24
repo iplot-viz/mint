@@ -33,8 +33,10 @@ if __name__ == '__main__':
     currTime = datetime.now().isoformat(timespec='seconds')
     currTimeDelta = datetime.now() - timedelta(days=7)
 
-    file_to_import = "csv/deadlock_one.csv"
+    # file_to_import = "csv/deadlock_one.csv"
     # file_to_import = "csv/deadlock_example.csv"
+    # file_to_import = "csv/pulses_example_one.csv"
+    file_to_import = "csv/envelope.csv"
     # file_to_import = None
 
 
@@ -45,12 +47,15 @@ if __name__ == '__main__':
         "Variable": {},
         "Stack": {},
         "RowSpan": {"label": "Row span"},
-        "ColSpan": {"label": "Col span"}
+        "ColSpan": {"label": "Col span"},
+        "Envelope": {}
     }
 
 
     model = {
-        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+
     }
 
     if file_to_import:

@@ -63,10 +63,13 @@ class UDAVariablesTable(QWidget):
 
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
+            is_envelope = get_value(row, "Envelope")
+
+
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True, envelope=is_envelope) for e in time_model['pulsenb']]
             else:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, **time_model)]
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, envelope=is_envelope, **time_model)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
