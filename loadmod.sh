@@ -7,7 +7,7 @@ module load libMemcached/1.0.18-GCCcore-9.3.0
 GNUPLOT_PATH=/home/ITER/mazurp/gnuplot/bin/bin
 GNUPLOTWIDGET_PATH=/home/ITER/mazurp/iplotlib-gnuplot/qt/gnuplotwidget/gnuplotwidget/lib
 # Support for UDA
-UDA_PYTHON_PATH=/home/ITER/mazurp/udaclientPy38GCC9/udahpcPy38/lib/
+UDA_PYTHON_PATH=/home/ITER/mazurp/tmp/udaclientPy38GCC9/udahpcPy38/lib/
 # The plot library itself if not already in PYTHONPATH
 PLOTLIBRARY_PATH=/home/ITER/mazurp/iterplot
 
