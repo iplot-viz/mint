@@ -9,7 +9,7 @@ GNUPLOTWIDGET_PATH=/home/ITER/mazurp/iplotlib-gnuplot/qt/gnuplotwidget/gnuplotwi
 # Support for UDA
 UDA_PYTHON_PATH=/home/ITER/mazurp/tmp/udaclientPy38GCC9/udahpcPy38/lib/
 # The plot library itself if not already in PYTHONPATH
-PLOTLIBRARY_PATH=/home/ITER/mazurp/iterplot
+PLOTLIBRARY_PATH=/home/ITER/mazurp/iplotlib-gnuplot/
 
 OPENSSL_PATH=/work/imas/opt/EasyBuild/software/OpenSSL/1.0.1f-goolf-1.5.16/lib/
 
