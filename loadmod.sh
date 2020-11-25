@@ -5,11 +5,11 @@ module load libMemcached/1.0.18-GCCcore-9.3.0
 
 # Support for gnuplot QT widget requires gnuplot binary with Qt support and widget lbrary
 GNUPLOT_PATH=/home/ITER/mazurp/gnuplot/bin/bin
-GNUPLOTWIDGET_PATH=/home/ITER/mazurp/iplotlib-gnuplot/qt/gnuplotwidget/gnuplotwidget/lib
+GNUPLOTWIDGET_PATH=/home/ITER/mazurp/tmp/iplotlib-gnuplot/qt/gnuplotwidget/gnuplotwidget/lib
 # Support for UDA
 UDA_PYTHON_PATH=/home/ITER/mazurp/tmp/udaclientPy38GCC9/udahpcPy38/lib/
 # The plot library itself if not already in PYTHONPATH
-PLOTLIBRARY_PATH=/home/ITER/mazurp/iplotlib-gnuplot/
+PLOTLIBRARY_PATH=/home/ITER/mazurp/tmp/iplotlib-gnuplot/
 
 OPENSSL_PATH=/work/imas/opt/EasyBuild/software/OpenSSL/1.0.1f-goolf-1.5.16/lib/
 
