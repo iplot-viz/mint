@@ -351,6 +351,7 @@ class CanvasToolbar(QToolBar):
     undo = pyqtSignal()
     redo = pyqtSignal()
     export = pyqtSignal()
+    preferences = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -387,6 +388,11 @@ class CanvasToolbar(QToolBar):
         detach_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
         detach_action.triggered.connect(self.detachPressed.emit)
         self.addAction(detach_action)
+
+        preferences_action = QAction("Preferences", self)
+        preferences_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_DriveCDIcon")))
+        preferences_action.triggered.connect(self.preferences.emit)
+        self.addAction(preferences_action)
 
         self.addAction(self.style().standardIcon(getattr(QStyle, "SP_DriveHDIcon")), "Export", self.export.emit)
 
