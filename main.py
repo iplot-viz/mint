@@ -9,6 +9,7 @@ from iplotlib.UDAAccess import UDAAccess
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 
+from widgets.PreferencesWindow import PreferencesWindow
 from widgets.Uda import MainCanvas, MainMenu, Multiwindow, StatusBar, UDARangeSelector, UDAVariablesTable
 
 if __name__ == '__main__':
@@ -73,6 +74,8 @@ if __name__ == '__main__':
 
     draw_button.clicked.connect(redraw)
 
+
+
     left_column = QWidget()
     left_column.setLayout(QVBoxLayout())
     left_column.layout().setContentsMargins(QMargins())
@@ -84,6 +87,20 @@ if __name__ == '__main__':
         right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=False))
     else:
         right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas())
+
+    preferences_window = PreferencesWindow()
+
+    def preferences():
+        time_model = range_selector.get_model()
+        canvas = variables_table.to_canvas(time_model)
+        preferences_window.set_canvas(canvas)
+        preferences_window.show()
+
+
+    right_column.toolbar.preferences.connect(preferences)
+
+
+
 
     central_widget = QSplitter()
     central_widget.addWidget(left_column)
