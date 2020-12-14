@@ -4,8 +4,8 @@ from textwrap import dedent
 from PyQt5 import QtCore
 from PyQt5.QtCore import QAbstractItemModel, QItemSelectionModel, QModelIndex, QVariant, Qt, pyqtProperty, pyqtSignal
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
-from PyQt5.QtWidgets import QCheckBox, QColorDialog, QComboBox, QDataWidgetMapper, QFormLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, \
-    QTreeView, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QCheckBox, QColorDialog, QComboBox, QDataWidgetMapper, QFormLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QSplitter, \
+    QStackedWidget, QTreeView, QVBoxLayout, QWidget
 from iplotlib.Canvas import Canvas
 from iplotlib.Axis import LinearAxis
 from iplotlib.Plot import Plot2D
@@ -14,9 +14,13 @@ from iplotlib.Signal import ArraySignal, UDAPulse
 
 class PreferencesWindow(QMainWindow):
 
+    preferencesClosed = pyqtSignal()
+
     def __init__(self, canvas=None):
         super().__init__()
+        self.resize(800, 400)
         self.tree_view = QTreeView()
+        self.tree_view.setHeaderHidden(True)
         self.forms = {Canvas: CanvasForm(), Plot2D: PlotForm(), LinearAxis: AxisForm(), UDAPulse: SignalForm(), type(None): QPushButton("Select item")}
 
         self.right_column = QStackedWidget()
@@ -27,6 +31,8 @@ class PreferencesWindow(QMainWindow):
         central_widget = QSplitter()
         central_widget.addWidget(self.tree_view)
         central_widget.addWidget(self.right_column)
+        central_widget.setSizes([30, 70])
+
         self.setCentralWidget(central_widget)
 
     def item_selected(self, item):
@@ -48,15 +54,22 @@ class PreferencesWindow(QMainWindow):
             self.right_column.currentWidget().set_model(canvas)
         self.tree_view.expandAll()
 
+    def closeEvent(self, event):
+        QApplication.focusWidget().clearFocus()
+        self.preferencesClosed.emit()
+
 
 class CanvasItemModel(QStandardItemModel):
 
     def __init__(self, canvas=None):
         super().__init__()
-        print("Model init")
 
         self.canvas = canvas
         self.createTree()
+        self.itemChanged.connect(self.aaa)
+
+    def aaa(self,e):
+        print("ZOSIA")
 
     def createTree(self):
         canvasItem = QStandardItem("Canvas")
@@ -89,13 +102,10 @@ class CanvasItemModel(QStandardItemModel):
                     axisItem.setData(axis, Qt.UserRole)
                     plotItem.appendRow(axisItem)
 
-    # def data(self, index: QtCore.QModelIndex, role: int = ...) -> typing.Any:
-    #     print("CANVAS MODEL ITEM",index.row(),index.column(),index.parent())
-    #     return super().data(index, role)
+    # def item(self, row: int, column: int = ...) -> 'QStandardItem':
+    #     print("ITEM", row, column)
+    #     return super().item(row, column)
 
-    def item(self, row: int, column: int = ...) -> 'QStandardItem':
-        print("ITEM", row, column)
-        return super().item(row, column)
 
 
 class BeanItemModel(QAbstractItemModel):
@@ -117,6 +127,9 @@ class BeanItemModel(QAbstractItemModel):
         if self.form and self.form.model is not None and self.form.fields is not None:
             desc = self.form.fields[index.column()]
             setattr(self.form.model, desc[1], value)
+            print("*** SETATTR",desc[1],value)
+            self.dataChanged.emit(self.createIndex(0,0), self.createIndex(100,100))
+            self.layoutChanged.emit()
         return True
 
     def columnCount(self, parent: QModelIndex = ...) -> int:
@@ -130,13 +143,17 @@ class BeanItemModel(QAbstractItemModel):
     def index(self, row: int, column: int, parent: QModelIndex = ...) -> QModelIndex:
         return self.createIndex(row, column)
 
+    # def parent(self, child: QModelIndex) -> QModelIndex:
+    #     print("PARENT",child)
+    #     pass
 
-#TODO: redraw automatically after pref close
+
+
+
 #TODO: change detach icon to "DETACH" text
 #TODO: Make color picker work, make signal style work, add different marker styles
 #TODO: Make preferences window bigger
 #TODO: Range changes should be included as canvas property: for entire canvas or for plots
-#TODO: Inheritance for canvas properties
 class PreferencesForm(QWidget):
 
     closeForm: pyqtSignal()
@@ -170,6 +187,8 @@ class PreferencesForm(QWidget):
     def set_model(self, obj):
         self.model = obj
         self.mapper.toFirst()
+
+
 
 
 class CanvasForm(PreferencesForm):
@@ -217,44 +236,43 @@ class SignalForm(PreferencesForm):
 
 class ColorPicker(QPushButton):
 
+    zosia = pyqtProperty(str, user=True)
+
     def __init__(self):
         super().__init__()
-        self.color = None
         self.dialog = QColorDialog(self)
         self.dialog.colorSelected.connect(self.select_color)
         self.setText("Choose color")
         self.clicked.connect(self.open_picker)
         self.selectedColor = ""
+        self.metaObject().userProperty().write(self, self.selectedColor)
 
     def open_picker(self):
-        print("Opening picker")
+        print("Opening picker with property names: " ,self.dynamicPropertyNames())
+
         self.dialog.show()
 
     def select_color(self, color):
-        self.color = color
-        rgb = "rgb({},{},{})".format(self.color.red(), self.color.green(), self.color.blue())
-        print("background-color: rgb({},{},{});".format(self.color.red(), self.color.green(), self.color.blue()))
-        self.setStyleSheet("background-color: rgb({},{},{});".format(self.color.red(), self.color.green(), self.color.blue()))
-        print("* SET PROPERTY",rgb)
-        self.setProperty("test1",rgb)
+        rgba = "rgba({},{},{},1)".format(color.red(), color.green(), color.blue())
+        self.setStyleSheet("background-color: {}".format(rgba))
+        self.selectedColor = '#{:02X}{:02X}{:02X}'.format(color.red(), color.green(), color.blue())
+
+        print("Setting color to: ", self.selectedColor)
+        print("\tUSERPROP: ", self.metaObject().userProperty().read(self))
+        res = self.setProperty("rgbValue", self.selectedColor)
+        # self.metaObject().userProperty().write(self, self.selectedColor)
+        print("SET PROPERTY RESULT: ",self.dynamicPropertyNames())
 
 
     @pyqtProperty(str, user=True)
-    def test1(self):
-        print("* Qcolorpicker:test1:getter:",self.selectedColor)
+    def rgbValue(self):
         return self.selectedColor
-
-    @test1.setter
-    def test1setter(self, val):
-        print("* Qcolorpicker:test1:setter:", val)
-        self.selectedColor = val
 
 
 def createComboBox(items):
     widget = QComboBox()
     if isinstance(items, dict):
-        for k,v in items.items():
-            print("ADDING",k,"and",v)
+        for k, v in items.items():
             widget.addItem(v, k)
     elif isinstance(items, list):
         for i in items:
