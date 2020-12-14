@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     model = {
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
-        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-31T20:27:40"]}
 
     }
 
@@ -74,6 +74,7 @@ if __name__ == '__main__':
     draw_button = QPushButton("Draw")
     draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"icons/plot.png")))
     preferences_window = PreferencesWindow()
+
 
     def update_canvas():
         """
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
 
     right_column.toolbar.preferences.connect(preferences_window.show)
-
+    preferences_window.preferencesClosed.connect(right_column.draw)
 
     central_widget = QSplitter()
     central_widget.addWidget(left_column)
