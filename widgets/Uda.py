@@ -1,11 +1,12 @@
 import collections
+import os
 import typing
 from functools import partial
 
 import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, \
     QMainWindow, QMenu, QMenuBar, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStatusBar, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QToolButton, QVBoxLayout, QWidget
 from iplotlib.Axis import LinearAxis
@@ -15,6 +16,8 @@ from iplotlib.Signal import UDAPulse
 from qt import QtPlotCanvas
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 
+from util.JSONExporter import JSONExporter
+
 
 class UDAVariablesTable(QWidget):
 
@@ -22,6 +25,7 @@ class UDAVariablesTable(QWidget):
 
     def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=Plot2D):
         super().__init__(parent)
+
         self.data_access = data_access
         self.plot_class = plot_class
         self.header = header
@@ -64,12 +68,12 @@ class UDAVariablesTable(QWidget):
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
             is_envelope = get_value(row, "Envelope")
-
+            title = get_value(row, "Alias") or None
 
             if 'pulsenb' in time_model:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True, envelope=is_envelope) for e in time_model['pulsenb']]
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), title=title, varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True, envelope=is_envelope) for e in time_model['pulsenb']]
             else:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, envelope=is_envelope, **time_model)]
+                signals = [UDAPulse(datasource=get_value(row, "DataSource"), title=title, varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, envelope=is_envelope, **time_model)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
@@ -83,14 +87,12 @@ class UDAVariablesTable(QWidget):
         else:
             return None, 0, 0, 0, 1, 1
 
-    def to_canvas(self, time_model):
+    def get_canvas(self, time_model):
         model = {}
 
         x_axis_date = False
         if time_model.get("ts_start") and time_model.get("ts_end"):
             x_axis_date = True
-
-
 
         for row in self.table_model.model:
             signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
@@ -109,12 +111,11 @@ class UDAVariablesTable(QWidget):
                 for signal in signals:
                     model[colnum][rownum][2][stacknum].append(signal)
 
+        canvas = Canvas()
 
         if model.keys():
-            total_cols = max(model.keys())
-            total_rows = max([max(e.keys()) for e in model.values()])
-            print("Creating canvas with {} rows and {} cols".format(total_cols,total_rows))
-            canvas = Canvas(total_rows, total_cols)
+            canvas.cols = max(model.keys())
+            canvas.rows = max([max(e.keys()) for e in model.values()])
 
             for colnum, rows in model.items():
                 for row in range(max(rows.keys())):
@@ -125,7 +126,9 @@ class UDAVariablesTable(QWidget):
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
                     canvas.add_plot(plot, col=colnum-1)
-            return canvas
+
+
+        return canvas
 
 
 class PlotsModel(QAbstractTableModel):
@@ -203,8 +206,9 @@ class UDAVairablesToolbar(QWidget):
         self.layout().setContentsMargins(QMargins())
 
         tb = QToolBar()
-        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV", self.do_import)
-        tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DialogSaveButton")), "Save CSV", self.do_export)
+        # tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV", self.do_import)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__),"../icons/open_file.png")), "Open CSV", self.do_import)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__),"../icons/save_as.png")), "Save CSV", self.do_export)
 
         self.layout().addWidget(tb)
 
@@ -350,7 +354,9 @@ class CanvasToolbar(QToolBar):
     detachPressed = pyqtSignal()
     undo = pyqtSignal()
     redo = pyqtSignal()
-    export = pyqtSignal()
+    export_json = pyqtSignal()
+    import_json = pyqtSignal()
+    redraw = pyqtSignal()
     preferences = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -375,34 +381,36 @@ class CanvasToolbar(QToolBar):
         self.addSeparator()
 
         undo_action = QAction("Undo", self)
-        undo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaSeekBackward")))
+        undo_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/undo.png")))
         undo_action.triggered.connect(self.undo.emit)
         self.addAction(undo_action)
 
         redo_action = QAction("Redo", self)
-        redo_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_MediaSeekForward")))
+        redo_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/redo.png")))
         redo_action.triggered.connect(self.redo.emit)
         self.addAction(redo_action)
 
         detach_action = QAction("Detach", self)
-        detach_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_TitleBarNormalButton")))
+        detach_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/fullscreen.png")))
         detach_action.triggered.connect(self.detachPressed.emit)
         self.addAction(detach_action)
 
         preferences_action = QAction("Preferences", self)
-        preferences_action.setIcon(self.style().standardIcon(getattr(QStyle, "SP_DriveCDIcon")))
+        preferences_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/options.png")))
         preferences_action.triggered.connect(self.preferences.emit)
         self.addAction(preferences_action)
 
-        self.addAction(self.style().standardIcon(getattr(QStyle, "SP_DriveHDIcon")), "Export", self.export.emit)
+        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Export to JSON", self.export_json.emit)
+        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Import JSON", self.import_json.emit)
+        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/rotate180.png")), "Redraw", self.redraw.emit)
 
 
 class MainCanvas(QMainWindow):
 
-    def __init__(self, detached=False, attach_parent=None, plot_canvas=None):
+    def __init__(self, detached=False, attach_parent=None, plot_canvas=None, canvas=None):
         super().__init__()
         self.plot_canvas: QtPlotCanvas = plot_canvas
-        self.canvas = None
+        self.canvas = canvas
         self.toolbar = CanvasToolbar()
 
         self.addToolBar(self.toolbar)
@@ -436,18 +444,27 @@ class MainCanvas(QMainWindow):
         self.toolbar.detachPressed.connect(detach)
         self.toolbar.undo.connect(self.plot_canvas.back)
         self.toolbar.redo.connect(self.plot_canvas.forward)
-
-        def export():
-            pass
-            # exported = jsons.dump(self.canvas)
-            # print("Exporting!", exported)
-
-        self.toolbar.export.connect(export)
+        self.toolbar.redraw.connect(self.draw)
 
 
-    def set_canvas(self, canvas):
-        self.canvas = canvas
-        self.plot_canvas.set_canvas(canvas)
+        def do_export():
+            file = QFileDialog.getSaveFileName(self, "Save JSON")
+            if file and file[0]:
+                with open(file[0], "w") as out_file:
+                    out_file.write(JSONExporter().to_json(self.canvas))
+
+        def do_import():
+            file = QFileDialog.getOpenFileName(self, "Open CSV")
+            if file and file[0]:
+                with open(file[0], "r") as in_file:
+                    self.canvas = JSONExporter().from_json(in_file.read())
+                    print("CANVAS: ",self.canvas)
+
+        self.toolbar.import_json.connect(do_import)
+        self.toolbar.export_json.connect(do_export)
+
+    def draw(self):
+        self.plot_canvas.set_canvas(self.canvas)
 
 
 
