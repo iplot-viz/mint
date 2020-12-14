@@ -1,10 +1,13 @@
+import os
 import sys
 from datetime import datetime, timedelta
 
 import pandas
 from PyQt5.QtCore import QMargins
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
 from dataAccess import DataAccess
+from iplotlib.Canvas import Canvas
 from iplotlib.UDAAccess import UDAAccess
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
@@ -34,10 +37,10 @@ if __name__ == '__main__':
     currTime = datetime.now().isoformat(timespec='seconds')
     currTimeDelta = datetime.now() - timedelta(days=7)
 
-    # file_to_import = "csv/deadlock_one.csv"
+    file_to_import = "csv/deadlock_one.csv"
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
-    file_to_import = "csv/envelope.csv"
+    # file_to_import = "csv/envelope.csv"
     # file_to_import = None
 
 
@@ -49,7 +52,8 @@ if __name__ == '__main__':
         "Stack": {},
         "RowSpan": {"label": "Row span"},
         "ColSpan": {"label": "Col span"},
-        "Envelope": {}
+        "Envelope": {},
+        "Alias": {}
     }
 
 
@@ -62,19 +66,33 @@ if __name__ == '__main__':
     if file_to_import:
         model["table"] = pandas.read_csv(file_to_import, dtype=str, keep_default_na=False).values.tolist()
 
+
+    canvas = Canvas()
+
     variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = UDARangeSelector(model=model.get("range"))
     draw_button = QPushButton("Draw")
-    draw_button.setIcon(draw_button.style().standardIcon(getattr(QStyle, "SP_BrowserReload")))
+    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"icons/plot.png")))
+    preferences_window = PreferencesWindow()
+
+    def update_canvas():
+        """
+        Updates canvas object with data from variables table and timerange/pulses forms
+        """
+        time_model = range_selector.get_model()
+        new_canvas = variables_table.get_canvas(time_model)
+        canvas.rows = new_canvas.rows
+        canvas.cols = new_canvas.cols
+        canvas.plots = new_canvas.plots
+        preferences_window.set_canvas(canvas)
+
+    update_canvas()
 
     def redraw():
-        time_model = range_selector.get_model()
-        canvas = variables_table.to_canvas(time_model)
-        right_column.set_canvas(canvas)
+        update_canvas()
+        right_column.draw()
 
     draw_button.clicked.connect(redraw)
-
-
 
     left_column = QWidget()
     left_column.setLayout(QVBoxLayout())
@@ -84,22 +102,11 @@ if __name__ == '__main__':
     left_column.layout().addWidget(draw_button)
 
     if (canvasImpl=="MATPLOTLIB"):
-        right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=False))
+        right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=False), canvas=canvas)
     else:
-        right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas())
+        right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
 
-    preferences_window = PreferencesWindow()
-
-    def preferences():
-        time_model = range_selector.get_model()
-        canvas = variables_table.to_canvas(time_model)
-        preferences_window.set_canvas(canvas)
-        preferences_window.show()
-
-
-    right_column.toolbar.preferences.connect(preferences)
-
-
+    right_column.toolbar.preferences.connect(preferences_window.show)
 
 
     central_widget = QSplitter()
