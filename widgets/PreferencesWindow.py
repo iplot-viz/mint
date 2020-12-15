@@ -195,7 +195,8 @@ class CanvasForm(PreferencesForm):
     def __init__(self):
         canvas_fields = [
             ("Title", "title", QLineEdit()),
-            ("Font size", "font_size", QSpinBox()),
+            ("Font size", "font_size", createSpinbox(min=0, max=20)),
+            ("Grid", "grid", QCheckBox()),
             ("Font color", "font_color", QLineEdit())
         ]
         super().__init__("Canvas", canvas_fields)
@@ -206,7 +207,7 @@ class PlotForm(PreferencesForm):
         plot_fields = [
             ("Title", "title", QLineEdit()),
             ("Grid", "grid", QCheckBox()),
-            ("Font size", "font_size", QSpinBox()),
+            ("Font size", "font_size", createSpinbox(min=0, max=20)),
             ("Font color", "font_color", QLineEdit())
         ]
         super().__init__("A plot", plot_fields)
@@ -216,7 +217,7 @@ class AxisForm(PreferencesForm):
     def __init__(self):
         axis_fields = [
             ("Label", "label", QLineEdit()),
-            ("Font size", "font_size", QSpinBox()),
+            ("Font size", "font_size", createSpinbox(min=0, max=20)),
             ("Font color", "font_color", QLineEdit())
         ]
         super().__init__("An axis", axis_fields)
@@ -227,8 +228,8 @@ class SignalForm(PreferencesForm):
         signal_fields = [
             ("Label", "title", QLineEdit()),
             ("Color", "color", ColorPicker()),
-            ("Thickness", "linesize", QSpinBox()),
-            ("Varname", "varname", QLineEdit()),
+            ("Thickness", "linesize", createSpinbox(min=0, max=20)),
+            ("Varname", "varname", createLineEdit(readonly=True)),
             ("Style", "style", createComboBox({"solid": "Solid", "dotted": "Dotted", "dashed": "Dashed", "None": "None"})),
         ]
         super().__init__("A signal", signal_fields)
@@ -280,3 +281,17 @@ def createComboBox(items):
         pass
     return widget
 
+def createSpinbox(**params):
+    widget = QSpinBox()
+    if params.get("min"):
+        widget.setMinimum(params.get("min"))
+    if params.get("max"):
+        widget.setMaximum(params.get("max"))
+
+    return widget
+
+def createLineEdit(**params):
+    widget = QLineEdit()
+    if params.get("readonly"):
+        widget.setReadOnly(params.get("readonly"))
+    return widget
