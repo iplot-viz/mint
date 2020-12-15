@@ -128,7 +128,6 @@ class UDAVariablesTable(QWidget):
                                 plot.add_signal(signal, stack=stack)
                     canvas.add_plot(plot, col=colnum-1)
 
-
         return canvas
 
 
