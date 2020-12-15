@@ -390,10 +390,13 @@ class CanvasToolbar(QToolBar):
         redo_action.triggered.connect(self.redo.emit)
         self.addAction(redo_action)
 
-        detach_action = QAction("Detach", self)
-        detach_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/fullscreen.png")))
-        detach_action.triggered.connect(self.detachPressed.emit)
-        self.addAction(detach_action)
+
+
+
+        self.detach_action = QAction("Detach", self)
+        # detach_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/fullscreen.png")))
+        self.detach_action.triggered.connect(self.detachPressed.emit)
+        self.addAction(self.detach_action)
 
         preferences_action = QAction("Preferences", self)
         preferences_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/options.png")))
@@ -434,11 +437,13 @@ class MainCanvas(QMainWindow):
                 self.setParent(self.attach_parent)
                 self.detached_window.hide()
                 self.detached = False
+                self.toolbar.detach_action.setText("Detach")
             else:
                 self.attach_parent = self.parent()
                 self.detached_window.setCentralWidget(self)
                 self.detached_window.show()
                 self.detached = True
+                self.toolbar.detach_action.setText("Reattach")
 
         self.toolbar.toolSelected.connect(tool_selected)
         self.toolbar.detachPressed.connect(detach)
