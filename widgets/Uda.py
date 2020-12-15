@@ -116,6 +116,7 @@ class UDAVariablesTable(QWidget):
         if model.keys():
             canvas.cols = max(model.keys())
             canvas.rows = max([max(e.keys()) for e in model.values()])
+            canvas.plots = [[] for _ in range(canvas.cols)]
 
             for colnum, rows in model.items():
                 for row in range(max(rows.keys())):
