@@ -36,7 +36,9 @@ class UDAVariablesTable(QWidget):
         self.uda_table_view = QTableView()
         self.uda_table_view.setModel(self.table_model)
 
-        uda_toolbar = UDAVairablesToolbar(table_view=self.uda_table_view)
+        uda_toolbar = UDAVairablesToolbar()
+        uda_toolbar.exportCsv.connect(self.export_clicked)
+        uda_toolbar.importCsv.connect(self.import_clicked)
 
         uda_tab = QWidget()
         uda_tab.setLayout(QVBoxLayout())
@@ -131,6 +133,26 @@ class UDAVariablesTable(QWidget):
         return canvas
 
 
+    def export_clicked(self):
+        file = QFileDialog.getSaveFileName(self, "Save CSV")
+        if file and file[0]:
+            self.export_csv(file[0])
+
+    def import_clicked(self):
+        file = QFileDialog.getOpenFileName(self, "Open CSV")
+        if file and file[0]:
+            self.import_csv(file[0])
+
+    def export_csv(self, file_path):
+        df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
+        df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
+
+    def import_csv(self, file_path):
+        df = pandas.read_csv(file_path, dtype=str, keep_default_na=False)
+        if not df.empty:
+            self.uda_table_view.model().set_model(df.values.tolist())
+
+
 class PlotsModel(QAbstractTableModel):
 
     def __init__(self, column_definitions, initial_model=None):
@@ -196,34 +218,25 @@ class PlotsModel(QAbstractTableModel):
         self._add_empty_row()
 
 
+
+
+
+
 class UDAVairablesToolbar(QWidget):
 
-    def __init__(self, parent=None, table_view=None):
+    exportCsv = pyqtSignal()
+    importCsv = pyqtSignal()
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.table_view = table_view
 
         self.setLayout(QHBoxLayout())
         self.layout().setContentsMargins(QMargins())
 
         tb = QToolBar()
-        # tb.addAction(self.style().standardIcon(getattr(QStyle, "SP_DirOpenIcon")), "Open CSV", self.do_import)
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__),"../icons/open_file.png")), "Open CSV", self.do_import)
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__),"../icons/save_as.png")), "Save CSV", self.do_export)
-
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Open CSV", self.importCsv.emit)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Save CSV", self.exportCsv.emit)
         self.layout().addWidget(tb)
-
-    def do_export(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV")
-        if file and file[0]:
-            df = pandas.DataFrame(self.table_view.model().model[:-1])
-            df.to_csv(file[0], header=self.table_view.model().column_names, index=False)
-
-    def do_import(self):
-        file = QFileDialog.getOpenFileName(self, "Open CSV")
-        if file and file[0]:
-            df = pandas.read_csv(file[0], dtype=str, keep_default_na=False)
-            if not df.empty:
-                self.table_view.model().set_model(df.values.tolist())
 
 
 class UDARangeSelector(QWidget):
