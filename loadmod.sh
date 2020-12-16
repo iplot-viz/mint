@@ -1,4 +1,4 @@
-module load matplotlib/3.3.2-intel-2020a-Python-3.8.2
+module load matplotlib/3.3.3-intel-2020a-Python-3.8.2
 module load Python/3.8.2-GCCcore-9.3.0
 module load PyQt5/5.13.2-GCCcore-9.3.0-Python-3.8.2
 module load libMemcached/1.0.18-GCCcore-9.3.0
