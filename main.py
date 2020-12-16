@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas
 from PyQt5.QtCore import QMargins
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    file_to_import = None
+    # file_to_import = None
 
 
     app = QApplication(sys.argv)
@@ -90,6 +91,9 @@ if __name__ == '__main__':
     update_canvas()
 
     def redraw():
+        dir = os.path.expanduser("~/.local/1Dtool/dumps/")
+        Path(dir).mkdir(parents=True, exist_ok=True)
+        variables_table.export_csv(os.path.join(dir, "variables_table.csv"))
         update_canvas()
         right_column.draw()
 
