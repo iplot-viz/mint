@@ -57,23 +57,20 @@ if __name__ == '__main__':
         "Alias": {}
     }
 
-
     model = {
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         #"range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
-
     }
 
     if file_to_import:
         model["table"] = pandas.read_csv(file_to_import, dtype=str, keep_default_na=False).values.tolist()
-
 
     canvas = Canvas()
 
     variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = UDARangeSelector(model=model.get("range"))
     draw_button = QPushButton("Draw")
-    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"icons/plot.png")))
+    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
     preferences_window = PreferencesWindow()
 
 
@@ -91,9 +88,9 @@ if __name__ == '__main__':
     update_canvas()
 
     def redraw():
-        dir = os.path.expanduser("~/.local/1Dtool/dumps/")
-        Path(dir).mkdir(parents=True, exist_ok=True)
-        variables_table.export_csv(os.path.join(dir, "variables_table.csv"))
+        dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
+        Path(dump_dir).mkdir(parents=True, exist_ok=True)
+        variables_table.export_csv(os.path.join(dump_dir, "variables_table.csv"))
         update_canvas()
         right_column.draw()
 
