@@ -89,18 +89,19 @@ class CanvasItemModel(QStandardItemModel):
                 plotItem.setData(plot, Qt.UserRole)
                 columnItem.appendRow(plotItem)
 
-                for stack_idx, stack in enumerate(plot.signals.values()):
-                    for signal_idx, signal in enumerate(stack):
-                        signalItem = QStandardItem("Signal " + str(signal_idx))
-                        signalItem.setEditable(False)
-                        signalItem.setData(signal, Qt.UserRole)
-                        plotItem.appendRow(signalItem)
+                if plot:
+                    for stack_idx, stack in enumerate(plot.signals.values()):
+                        for signal_idx, signal in enumerate(stack):
+                            signalItem = QStandardItem("Signal " + str(signal_idx))
+                            signalItem.setEditable(False)
+                            signalItem.setData(signal, Qt.UserRole)
+                            plotItem.appendRow(signalItem)
 
-                for axis_idx, axis in enumerate(plot.axes):
-                    axisItem = QStandardItem("Axis " + str(axis_idx))
-                    axisItem.setEditable(False)
-                    axisItem.setData(axis, Qt.UserRole)
-                    plotItem.appendRow(axisItem)
+                    for axis_idx, axis in enumerate(plot.axes):
+                        axisItem = QStandardItem("Axis " + str(axis_idx))
+                        axisItem.setEditable(False)
+                        axisItem.setData(axis, Qt.UserRole)
+                        plotItem.appendRow(axisItem)
 
     # def item(self, row: int, column: int = ...) -> 'QStandardItem':
     #     print("ITEM", row, column)
