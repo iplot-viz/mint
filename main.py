@@ -38,7 +38,7 @@ if __name__ == '__main__':
     currTime = datetime.now().isoformat(timespec='seconds')
     currTimeDelta = datetime.now() - timedelta(days=7)
 
-    file_to_import = "csv/deadlock_one.csv"
+    file_to_import = "csv/deadlock_stack.csv"
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
@@ -59,13 +59,13 @@ if __name__ == '__main__':
 
     model = {
         "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
-        #"range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+        # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
     }
 
     if file_to_import:
         model["table"] = pandas.read_csv(file_to_import, dtype=str, keep_default_na=False).values.tolist()
 
-    canvas = Canvas()
+    canvas = Canvas(grid=True)
 
     variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = UDARangeSelector(model=model.get("range"))
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     left_column.layout().addWidget(draw_button)
 
     if (canvasImpl=="MATPLOTLIB"):
-        right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=False), canvas=canvas)
+        right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=True), canvas=canvas)
     else:
         right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
 

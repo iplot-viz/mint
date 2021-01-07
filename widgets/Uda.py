@@ -124,7 +124,8 @@ class UDAVariablesTable(QWidget):
                 for row in range(max(rows.keys())):
                     plot = None
                     if row+1 in rows.keys():
-                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date), LinearAxis()], row_span=rows[row+1][0], col_span=rows[row+1][1])
+                        y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
+                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date), y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
                         for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -425,6 +426,7 @@ class MainCanvas(QMainWindow):
 
     def __init__(self, detached=False, attach_parent=None, plot_canvas=None, canvas=None):
         super().__init__()
+        self.original_canvas = None
         self.plot_canvas: QtPlotCanvas = plot_canvas
         self.canvas = canvas
         self.toolbar = CanvasToolbar()
@@ -483,6 +485,7 @@ class MainCanvas(QMainWindow):
 
     def draw(self):
         self.plot_canvas.set_canvas(self.canvas)
+
 
 
 

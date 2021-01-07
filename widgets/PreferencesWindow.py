@@ -1,11 +1,12 @@
 import typing
 from textwrap import dedent
+from typing import Collection
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QAbstractItemModel, QItemSelectionModel, QModelIndex, QVariant, Qt, pyqtProperty, pyqtSignal
-from PyQt5.QtGui import QStandardItem, QStandardItemModel
-from PyQt5.QtWidgets import QApplication, QCheckBox, QColorDialog, QComboBox, QDataWidgetMapper, QFormLayout, QLabel, QLineEdit, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QSplitter, \
-    QStackedWidget, QTreeView, QVBoxLayout, QWidget
+from PyQt5.QtCore import QAbstractItemModel, QByteArray, QEvent, QItemSelectionModel, QMargins, QModelIndex, QVariant, Qt, pyqtProperty, pyqtSignal
+from PyQt5.QtGui import QKeyEvent, QStandardItem, QStandardItemModel
+from PyQt5.QtWidgets import QAbstractItemDelegate, QApplication, QCheckBox, QColorDialog, QComboBox, QDataWidgetMapper, QFormLayout, QItemDelegate, QLabel, QLineEdit, QMainWindow, QPushButton, \
+    QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QTreeView, QVBoxLayout, QWidget
 from iplotlib.Canvas import Canvas
 from iplotlib.Axis import LinearAxis
 from iplotlib.Plot import Plot2D
@@ -55,29 +56,35 @@ class PreferencesWindow(QMainWindow):
         self.tree_view.expandAll()
 
     def closeEvent(self, event):
-        QApplication.focusWidget().clearFocus()
+        if QApplication.focusWidget():
+            QApplication.focusWidget().clearFocus()
         self.preferencesClosed.emit()
 
 
 class CanvasItemModel(QStandardItemModel):
 
-    def __init__(self, canvas=None):
+    def __init__(self, canvas=None, autoNames=False):
         super().__init__()
-
+        self.autoNames = autoNames
         self.canvas = canvas
         self.createTree()
-        self.itemChanged.connect(self.aaa)
-
-    def aaa(self,e):
-        print("ZOSIA")
 
     def createTree(self):
         canvasItem = QStandardItem("Canvas")
         canvasItem.setEditable(False)
         canvasItem.setData(self.canvas, Qt.UserRole)
+        if self.autoNames and self.canvas.title:
+            canvasItem.setText(self.canvas.title)
         self.setItem(0, 0, canvasItem)
 
-        #TODO: Implement stackpanel as a single plot with multiple axes
+        def addAxis(label, axis, plotItem):
+            axisItem = QStandardItem(label)
+            axisItem.setEditable(False)
+            axisItem.setData(axis, Qt.UserRole)
+            if self.autoNames and axis.label:
+                axisItem.setText(axis.label)
+            plotItem.appendRow(axisItem)
+
         for column_idx in range(len(self.canvas.plots)):
             columnItem = QStandardItem("Column " + str(column_idx))
 
@@ -87,26 +94,27 @@ class CanvasItemModel(QStandardItemModel):
                 plotItem = QStandardItem("Plot " + str(plot_idx))
                 plotItem.setEditable(False)
                 plotItem.setData(plot, Qt.UserRole)
+                if self.autoNames and plot.title:
+                    plotItem.setText(plot.title)
+
                 columnItem.appendRow(plotItem)
 
                 if plot:
                     for stack_idx, stack in enumerate(plot.signals.values()):
                         for signal_idx, signal in enumerate(stack):
-                            signalItem = QStandardItem("Signal " + str(signal_idx))
+                            signalItem = QStandardItem("Signal {} stack {}".format(signal_idx, stack_idx))
                             signalItem.setEditable(False)
                             signalItem.setData(signal, Qt.UserRole)
+                            if self.autoNames and signal.title:
+                                signalItem.setText(signal.title)
                             plotItem.appendRow(signalItem)
 
                     for axis_idx, axis in enumerate(plot.axes):
-                        axisItem = QStandardItem("Axis " + str(axis_idx))
-                        axisItem.setEditable(False)
-                        axisItem.setData(axis, Qt.UserRole)
-                        plotItem.appendRow(axisItem)
-
-    # def item(self, row: int, column: int = ...) -> 'QStandardItem':
-    #     print("ITEM", row, column)
-    #     return super().item(row, column)
-
+                        if isinstance(axis, Collection):
+                            for subaxis_idx, subaxis in enumerate(axis):
+                                addAxis("Axis {} stack {}".format(axis_idx, subaxis_idx), subaxis, plotItem)
+                        else:
+                            addAxis("Axis {}".format(axis_idx), axis, plotItem)
 
 
 class BeanItemModel(QAbstractItemModel):
@@ -117,10 +125,8 @@ class BeanItemModel(QAbstractItemModel):
         self.form = form
 
     def data(self, index: QModelIndex, role: int = ...) -> typing.Any:
-        # print("Get data",self.form)
         if self.form and self.form.model is not None and self.form.fields is not None:
             desc = self.form.fields[index.column()]
-            # print("\tDESC",desc,"Model:",self.form.model)
             return getattr(self.form.model, desc[1])
         return ""
 
@@ -128,8 +134,7 @@ class BeanItemModel(QAbstractItemModel):
         if self.form and self.form.model is not None and self.form.fields is not None:
             desc = self.form.fields[index.column()]
             setattr(self.form.model, desc[1], value)
-            print("*** SETATTR",desc[1],value)
-            self.dataChanged.emit(self.createIndex(0,0), self.createIndex(100,100))
+            self.dataChanged.emit(self.createIndex(0, 0), self.createIndex(100, 100)) #FIXME: correct this
             self.layoutChanged.emit()
         return True
 
@@ -144,22 +149,13 @@ class BeanItemModel(QAbstractItemModel):
     def index(self, row: int, column: int, parent: QModelIndex = ...) -> QModelIndex:
         return self.createIndex(row, column)
 
-    # def parent(self, child: QModelIndex) -> QModelIndex:
-    #     print("PARENT",child)
-    #     pass
 
-
-
-
-#TODO: change detach icon to "DETACH" text
-#TODO: Make color picker work, make signal style work, add different marker styles
-#TODO: Make preferences window bigger
 #TODO: Range changes should be included as canvas property: for entire canvas or for plots
 class PreferencesForm(QWidget):
 
     closeForm: pyqtSignal()
 
-    def __init__(self, label: str = None, fields=None):
+    def __init__(self, label: str = None):
         super().__init__()
         self.setLayout(QVBoxLayout())
         if label is not None:
@@ -171,128 +167,168 @@ class PreferencesForm(QWidget):
         self.form.setLayout(QFormLayout())
         self.layout().addWidget(self.form)
 
-        close_button = QPushButton("Close")
-        # close_button.clicked.connect(self.closeForm.emit)
-        # self.layout().addWidget(close_button)
-
         self.mapper = QDataWidgetMapper()
         self.model = None
+        self.mapper.setItemDelegate(CanvasFormDelegate())
         self.mapper.setModel(BeanItemModel(self))
 
+    def add_fields(self, fields):
         self.fields = fields
         if self.fields is not None:
             for index, (label, prop, widget) in enumerate(self.fields):
                 self.form.layout().addRow(label, widget)
+                # self.form.layout().addRow(None, QLabel("HELLO WORLD"))
                 self.mapper.addMapping(widget, index)
 
     def set_model(self, obj):
         self.model = obj
         self.mapper.toFirst()
 
+    def createSpinbox(self, **params):
+        widget = QSpinBox()
+        if params.get("min"):
+            widget.setMinimum(params.get("min"))
+        if params.get("max"):
+            widget.setMaximum(params.get("max"))
 
+        return widget
+
+    def createComboBox(self, items):
+        widget = QComboBox()
+        if isinstance(items, dict):
+            for k, v in items.items():
+                widget.addItem(v, k)
+        elif isinstance(items, list):
+            for i in items:
+                widget.addItem(i)
+            pass
+        return widget
+
+    def createLineEdit(self, **params):
+        widget = QLineEdit()
+        if params.get("readonly"):
+            widget.setReadOnly(params.get("readonly"))
+        return widget
+
+    def defaultFontSizeWidget(self):
+        return self.createSpinbox(min=0, max=20)
+
+    def defaultLineSizeWidget(self):
+        return self.createSpinbox(min=0, max=20)
+
+    def defaultMarkerSizeWidget(self):
+        return self.createSpinbox(min=0, max=20)
+
+    def defaultLineStyleWidget(self):
+        return self.createComboBox({"solid": "Solid", "dotted": "Dotted", "dashed": "Dashed", "None": "None"})
+
+    def defaultMarkerWidget(self):
+        return self.createComboBox({"None": "None", "o": "o", "x": "x"})
+
+    def defaultStepWidget(self):
+        return self.createComboBox({"None": "None", "Begin": "pre", "End": "post", "Middle": "mid"})
 
 
 class CanvasForm(PreferencesForm):
     def __init__(self):
+        super().__init__("Canvas")
         canvas_fields = [
             ("Title", "title", QLineEdit()),
-            ("Font size", "font_size", createSpinbox(min=0, max=20)),
+            ("Font size", "font_size", self.defaultFontSizeWidget()),
             ("Grid", "grid", QCheckBox()),
-            ("Font color", "font_color", QLineEdit())
+            ("Font color", "font_color", ColorPicker()),
+            ("Line style", "line_style", self.defaultLineStyleWidget()),
+            ("Line size", "line_size", self.defaultLineSizeWidget()),
+            ("Marker", "marker", self.defaultMarkerWidget()),
+            ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
+            ("Step", "step", self.defaultStepWidget())
         ]
-        super().__init__("Canvas", canvas_fields)
+        self.add_fields(canvas_fields)
 
 
 class PlotForm(PreferencesForm):
     def __init__(self):
+        super().__init__("A plot")
         plot_fields = [
             ("Title", "title", QLineEdit()),
             ("Grid", "grid", QCheckBox()),
-            ("Font size", "font_size", createSpinbox(min=0, max=20)),
-            ("Font color", "font_color", QLineEdit())
+            ("Font size", "font_size", self.defaultFontSizeWidget()),
+            ("Font color", "font_color", ColorPicker()),
+            ("Line style", "line_style", self.defaultLineStyleWidget()),
+            ("Line size", "line_size", self.defaultLineSizeWidget()),
+            ("Marker", "marker", self.defaultMarkerWidget()),
+            ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
+            ("Step", "step", self.defaultStepWidget())
         ]
-        super().__init__("A plot", plot_fields)
+        self.add_fields(plot_fields)
 
 
 class AxisForm(PreferencesForm):
     def __init__(self):
+        super().__init__("An axis")
+
         axis_fields = [
             ("Label", "label", QLineEdit()),
-            ("Font size", "font_size", createSpinbox(min=0, max=20)),
-            ("Font color", "font_color", QLineEdit())
+            ("Font size", "font_size", self.defaultFontSizeWidget()),
+            ("Font color", "font_color", ColorPicker())
         ]
-        super().__init__("An axis", axis_fields)
+
+        self.add_fields(axis_fields)
 
 
 class SignalForm(PreferencesForm):
     def __init__(self):
+        super().__init__("A signal")
         signal_fields = [
             ("Label", "title", QLineEdit()),
+            ("Varname", "varname", self.createLineEdit(readonly=True)),
             ("Color", "color", ColorPicker()),
-            ("Thickness", "linesize", createSpinbox(min=0, max=20)),
-            ("Varname", "varname", createLineEdit(readonly=True)),
-            ("Style", "style", createComboBox({"solid": "Solid", "dotted": "Dotted", "dashed": "Dashed", "None": "None"})),
+            ("Line style", "line_style", self.defaultLineStyleWidget()),
+            ("Line size", "line_size", self.defaultLineSizeWidget()),
+            ("Marker", "marker", self.defaultMarkerWidget()),
+            ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
+            ("Step", "step", self.defaultStepWidget())
         ]
-        super().__init__("A signal", signal_fields)
+        self.add_fields(signal_fields)
 
 
-class ColorPicker(QPushButton):
-
-    zosia = pyqtProperty(str, user=True)
+class ColorPicker(QWidget):
 
     def __init__(self):
         super().__init__()
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(QMargins())
+        button = QPushButton("Select color")
+        button.clicked.connect(self.open_picker)
+        self.layout().addWidget(button)
         self.dialog = QColorDialog(self)
         self.dialog.colorSelected.connect(self.select_color)
-        self.setText("Choose color")
-        self.clicked.connect(self.open_picker)
-        self.selectedColor = ""
-        self.metaObject().userProperty().write(self, self.selectedColor)
+        self.selectedColor = None
 
     def open_picker(self):
-        print("Opening picker with property names: " ,self.dynamicPropertyNames())
-
         self.dialog.show()
 
     def select_color(self, color):
-        rgba = "rgba({},{},{},1)".format(color.red(), color.green(), color.blue())
-        self.setStyleSheet("background-color: {}".format(rgba))
-        self.selectedColor = '#{:02X}{:02X}{:02X}'.format(color.red(), color.green(), color.blue())
-
-        print("Setting color to: ", self.selectedColor)
-        print("\tUSERPROP: ", self.metaObject().userProperty().read(self))
-        res = self.setProperty("rgbValue", self.selectedColor)
-        # self.metaObject().userProperty().write(self, self.selectedColor)
-        print("SET PROPERTY RESULT: ",self.dynamicPropertyNames())
-
+        self.setProperty("rgbValue", '#{:02X}{:02X}{:02X}'.format(color.red(), color.green(), color.blue()))
+        print("Color set to ", self.selectedColor)
+        QApplication.postEvent(self, QKeyEvent(QEvent.KeyPress, Qt.Key_Enter, Qt.NoModifier))
 
     @pyqtProperty(str, user=True)
     def rgbValue(self):
         return self.selectedColor
 
+    @rgbValue.setter
+    def rgbValue(self, color):
+        self.setStyleSheet("background-color: {}".format(color))
+        self.selectedColor = color
 
-def createComboBox(items):
-    widget = QComboBox()
-    if isinstance(items, dict):
-        for k, v in items.items():
-            widget.addItem(v, k)
-    elif isinstance(items, list):
-        for i in items:
-            widget.addItem(i)
-        pass
-    return widget
 
-def createSpinbox(**params):
-    widget = QSpinBox()
-    if params.get("min"):
-        widget.setMinimum(params.get("min"))
-    if params.get("max"):
-        widget.setMaximum(params.get("max"))
+class CanvasFormDelegate(QItemDelegate):
 
-    return widget
+    def setEditorData(self, editor: QWidget, index: QtCore.QModelIndex) -> None:
+        super().setEditorData(editor, index)
 
-def createLineEdit(**params):
-    widget = QLineEdit()
-    if params.get("readonly"):
-        widget.setReadOnly(params.get("readonly"))
-    return widget
+        # If model value is None, reset combobox to first element
+        if isinstance(editor, QComboBox):
+            if index.data() is None:
+                editor.setCurrentIndex(0)
