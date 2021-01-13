@@ -14,7 +14,10 @@ from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
 from qt import QtPlotCanvas
-from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+try:
+	from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+except ModuleNotFoundError:
+    print("import 'gnuplot' is not installed")
 
 from util.JSONExporter import JSONExporter
 

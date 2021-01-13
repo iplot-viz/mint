@@ -10,7 +10,11 @@ from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxL
 from dataAccess import DataAccess
 from iplotlib.Canvas import Canvas
 from iplotlib.UDAAccess import UDAAccess
-from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+try :
+        from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+except ModuleNotFoundError:
+    print("import qt gnuplot not installed ")
+
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 
 from widgets.PreferencesWindow import PreferencesWindow
@@ -38,11 +42,11 @@ if __name__ == '__main__':
     currTime = datetime.now().isoformat(timespec='seconds')
     currTimeDelta = datetime.now() - timedelta(days=7)
 
-    file_to_import = "csv/deadlock_stack.csv"
+    #file_to_import = "csv/deadlock_stack.csv"
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    # file_to_import = None
+    file_to_import = None
 
 
     app = QApplication(sys.argv)
