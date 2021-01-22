@@ -89,18 +89,19 @@
                                 <copy source="widgets" target="widgets"/>
                                 <copy source="main.py" target="main.py"/>
  <copy source="mydatasources.cfg" target="mydatasources.cfg"/>
-  <copy source="examples" target="examples"/>
+<copy source="protoplot-pyqt5.sh" target="protoplot-pyqt5.sh"/>
+<copy source="default_proto_env" target="default_proto_env"/>
 
                             </init>
                         <packaging>
                         <package>
 				<requires codac="true">python38-modules</requires>
-<include type="file" source="icons" target="apps/iplotlib-qt/icons"/>
-                            <include type="file" source="csv" target="apps/iplotlib-qt/csv"/>
-                            <include type="file" source="util" target="apps/iplotlib-qt/util"/>
-                            <include type="file" source="widgets" target="apps/iplotlib-qt/widgets"/>
- <include type="file" source="main.py" target="apps/iplotlib-qt/main.py"/>
- <include type="file" source="mydatasources.cfg" target="apps/iplotlib-qt/conf/mydatasources.cfg"/>
+<include type="file" source="icons" target="apps/protoplot-pyqt5/icons"/>
+                            <include type="file" source="csv" target="apps/protoplot-pyqt5/csv"/>
+                            <include type="file" source="util" target="apps/protoplot-pyqt5/util"/>
+                            <include type="file" source="widgets" target="apps/protoplot-pyqt5/widgets"/>
+ <include type="file" source="main.py" target="apps/protoplot-pyqt5/main.py"/>
+ <include type="file" source="mydatasources.cfg" target="apps/protoplot-pyqt5/conf/mydatasources.cfg"/>
 <include type="file" source="protoplot-pyqt5.sh" target="bin/protoplot-pyqt5" />
 <include type="config" source="default_proto_env" targetroot="CODAC_CONF" target="env.d/protoplot-pyqt5" />
                         </package>

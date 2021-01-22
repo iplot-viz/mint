@@ -4,5 +4,5 @@
 #PROTO_LOG_PATH=
 PROTO_LOG_LEVEL=INFO
 PROTO_LOG_FILENAME=protoplot-pyqt5.log
-DATASOURCESCONF=${CODA_ROOT}/apps/protoplot-pyqt5/conf/mydatasources.cfg
+DATASOURCESCONF=/opt/codac/apps/protoplot-pyqt5/conf/mydatasources.cfg
 
