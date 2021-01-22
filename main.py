@@ -7,7 +7,7 @@ import pandas
 from PyQt5.QtCore import QMargins
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
-from dataAccess import DataAccess
+from access.dataAccess import DataAccess
 from iplotlib.Canvas import Canvas
 from iplotlib.UDAAccess import UDAAccess
 try :
