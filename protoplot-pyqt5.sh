@@ -7,21 +7,21 @@ then
 fi
 PYRUN=`python -V`
 
-if [ "$LD_LIBRARY_PATH" == *"/opt/codac/qt5/lib"* ]
+if [[ $LD_LIBRARY_PATH == *"/opt/codac/qt5/lib"* ]]
 then
 echo "not adding qt5"
 else
 export LD_LIBRARY_PATH=/opt/codac/qt5/lib:$LD_LIBRARY_PATH 
 fi
 
-if [ "$PYTHONPATH" == *"/opt/codac/apps/iplotlib-qt"* ]
+if [[ $PYTHONPATH == *"/opt/codac/apps/iplotlib-qt"* ]]
 then
 echo "not adding qt5"
 else
 export PYTHONPATH=$PYTHONPATH:/opt/codac/apps/iplotlib-qt 
 fi
 
-if [ "$PYRUN" == "Python 3.8"* ]
+if [[ $PYRUN == "Python 3.8"* ]]
 then
 
 python /opt/codac/apps/protoplot-pyqt5/main.py
