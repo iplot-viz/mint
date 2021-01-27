@@ -15,7 +15,7 @@ from iplotlib.Signal import ArraySignal, UDAPulse
 
 class PreferencesWindow(QMainWindow):
 
-    preferencesClosed = pyqtSignal()
+    apply = pyqtSignal()
 
     def __init__(self, canvas=None):
         super().__init__()
@@ -39,7 +39,7 @@ class PreferencesWindow(QMainWindow):
     def item_selected(self, item):
         if len(item.indexes()) > 0:
             for i in item.indexes():
-                print("\tITEM", i.row(), i.column(), i.data(Qt.UserRole))
+                print("\tITEM", i.row(), i.column(), "All types:" , type(i.data(Qt.UserRole)).__mro__)
                 data = i.data(Qt.UserRole)
                 index = list(self.forms.keys()).index(type(data))
                 self.right_column.setCurrentIndex(index)
@@ -51,6 +51,7 @@ class PreferencesWindow(QMainWindow):
         self.tree_view.selectionModel().selectionChanged.connect(self.item_selected)
         index = list(self.forms.keys()).index(Canvas)
         self.right_column.setCurrentIndex(index)
+
         if isinstance(self.right_column.currentWidget(), PreferencesForm):
             self.right_column.currentWidget().set_model(canvas)
         self.tree_view.expandAll()
@@ -58,7 +59,7 @@ class PreferencesWindow(QMainWindow):
     def closeEvent(self, event):
         if QApplication.focusWidget():
             QApplication.focusWidget().clearFocus()
-        self.preferencesClosed.emit()
+        self.apply.emit()
 
 
 class CanvasItemModel(QStandardItemModel):
@@ -153,7 +154,7 @@ class BeanItemModel(QAbstractItemModel):
 #TODO: Range changes should be included as canvas property: for entire canvas or for plots
 class PreferencesForm(QWidget):
 
-    closeForm: pyqtSignal()
+    apply: pyqtSignal()
 
     def __init__(self, label: str = None):
         super().__init__()
@@ -167,6 +168,10 @@ class PreferencesForm(QWidget):
         self.form.setLayout(QFormLayout())
         self.layout().addWidget(self.form)
 
+        apply_button = QPushButton("Apply")
+        apply_button.pressed.connect(self.hide)
+        # self.layout().addWidget(apply_button)
+
         self.mapper = QDataWidgetMapper()
         self.model = None
         self.mapper.setItemDelegate(CanvasFormDelegate())
@@ -175,10 +180,26 @@ class PreferencesForm(QWidget):
     def add_fields(self, fields):
         self.fields = fields
         if self.fields is not None:
-            for index, (label, prop, widget) in enumerate(self.fields):
-                self.form.layout().addRow(label, widget)
-                # self.form.layout().addRow(None, QLabel("HELLO WORLD"))
-                self.mapper.addMapping(widget, index)
+            # for index, (label, prop, widget) in enumerate(self.fields):
+            #     self.form.layout().addRow(label, widget)
+            #     self.mapper.addMapping(widget, index)
+
+            for index, row in enumerate(self.fields):
+                if isinstance(row, tuple):
+                    label, prop, widget = row
+                    self.form.layout().addRow(label, widget)
+                    self.mapper.addMapping(widget, index)
+                elif isinstance(row, list):
+                    for field in row:
+                        label, prop, widget = field
+                        self.form.layout().addRow(label, widget)
+                        self.mapper.addMapping(widget, index)
+
+                # print("ROW",type(row))
+                # self.form.layout().addRow(label, widget)
+                # self.mapper.addMapping(widget, index)
+
+
 
     def set_model(self, obj):
         self.model = obj
@@ -228,6 +249,11 @@ class PreferencesForm(QWidget):
     def defaultStepWidget(self):
         return self.createComboBox({"None": "None", "Begin": "pre", "End": "post", "Middle": "mid"})
 
+    def defaultStepWidget(self):
+        return self.createComboBox({"None": "None", "Begin": "pre", "End": "post", "Middle": "mid"})
+
+    def defaultDecSamplesWidget(self):
+        return self.createSpinbox(min=-1, max=20000)
 
 class CanvasForm(PreferencesForm):
     def __init__(self):
@@ -236,12 +262,14 @@ class CanvasForm(PreferencesForm):
             ("Title", "title", QLineEdit()),
             ("Font size", "font_size", self.defaultFontSizeWidget()),
             ("Grid", "grid", QCheckBox()),
+            ("Legend", "legend", QCheckBox()),
             ("Font color", "font_color", ColorPicker()),
             ("Line style", "line_style", self.defaultLineStyleWidget()),
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget())
+            ("Step", "step", self.defaultStepWidget()),
+            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
         ]
         self.add_fields(canvas_fields)
 
@@ -252,13 +280,16 @@ class PlotForm(PreferencesForm):
         plot_fields = [
             ("Title", "title", QLineEdit()),
             ("Grid", "grid", QCheckBox()),
+            ("Legend", "legend", QCheckBox()),
             ("Font size", "font_size", self.defaultFontSizeWidget()),
             ("Font color", "font_color", ColorPicker()),
             ("Line style", "line_style", self.defaultLineStyleWidget()),
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget())
+            ("Step", "step", self.defaultStepWidget()),
+            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
+
         ]
         self.add_fields(plot_fields)
 
@@ -287,7 +318,8 @@ class SignalForm(PreferencesForm):
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget())
+            ("Step", "step", self.defaultStepWidget()),
+            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
         ]
         self.add_fields(signal_fields)
 
