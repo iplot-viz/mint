@@ -1,6 +1,8 @@
-import collections
 import os
+import threading
+import time
 import typing
+import numpy as np
 from functools import partial
 
 import pandas
@@ -13,8 +15,8 @@ from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
+from matplotlib.dates import date2num, epoch2num
 from qt import QtPlotCanvas
-from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 
 from util.JSONExporter import JSONExporter
 
@@ -36,9 +38,20 @@ class UDAVariablesTable(QWidget):
         self.uda_table_view = QTableView()
         self.uda_table_view.setModel(self.table_model)
 
+        def export_clicked():
+            file = QFileDialog.getSaveFileName(self, "Save CSV")
+            if file and file[0]:
+                self.export_csv(file[0])
+
+        def import_clicked():
+            file = QFileDialog.getOpenFileName(self, "Open CSV")
+            if file and file[0]:
+                self.import_csv(file[0])
+
+
         uda_toolbar = UDAVairablesToolbar()
-        uda_toolbar.exportCsv.connect(self.export_clicked)
-        uda_toolbar.importCsv.connect(self.import_clicked)
+        uda_toolbar.exportCsv.connect(export_clicked)
+        uda_toolbar.importCsv.connect(import_clicked)
 
         uda_tab = QWidget()
         uda_tab.setLayout(QVBoxLayout())
@@ -62,20 +75,21 @@ class UDAVariablesTable(QWidget):
         context_menu.addAction(self.style().standardIcon(getattr(QStyle, "SP_TrashIcon")), "Remove", remove_row)
         context_menu.popup(event.globalPos())
 
-    def _create_signals(self, row, time_model):
+    def _create_signals(self, row, time_model=None):
 
         def get_value(data_row, key):
             return data_row[list(self.header).index(key)]
 
-
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
-            is_envelope = get_value(row, "Envelope")
-            title = get_value(row, "Alias") or None
+            signal_params = dict(datasource=get_value(row, "DataSource"), title=get_value(row, "Alias") or None, varname=get_value(row, "Variable"), envelope=get_value(row, "Envelope"))
 
-            if 'pulsenb' in time_model:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), title=title, varname=get_value(row, "Variable"), pulsenb=e, ts_relative=True, envelope=is_envelope) for e in time_model['pulsenb']]
+            if time_model is not None:
+                if 'pulsenb' in time_model:
+                    signals = [UDAPulse(**signal_params, pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
+                else:
+                    signals = [UDAPulse(**signal_params, pulsenb=None, ts_relative=False, **time_model)]
             else:
-                signals = [UDAPulse(datasource=get_value(row, "DataSource"), title=title, varname=get_value(row, "Variable"), pulsenb=None, ts_relative=False, envelope=is_envelope, **time_model)]
+                signals = [UDAPulse(**signal_params)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
@@ -89,12 +103,10 @@ class UDAVariablesTable(QWidget):
         else:
             return None, 0, 0, 0, 1, 1
 
-    def get_canvas(self, time_model):
+    def create_canvas(self, time_model=None):
         model = {}
 
-        x_axis_date = False
-        if time_model.get("ts_start") and time_model.get("ts_end"):
-            x_axis_date = True
+        x_axis_date = False if time_model is not None and 'pulsenb' in time_model else True
 
         for row in self.table_model.model:
             signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
@@ -134,15 +146,7 @@ class UDAVariablesTable(QWidget):
         return canvas
 
 
-    def export_clicked(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV")
-        if file and file[0]:
-            self.export_csv(file[0])
 
-    def import_clicked(self):
-        file = QFileDialog.getOpenFileName(self, "Open CSV")
-        if file and file[0]:
-            self.import_csv(file[0])
 
     def export_csv(self, file_path):
         df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
@@ -404,9 +408,6 @@ class CanvasToolbar(QToolBar):
         redo_action.triggered.connect(self.redo.emit)
         self.addAction(redo_action)
 
-
-
-
         self.detach_action = QAction("Detach", self)
         # detach_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/fullscreen.png")))
         self.detach_action.triggered.connect(self.detachPressed.emit)
@@ -430,6 +431,7 @@ class MainCanvas(QMainWindow):
         self.plot_canvas: QtPlotCanvas = plot_canvas
         self.canvas = canvas
         self.toolbar = CanvasToolbar()
+        self.toolbar.setVisible(False)
 
         self.addToolBar(self.toolbar)
         self.setCentralWidget(self.plot_canvas)
@@ -484,9 +486,8 @@ class MainCanvas(QMainWindow):
         self.toolbar.export_json.connect(do_export)
 
     def draw(self):
+        self.toolbar.setVisible(True)
         self.plot_canvas.set_canvas(self.canvas)
-
-
 
 
 class MainMenu(QMenuBar):
