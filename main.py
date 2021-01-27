@@ -10,7 +10,11 @@ from PyQt5.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSplitter, Q
 from access.dataAccess import DataAccess
 from iplotlib.Canvas import Canvas
 from iplotlib.UDAAccess import UDAAccess
-from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+try :
+        from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+except ModuleNotFoundError:
+    print("import qt gnuplot not installed ")
+
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 from utils.streamer import CanvasStreamer, VarDataStreamer
 

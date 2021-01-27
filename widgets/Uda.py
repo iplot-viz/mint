@@ -17,6 +17,10 @@ from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
 from matplotlib.dates import date2num, epoch2num
 from qt import QtPlotCanvas
+try:
+	from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+except ModuleNotFoundError:
+    print("import 'gnuplot' is not installed")
 
 from util.JSONExporter import JSONExporter
 
