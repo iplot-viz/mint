@@ -6,12 +6,13 @@ from pathlib import Path
 import pandas
 from PyQt5.QtCore import QMargins
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
-from dataAccess import DataAccess
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QPushButton, QSplitter, QStyle, QVBoxLayout, QWidget
+from access.dataAccess import DataAccess
 from iplotlib.Canvas import Canvas
 from iplotlib.UDAAccess import UDAAccess
 from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
+from utils.streamer import CanvasStreamer, VarDataStreamer
 
 from widgets.PreferencesWindow import PreferencesWindow
 from widgets.Uda import MainCanvas, MainMenu, Multiwindow, StatusBar, UDARangeSelector, UDAVariablesTable
@@ -36,12 +37,14 @@ if __name__ == '__main__':
             canvasImpl = sys.argv[1]
 
     currTime = datetime.now().isoformat(timespec='seconds')
-    currTimeDelta = datetime.now() - timedelta(days=7)
+    currTimeDelta = datetime.now() - timedelta(hours=1)
 
-    file_to_import = "csv/deadlock_stack.csv"
+    # file_to_import = "csv/deadlock_stack.csv"
+    # file_to_import = "csv/stream_example.csv"
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
+    file_to_import = "csv/stream1.csv"
     # file_to_import = None
 
 
@@ -58,8 +61,10 @@ if __name__ == '__main__':
     }
 
     model = {
-        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2021-01-08T20:17:40", "2021-01-15T20:27:40"]}
+
     }
 
     if file_to_import:
@@ -67,49 +72,75 @@ if __name__ == '__main__':
 
     canvas = Canvas(grid=True)
 
-    variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
-    range_selector = UDARangeSelector(model=model.get("range"))
-    draw_button = QPushButton("Draw")
-    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
-    preferences_window = PreferencesWindow()
-
-
-    def update_canvas():
-        """
-        Updates canvas object with data from variables table and timerange/pulses forms
-        """
-        time_model = range_selector.get_model()
-        new_canvas = variables_table.get_canvas(time_model)
-        canvas.rows = new_canvas.rows
-        canvas.cols = new_canvas.cols
-        canvas.plots = new_canvas.plots
-        preferences_window.set_canvas(canvas)
-
-    update_canvas()
-
-    def redraw():
-        dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
-        Path(dump_dir).mkdir(parents=True, exist_ok=True)
-        variables_table.export_csv(os.path.join(dump_dir, "variables_table.csv"))
-        update_canvas()
-        right_column.draw()
-
-    draw_button.clicked.connect(redraw)
-
-    left_column = QWidget()
-    left_column.setLayout(QVBoxLayout())
-    left_column.layout().setContentsMargins(QMargins())
-    left_column.layout().addWidget(range_selector)
-    left_column.layout().addWidget(variables_table)
-    left_column.layout().addWidget(draw_button)
 
     if (canvasImpl=="MATPLOTLIB"):
         right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=True), canvas=canvas)
     else:
         right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
 
+    variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
+    range_selector = UDARangeSelector(model=model.get("range"))
+
+    draw_button = QPushButton("Draw")
+    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
+    stream_button = QPushButton("Stream")
+    stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
+
+    preferences_window = PreferencesWindow()
+
+
+    def draw():
+        time_model = range_selector.get_model()
+        new_canvas = variables_table.create_canvas(time_model)
+        canvas.rows = new_canvas.rows
+        canvas.cols = new_canvas.cols
+        canvas.plots = new_canvas.plots
+        preferences_window.set_canvas(canvas)
+
+
+        dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
+        Path(dump_dir).mkdir(parents=True, exist_ok=True)
+        variables_table.export_csv(os.path.join(dump_dir, "variables_table.csv"))
+        right_column.draw()
+
+
+    def stream_callback(signal):
+        print("CALLBACK FOR SIGNAL",signal.varname, signal.get_data())
+        right_column.plot_canvas.matplotlib_canvas.refresh_signal(signal)
+
+
+    def stream():
+        stream_canvas = variables_table.create_canvas()
+        canvas.rows = stream_canvas.rows
+        canvas.cols = stream_canvas.cols
+        canvas.plots = stream_canvas.plots
+        right_column.draw()
+
+        streamer = CanvasStreamer()
+        streamer.start(canvas, stream_callback)
+
+    draw_button.clicked.connect(draw)
+    stream_button.clicked.connect(stream)
+
+    left_column = QWidget()
+    left_column.setLayout(QVBoxLayout())
+    left_column.layout().setContentsMargins(QMargins())
+    left_column.layout().addWidget(range_selector)
+    left_column.layout().addWidget(variables_table)
+
+    left_column_buttons = QWidget()
+    left_column_buttons.setLayout(QHBoxLayout())
+    left_column_buttons.layout().setContentsMargins(QMargins())
+    left_column_buttons.layout().addWidget(stream_button)
+    left_column_buttons.layout().addWidget(draw_button)
+
+
+    left_column.layout().addWidget(left_column_buttons)
+
+
+
     right_column.toolbar.preferences.connect(preferences_window.show)
-    preferences_window.preferencesClosed.connect(right_column.draw)
+    preferences_window.apply.connect(right_column.draw)
 
     central_widget = QSplitter()
     central_widget.addWidget(left_column)
