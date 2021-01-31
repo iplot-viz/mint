@@ -107,10 +107,12 @@ class UDAVariablesTable(QWidget):
         else:
             return None, 0, 0, 0, 1, 1
 
-    def create_canvas(self, time_model=None):
+    def create_canvas(self, time_model=None, stream_window=3600):
         model = {}
 
         x_axis_date = False if time_model is not None and 'pulsenb' in time_model else True
+        x_axis_follow = True if time_model is None else False
+        x_axis_window = stream_window if time_model is None else None
 
         for row in self.table_model.model:
             signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
@@ -141,7 +143,7 @@ class UDAVariablesTable(QWidget):
                     plot = None
                     if row+1 in rows.keys():
                         y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
-                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date), y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
+                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window), y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
                         for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -472,7 +474,6 @@ class MainCanvas(QMainWindow):
         self.toolbar.redo.connect(self.plot_canvas.forward)
         self.toolbar.redraw.connect(self.draw)
 
-
         def do_export():
             file = QFileDialog.getSaveFileName(self, "Save JSON")
             if file and file[0]:
@@ -539,8 +540,9 @@ class StatusBar(QStatusBar):
         super().__init__()
         self.showMessage("Ready.")
 
-"""This window closes all other open windows when itself gets closed"""
+
 class Multiwindow(QMainWindow):
+    """This window closes all other open windows when itself gets closed"""
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         QApplication.closeAllWindows()
