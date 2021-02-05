@@ -85,7 +85,7 @@
                             <init>
                                 <copy source="icons" target="icons"/>
 <copy source="csv" target="csv"/>
-                                <copy source="utils" target="utils"/>
+                                <copy source="util" target="util"/>
                                 <copy source="widgets" target="widgets"/>
                                 <copy source="main.py" target="main.py"/>
  <copy source="mydatasources.cfg" target="mydatasources.cfg"/>
