@@ -126,15 +126,35 @@ class BeanItemModel(QAbstractItemModel):
         self.form = form
 
     def data(self, index: QModelIndex, role: int = ...) -> typing.Any:
+
         if self.form and self.form.model is not None and self.form.fields is not None:
             desc = self.form.fields[index.column()]
-            return getattr(self.form.model, desc[1])
+
+            if desc[2] is not None and hasattr(desc[2],'_items'):
+                key = getattr(self.form.model, desc[1])
+                keys = list(desc[2]._items.keys())
+                if key in keys:
+                    return keys.index(key)
+                else:
+                    return 0
+            else:
+                return getattr(self.form.model, desc[1])
         return ""
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
+
         if self.form and self.form.model is not None and self.form.fields is not None:
             desc = self.form.fields[index.column()]
-            setattr(self.form.model, desc[1], value)
+
+            if desc[2] is not None and hasattr(desc[2], '_items'):
+                keys = list(desc[2]._items.keys())
+                print("SETTING VALUE: ", keys[value], "field ", desc[1], "model",self.form.model)
+                setattr(self.form.model, desc[1], keys[value])
+                print("VAL", self.form.model)
+            else:
+                print("MODEL SET DATA", role, value, desc)
+                setattr(self.form.model, desc[1], value)
+
             self.dataChanged.emit(self.createIndex(0, 0), self.createIndex(100, 100)) #FIXME: correct this
             self.layoutChanged.emit()
         return True
@@ -174,32 +194,25 @@ class PreferencesForm(QWidget):
 
         self.mapper = QDataWidgetMapper()
         self.model = None
-        self.mapper.setItemDelegate(CanvasFormDelegate())
         self.mapper.setModel(BeanItemModel(self))
 
     def add_fields(self, fields):
         self.fields = fields
         if self.fields is not None:
-            # for index, (label, prop, widget) in enumerate(self.fields):
-            #     self.form.layout().addRow(label, widget)
-            #     self.mapper.addMapping(widget, index)
 
             for index, row in enumerate(self.fields):
                 if isinstance(row, tuple):
                     label, prop, widget = row
                     self.form.layout().addRow(label, widget)
-                    self.mapper.addMapping(widget, index)
+                    if isinstance(widget, QComboBox):
+                        self.mapper.addMapping(widget, index, b"currentIndex")
+                    else:
+                        self.mapper.addMapping(widget, index)
                 elif isinstance(row, list):
                     for field in row:
                         label, prop, widget = field
                         self.form.layout().addRow(label, widget)
                         self.mapper.addMapping(widget, index)
-
-                # print("ROW",type(row))
-                # self.form.layout().addRow(label, widget)
-                # self.mapper.addMapping(widget, index)
-
-
 
     def set_model(self, obj):
         self.model = obj
@@ -216,7 +229,9 @@ class PreferencesForm(QWidget):
 
     def createComboBox(self, items):
         widget = QComboBox()
+        widget._items = items
         if isinstance(items, dict):
+            print("DICT",items)
             for k, v in items.items():
                 widget.addItem(v, k)
         elif isinstance(items, list):
@@ -241,16 +256,13 @@ class PreferencesForm(QWidget):
         return self.createSpinbox(min=0, max=20)
 
     def defaultLineStyleWidget(self):
-        return self.createComboBox({"solid": "Solid", "dotted": "Dotted", "dashed": "Dashed", "None": "None"})
+        return self.createComboBox({"Solid": "Solid", "Dotted": "Dotted", "Dashed": "Dashed", "None": "None"})
 
     def defaultMarkerWidget(self):
         return self.createComboBox({"None": "None", "o": "o", "x": "x"})
 
     def defaultStepWidget(self):
-        return self.createComboBox({"None": "None", "Begin": "pre", "End": "post", "Middle": "mid"})
-
-    def defaultStepWidget(self):
-        return self.createComboBox({"None": "None", "Begin": "pre", "End": "post", "Middle": "mid"})
+        return self.createComboBox({"None": "None", "post": "Last Value"})
 
     def defaultDecSamplesWidget(self):
         return self.createSpinbox(min=-1, max=20000)
@@ -353,14 +365,3 @@ class ColorPicker(QWidget):
     def rgbValue(self, color):
         self.setStyleSheet("background-color: {}".format(color))
         self.selectedColor = color
-
-
-class CanvasFormDelegate(QItemDelegate):
-
-    def setEditorData(self, editor: QWidget, index: QtCore.QModelIndex) -> None:
-        super().setEditorData(editor, index)
-
-        # If model value is None, reset combobox to first element
-        if isinstance(editor, QComboBox):
-            if index.data() is None:
-                editor.setCurrentIndex(0)
