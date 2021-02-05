@@ -108,7 +108,7 @@ if __name__ == '__main__':
         right_column.toolbar.setVisible(True)
         dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
-        variables_table.export_csv(os.path.join(dump_dir, "variables_table.csv"))
+        variables_table.export_csv(os.path.join(dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
         right_column.draw()
 
     def stream():
