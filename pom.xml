@@ -97,6 +97,7 @@
                         <package>
 				<requires codac="true">python38-modules</requires>
 <requires codac="true">iplotlib-qt</requires>
+<requires >libicu</requires>
 <include type="file" source="icons" target="apps/protoplot-pyqt5/icons"/>
                             <include type="file" source="csv" target="apps/protoplot-pyqt5/csv"/>
                             <include type="file" source="util" target="apps/protoplot-pyqt5/util"/>
