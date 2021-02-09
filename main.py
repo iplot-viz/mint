@@ -49,8 +49,8 @@ if __name__ == '__main__':
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    file_to_import = "csv/stream1.csv"
-    # file_to_import = None
+    #file_to_import = "csv/stream1.csv"
+    file_to_import = None
 
     app = QApplication(sys.argv)
 
@@ -65,9 +65,9 @@ if __name__ == '__main__':
     }
 
     model = {
-        # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
-        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2021-01-08T20:17:40", "2021-01-15T20:27:40"]}
+        #"range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2021-01-08T20:17:40", "2021-01-15T20:27:40"]}
 
     }
 
