@@ -103,6 +103,7 @@ if __name__ == '__main__':
         canvas.rows = new_canvas.rows
         canvas.cols = new_canvas.cols
         canvas.plots = new_canvas.plots
+        canvas.streaming = False
         preferences_window.set_canvas(canvas)
 
         right_column.toolbar.setVisible(True)
@@ -118,22 +119,23 @@ if __name__ == '__main__':
         windowField = QSpinBox()
 
         def stream_callback(signal):
-            print("CALLBACK FOR SIGNAL", signal.varname)
             right_column.plot_canvas.matplotlib_canvas.refresh_signal(signal)
 
         def do_stream():
             global streamer
             stream_dialog.hide()
 
-            stream_canvas = variables_table.create_canvas(stream_window = windowField.value())
+
+            stream_canvas = variables_table.create_canvas(stream_window=windowField.value())
             canvas.rows = stream_canvas.rows
             canvas.cols = stream_canvas.cols
+            canvas.streaming = True
             canvas.plots = stream_canvas.plots
             right_column.draw()
 
             right_column.toolbar.setVisible(False)
 
-            streamer = CanvasStreamer()
+            streamer = CanvasStreamer(da)
             streamer.start(canvas, stream_callback)
             stream_button.setText("Stop")
 
