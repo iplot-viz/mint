@@ -10,7 +10,8 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, \
-    QMainWindow, QMenu, QMenuBar, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStatusBar, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QToolButton, QVBoxLayout, QWidget
+    QMainWindow, QMenu, QMenuBar, QMessageBox, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStatusBar, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QToolButton, QVBoxLayout, \
+    QWidget
 from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
@@ -159,9 +160,16 @@ class UDAVariablesTable(QWidget):
         df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
 
     def import_csv(self, file_path):
-        df = pandas.read_csv(file_path, dtype=str, keep_default_na=False)
-        if not df.empty:
-            self.uda_table_view.model().set_model(df.values.tolist())
+        try:
+            df = pandas.read_csv(file_path, dtype=str, keep_default_na=False)
+            if not df.empty:
+                self.uda_table_view.model().set_model(df.values.tolist())
+        except:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setText("Error parsing file")
+            box.exec_()
+
 
 
 class PlotsModel(QAbstractTableModel):
@@ -481,11 +489,16 @@ class MainCanvas(QMainWindow):
                     out_file.write(JSONExporter().to_json(self.canvas))
 
         def do_import():
-            file = QFileDialog.getOpenFileName(self, "Open CSV")
-            if file and file[0]:
-                with open(file[0], "r") as in_file:
-                    self.canvas = JSONExporter().from_json(in_file.read())
-                    print("CANVAS: ",self.canvas)
+            try:
+                file = QFileDialog.getOpenFileName(self, "Open CSV")
+                if file and file[0]:
+                    with open(file[0], "r") as in_file:
+                        self.canvas = JSONExporter().from_json(in_file.read())
+            except:
+                box = QMessageBox()
+                box.setIcon(QMessageBox.Critical)
+                box.setText("Error parsing file")
+                box.exec_()
 
         self.toolbar.import_json.connect(do_import)
         self.toolbar.export_json.connect(do_export)
