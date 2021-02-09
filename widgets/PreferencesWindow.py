@@ -28,6 +28,8 @@ class PreferencesWindow(QMainWindow):
 
         for form in self.forms.values():
             self.right_column.addWidget(form)
+            if isinstance(form, PreferencesForm):
+                form.applySignal.connect(self.apply.emit)
 
         central_widget = QSplitter()
         central_widget.addWidget(self.tree_view)
@@ -39,7 +41,7 @@ class PreferencesWindow(QMainWindow):
     def item_selected(self, item):
         if len(item.indexes()) > 0:
             for i in item.indexes():
-                print("\tITEM", i.row(), i.column(), "All types:" , type(i.data(Qt.UserRole)).__mro__)
+                print("\tITEM", i.row(), i.column(), "All types:" , type(i.data(Qt.UserRole)).__mro__,i.data(Qt.UserRole))
                 data = i.data(Qt.UserRole)
                 index = list(self.forms.keys()).index(type(data))
                 self.right_column.setCurrentIndex(index)
@@ -55,6 +57,9 @@ class PreferencesWindow(QMainWindow):
         if isinstance(self.right_column.currentWidget(), PreferencesForm):
             self.right_column.currentWidget().set_model(canvas)
         self.tree_view.expandAll()
+
+    # def save(self):
+    #     PreferencesWindow.apply.emit()
 
     def closeEvent(self, event):
         if QApplication.focusWidget():
@@ -174,7 +179,7 @@ class BeanItemModel(QAbstractItemModel):
 #TODO: Range changes should be included as canvas property: for entire canvas or for plots
 class PreferencesForm(QWidget):
 
-    apply: pyqtSignal()
+    applySignal = pyqtSignal()
 
     def __init__(self, label: str = None):
         super().__init__()
@@ -189,8 +194,8 @@ class PreferencesForm(QWidget):
         self.layout().addWidget(self.form)
 
         apply_button = QPushButton("Apply")
-        apply_button.pressed.connect(self.hide)
-        # self.layout().addWidget(apply_button)
+        apply_button.pressed.connect(self.applySignal.emit)
+        self.layout().addWidget(apply_button)
 
         self.mapper = QDataWidgetMapper()
         self.model = None
@@ -268,6 +273,7 @@ class PreferencesForm(QWidget):
         return self.createSpinbox(min=-1, max=20000)
 
 class CanvasForm(PreferencesForm):
+
     def __init__(self):
         super().__init__("Canvas")
         canvas_fields = [
@@ -313,7 +319,9 @@ class AxisForm(PreferencesForm):
         axis_fields = [
             ("Label", "label", QLineEdit()),
             ("Font size", "font_size", self.defaultFontSizeWidget()),
-            ("Font color", "font_color", ColorPicker())
+            ("Font color", "font_color", ColorPicker()),
+            # ("Min value", "begin", QLineEdit()),
+            # ("Max value", "end", QLineEdit())
         ]
 
         self.add_fields(axis_fields)
