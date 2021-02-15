@@ -156,8 +156,11 @@ class UDAVariablesTable(QWidget):
 
 
     def export_csv(self, file_path):
-        df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
-        df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
+        try:
+            df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
+            df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
+        except:
+            print("Error when dumping variables to file:",e)
 
     def import_csv(self, file_path):
         try:
