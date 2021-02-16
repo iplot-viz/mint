@@ -279,6 +279,7 @@ class CanvasForm(PreferencesForm):
         canvas_fields = [
             ("Title", "title", QLineEdit()),
             ("Font size", "font_size", self.defaultFontSizeWidget()),
+            ("Shared x axis", "shared_x_axis", QCheckBox()),
             ("Grid", "grid", QCheckBox()),
             ("Legend", "legend", QCheckBox()),
             ("Font color", "font_color", ColorPicker()),
