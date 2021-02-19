@@ -1,7 +1,10 @@
+import json
 import os
 import threading
 import time
 import typing
+
+import dateutil
 import numpy as np
 from functools import partial
 
@@ -30,11 +33,12 @@ class UDAVariablesTable(QWidget):
 
     canvasChanged = pyqtSignal(Canvas)
 
-    def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=Plot2D):
+    def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=Plot2D, default_dec_samples=1000):
         super().__init__(parent)
 
         self.data_access = data_access
         self.plot_class = plot_class
+        self.default_dec_samples = default_dec_samples
         self.header = header
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
@@ -86,7 +90,11 @@ class UDAVariablesTable(QWidget):
             return data_row[list(self.header).index(key)]
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
-            signal_params = dict(datasource=get_value(row, "DataSource"), title=get_value(row, "Alias") or None, varname=get_value(row, "Variable"), envelope=get_value(row, "Envelope"))
+            signal_params = dict(datasource=get_value(row, "DataSource"),
+                                 title=get_value(row, "Alias") or None,
+                                 varname=get_value(row, "Variable"),
+                                 envelope=get_value(row, "Envelope"),
+                                 dec_samples=get_value(row, "DecSamples") or self.default_dec_samples)
 
             if time_model is not None:
                 if 'pulsenb' in time_model:
@@ -144,7 +152,15 @@ class UDAVariablesTable(QWidget):
                     plot = None
                     if row+1 in rows.keys():
                         y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
-                        plot = self.plot_class(axes=[LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window), y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
+
+                        if x_axis_date and time_model is not None:
+                            x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window,
+                                                begin=dateutil.parser.isoparse(time_model.get('ts_start')).timestamp(),
+                                                end=dateutil.parser.isoparse(time_model.get('ts_end')).timestamp())
+                        else:
+                            x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
+
+                        plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
                         for stack, signals in rows[row+1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
@@ -152,15 +168,12 @@ class UDAVariablesTable(QWidget):
 
         return canvas
 
-
-
-
-    def export_csv(self, file_path):
+    def export_csv(self, file_path=None):
         try:
             df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
-            df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
+            return df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
         except:
-            print("Error when dumping variables to file:",e)
+            print("Error when dumping variables to file:")
 
     def import_csv(self, file_path):
         try:
@@ -173,6 +186,14 @@ class UDAVariablesTable(QWidget):
             box.setText("Error parsing file")
             box.exec_()
 
+    def export_json(self):
+        df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
+        return df.to_json(orient='values')
+
+    def import_json(self, json):
+        df = pandas.read_json(json, dtype=str, orient='values')
+        if not df.empty:
+            self.uda_table_view.model().set_model(df.values.tolist())
 
 
 class PlotsModel(QAbstractTableModel):
@@ -281,8 +302,13 @@ class UDARangeSelector(QWidget):
 
     def get_model(self):
         model = self.items[self.stack.currentIndex()][3]
-        # return {"type": self.items[self.stack.currentIndex()][0], "model": model.stringList()}
         return model()
+
+    def export_json(self):
+        return json.dumps(self.get_model())
+
+    def import_json(self, json_string):
+        self.model = json.loads(json_string)
 
     def _createStackedForm(self):
         self.items = [self._createTimeRangeForm(), self._createPusleNumberForm(), self._createRelativeTimeForm()]
@@ -446,7 +472,7 @@ class MainCanvas(QMainWindow):
         super().__init__()
         self.original_canvas = None
         self.plot_canvas: QtPlotCanvas = plot_canvas
-        self.canvas = canvas
+        # self.canvas = canvas
         self.toolbar = CanvasToolbar()
         self.toolbar.setVisible(False)
 
@@ -486,17 +512,23 @@ class MainCanvas(QMainWindow):
         self.toolbar.redraw.connect(self.draw)
 
         def do_export():
-            file = QFileDialog.getSaveFileName(self, "Save JSON")
-            if file and file[0]:
-                with open(file[0], "w") as out_file:
-                    out_file.write(JSONExporter().to_json(self.canvas))
+            try:
+                file = QFileDialog.getSaveFileName(self, "Save JSON")
+                if file and file[0] and self.plot_canvas and self.plot_canvas.get_canvas():
+                    with open(file[0], "w") as out_file:
+                        out_file.write(self.export_json())
+            except:
+                box = QMessageBox()
+                box.setIcon(QMessageBox.Critical)
+                box.setText("Error exporting file")
+                box.exec_()
 
         def do_import():
             try:
                 file = QFileDialog.getOpenFileName(self, "Open CSV")
                 if file and file[0]:
                     with open(file[0], "r") as in_file:
-                        self.canvas = JSONExporter().from_json(in_file.read())
+                        self.import_json(in_file.read())
             except:
                 box = QMessageBox()
                 box.setIcon(QMessageBox.Critical)
@@ -506,15 +538,23 @@ class MainCanvas(QMainWindow):
         self.toolbar.import_json.connect(do_import)
         self.toolbar.export_json.connect(do_export)
 
-    def draw(self):
+    def export_json(self):
+        return JSONExporter().to_json(self.plot_canvas.get_canvas())
+
+    def import_json(self, json):
+        self.draw(JSONExporter().from_json(json))
+
+    def draw(self, canvas):
         self.toolbar.setVisible(True)
-        self.plot_canvas.set_canvas(self.canvas)
+        self.plot_canvas.set_canvas(canvas)
 
 
 class MainMenu(QMenuBar):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, export_widgets=dict()):
         super().__init__(parent)
+        self.export_widgets = export_widgets
+
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
 
         file_menu = self.addMenu("File")
@@ -523,6 +563,12 @@ class MainMenu(QMenuBar):
         exit_action = QAction("Exit", self)
         exit_action.setShortcuts(QKeySequence.Quit)
         exit_action.triggered.connect(QApplication.closeAllWindows)
+
+        export_action = QAction("Export workspace", self)
+        export_action.triggered.connect(self.do_export)
+
+        import_action = QAction("Import workspace", self)
+        import_action.triggered.connect(self.do_import)
 
         about_action = QAction("About Qt", self)
         about_action.setShortcuts(QKeySequence.New)
@@ -547,7 +593,60 @@ class MainMenu(QMenuBar):
         help_menu.addSection("Testsection")
         help_menu.addAction(about_action)
 
+        file_menu.addAction(export_action)
+        file_menu.addAction(import_action)
+
         file_menu.addAction(exit_action)
+
+
+
+    def do_export(self):
+        """Exports widgets from self.export_widget to one big json file"""
+        try:
+            file = QFileDialog.getSaveFileName(self, "Export workspace file")
+            if file and file[0]:
+                data = dict()
+                if self.export_widgets is not None:
+                    for k, v in self.export_widgets.items():
+                        if v is not None and hasattr(v, "export_json"):
+                            try:
+                                chunk = v.export_json()
+                                print("Exporting", v, k, chunk)
+                                data[k] = json.loads(chunk)
+                            except:
+                                print("Error exporting ", v , k)
+                        else:
+                            print("Skipping export widget", v, k)
+
+                with open(file[0], "w") as out_file:
+                    out_file.write(json.dumps(data, indent=4, sort_keys=True))
+        except :
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setText("Error exporting file")
+            box.exec_()
+
+    def do_import(self):
+        try:
+            file = QFileDialog.getOpenFileName(self, "Open workspace file")
+            if file and file[0]:
+
+                with open(file[0], "r") as in_file:
+                    data = json.loads(in_file.read())
+
+                    for k, v in self.export_widgets.items():
+                        if v is not None and hasattr(v, "import_json") and data.get(k) is not None:
+                            print("Importing",k,v)
+                            v.import_json(json.dumps(data.get(k)))
+
+
+        except:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setText("Error parsing file")
+            box.exec_()
+            raise
+
 
 
 class StatusBar(QStatusBar):
