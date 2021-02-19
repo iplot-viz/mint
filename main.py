@@ -20,8 +20,11 @@ except ModuleNotFoundError:
 from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
 from utils.streamer import CanvasStreamer
 
-from widgets.PreferencesWindow import PreferencesWindow
-from widgets.Uda import MainCanvas, MainMenu, Multiwindow, StatusBar, UDARangeSelector, UDAVariablesTable
+from gui.Main import Multiwindow, MainMenu, StatusBar
+from gui.PlotCanvas import MainCanvas
+from gui.VariablesTable import VariablesTable, DataRangeSelector
+from gui.PreferencesWindow import PreferencesWindow
+
 
 if __name__ == '__main__':
 
@@ -68,7 +71,7 @@ if __name__ == '__main__':
     }
 
     model = {
-        "range": {"mode": UDARangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
         #"range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2021-01-08T20:17:40", "2021-01-15T20:27:40"]}
 
@@ -87,8 +90,8 @@ if __name__ == '__main__':
     else:
         right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
 
-    variables_table = UDAVariablesTable(data_access=da, header=header, model=model.get("table"))
-    range_selector = UDARangeSelector(model=model.get("range"))
+    variables_table = VariablesTable(data_access=da, header=header, model=model.get("table"))
+    range_selector = DataRangeSelector(model=model.get("range"))
 
     draw_button = QPushButton("Draw")
     draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
@@ -134,7 +137,7 @@ if __name__ == '__main__':
             canvas.cols = stream_canvas.cols
             canvas.streaming = True
             canvas.plots = stream_canvas.plots
-            right_column.draw()
+            right_column.draw(canvas)
 
             right_column.toolbar.setVisible(False)
 

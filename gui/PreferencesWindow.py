@@ -268,9 +268,6 @@ class PreferencesForm(QWidget):
     def defaultStepWidget(self):
         return self.createComboBox({"None": "None", "post": "Last Value"})
 
-    def defaultDecSamplesWidget(self):
-        return self.createSpinbox(min=-1, max=20000)
-
 class CanvasForm(PreferencesForm):
 
     def __init__(self):
@@ -286,8 +283,7 @@ class CanvasForm(PreferencesForm):
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget()),
-            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
+            ("Step", "step", self.defaultStepWidget())
         ]
         self.add_fields(canvas_fields)
 
@@ -305,8 +301,7 @@ class PlotForm(PreferencesForm):
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget()),
-            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
+            ("Step", "step", self.defaultStepWidget())
 
         ]
         self.add_fields(plot_fields)
@@ -338,9 +333,7 @@ class SignalForm(PreferencesForm):
             ("Line size", "line_size", self.defaultLineSizeWidget()),
             ("Marker", "marker", self.defaultMarkerWidget()),
             ("Marker size", "marker_size", self.defaultMarkerSizeWidget()),
-            ("Step", "step", self.defaultStepWidget()),
-            ("Signal samples", "dec_samples", self.defaultDecSamplesWidget())
-        ]
+            ("Step", "step", self.defaultStepWidget())        ]
         self.add_fields(signal_fields)
 
 

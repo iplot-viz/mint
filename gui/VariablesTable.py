@@ -1,35 +1,22 @@
 import json
 import os
-import threading
-import time
 import typing
-
-import dateutil
-import numpy as np
 from functools import partial
 
+import dateutil
 import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon, QKeySequence
-from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, \
-    QMainWindow, QMenu, QMenuBar, QMessageBox, QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QStatusBar, QStyle, QTabWidget, QTableView, QTableWidget, QToolBar, QToolButton, QVBoxLayout, \
-    QWidget
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
+    QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
 from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
-from matplotlib.dates import date2num, epoch2num
-from qt import QtPlotCanvas
-try:
-	from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
-except ModuleNotFoundError:
-    print("import 'gnuplot' is not installed")
-
-from util.JSONExporter import JSONExporter
 
 
-class UDAVariablesTable(QWidget):
+class VariablesTable(QWidget):
 
     canvasChanged = pyqtSignal(Canvas)
 
@@ -58,7 +45,7 @@ class UDAVariablesTable(QWidget):
                 self.import_csv(file[0])
 
 
-        uda_toolbar = UDAVairablesToolbar()
+        uda_toolbar = VairablesToolbar()
         uda_toolbar.exportCsv.connect(export_clicked)
         uda_toolbar.importCsv.connect(import_clicked)
 
@@ -196,6 +183,22 @@ class UDAVariablesTable(QWidget):
             self.uda_table_view.model().set_model(df.values.tolist())
 
 
+class VairablesToolbar(QWidget):
+
+    exportCsv = pyqtSignal()
+    importCsv = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setLayout(QHBoxLayout())
+        self.layout().setContentsMargins(QMargins())
+
+        tb = QToolBar()
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Open CSV", self.importCsv.emit)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Save CSV", self.exportCsv.emit)
+        self.layout().addWidget(tb)
+
 class PlotsModel(QAbstractTableModel):
 
     def __init__(self, column_definitions, initial_model=None):
@@ -260,29 +263,7 @@ class PlotsModel(QAbstractTableModel):
         self.model = self._expand_model(model)
         self._add_empty_row()
 
-
-
-
-
-
-class UDAVairablesToolbar(QWidget):
-
-    exportCsv = pyqtSignal()
-    importCsv = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.setLayout(QHBoxLayout())
-        self.layout().setContentsMargins(QMargins())
-
-        tb = QToolBar()
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Open CSV", self.importCsv.emit)
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Save CSV", self.exportCsv.emit)
-        self.layout().addWidget(tb)
-
-
-class UDARangeSelector(QWidget):
+class DataRangeSelector(QWidget):
 
     PULSE_NUMBER = 1
     TIME_RANGE = 2
@@ -346,7 +327,7 @@ class UDARangeSelector(QWidget):
         pulse_number = QLineEdit()
 
         model = QStringListModel(form)
-        model.setStringList(self.model.get('value') if self.model.get('mode') == UDARangeSelector.PULSE_NUMBER and self.model.get('value') else [''])
+        model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.PULSE_NUMBER and self.model.get('value') else [''])
 
         mapper = QDataWidgetMapper(form)
         mapper.setOrientation(Qt.Vertical)
@@ -359,7 +340,7 @@ class UDARangeSelector(QWidget):
         def ret():
             return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
 
-        return UDARangeSelector.PULSE_NUMBER, "Pulse number", form, ret,
+        return DataRangeSelector.PULSE_NUMBER, "Pulse number", form, ret,
 
     def _createTimeRangeForm(self):
         form = QWidget()
@@ -371,7 +352,7 @@ class UDARangeSelector(QWidget):
         to_time.setDisplayFormat(self.TIME_FORMAT)
 
         model = QStringListModel(form)
-        model.setStringList(self.model.get('value') if self.model.get('mode') == UDARangeSelector.TIME_RANGE and self.model.get('value') else ['', ''])
+        model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.TIME_RANGE and self.model.get('value') else ['', ''])
 
         mapper = QDataWidgetMapper(form)
         mapper.setOrientation(Qt.Vertical)
@@ -386,7 +367,7 @@ class UDARangeSelector(QWidget):
         def ret():
             return {"ts_start": model.stringList()[0], "ts_end": model.stringList()[1]}
 
-        return UDARangeSelector.TIME_RANGE, "Time range", form, ret
+        return DataRangeSelector.TIME_RANGE, "Time range", form, ret
 
 
     def _createRelativeTimeForm(self):
@@ -406,259 +387,4 @@ class UDARangeSelector(QWidget):
         def ret():
             return {"relative": options[relative_time.currentIndex()][0]}
 
-        return UDARangeSelector.RELATIVE_TIME, "Relative", form, ret,
-
-
-class CanvasToolbar(QToolBar):
-
-    toolSelected = pyqtSignal(str)
-    detachPressed = pyqtSignal()
-    undo = pyqtSignal()
-    redo = pyqtSignal()
-    export_json = pyqtSignal()
-    import_json = pyqtSignal()
-    redraw = pyqtSignal()
-    preferences = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        # self.setLayout(QVBoxLayout())
-        self.layout().setContentsMargins(QMargins())
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
-
-        def selectTool(selected):
-            self.toolSelected.emit(selected)
-
-        tool_group = QActionGroup(self)
-        tool_group.setExclusive(True)
-
-        for e in [Canvas.MOUSE_MODE_SELECT, Canvas.MOUSE_MODE_CROSSHAIR, Canvas.MOUSE_MODE_PAN, Canvas.MOUSE_MODE_ZOOM]:
-            tool_action = QAction(e[3:], self)
-            tool_action.setCheckable(True)
-            tool_action.setActionGroup(tool_group)
-            tool_action.triggered.connect(partial(selectTool, e))
-            self.addAction(tool_action)
-
-        self.addSeparator()
-
-        undo_action = QAction("Undo", self)
-        undo_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/undo.png")))
-        undo_action.triggered.connect(self.undo.emit)
-        self.addAction(undo_action)
-
-        redo_action = QAction("Redo", self)
-        redo_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/redo.png")))
-        redo_action.triggered.connect(self.redo.emit)
-        self.addAction(redo_action)
-
-        self.detach_action = QAction("Detach", self)
-        # detach_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/fullscreen.png")))
-        self.detach_action.triggered.connect(self.detachPressed.emit)
-        self.addAction(self.detach_action)
-
-        preferences_action = QAction("Preferences", self)
-        preferences_action.setIcon(QIcon(os.path.join(os.path.dirname(__file__),"../icons/options.png")))
-        preferences_action.triggered.connect(self.preferences.emit)
-        self.addAction(preferences_action)
-
-        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Export to JSON", self.export_json.emit)
-        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Import JSON", self.import_json.emit)
-        self.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/rotate180.png")), "Redraw", self.redraw.emit)
-
-
-class MainCanvas(QMainWindow):
-
-    def __init__(self, detached=False, attach_parent=None, plot_canvas=None, canvas=None):
-        super().__init__()
-        self.original_canvas = None
-        self.plot_canvas: QtPlotCanvas = plot_canvas
-        # self.canvas = canvas
-        self.toolbar = CanvasToolbar()
-        self.toolbar.setVisible(False)
-
-        self.addToolBar(self.toolbar)
-        self.setCentralWidget(self.plot_canvas)
-
-        self.detached = False
-        self.attach_parent = attach_parent
-        self.detached_window = QMainWindow()
-        self.detached_window.setStatusBar(StatusBar())
-        self.detached_window.layout().setContentsMargins(QMargins())
-        self.detached_window.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint)
-
-        if hasattr(self.plot_canvas, "process_canvas_toolbar"):
-            self.plot_canvas.process_canvas_toolbar(self.toolbar)
-
-        def tool_selected(tool):
-            self.plot_canvas.set_mouse_mode(tool)
-
-        def detach():
-            if self.detached:
-                self.setParent(self.attach_parent)
-                self.detached_window.hide()
-                self.detached = False
-                self.toolbar.detach_action.setText("Detach")
-            else:
-                self.attach_parent = self.parent()
-                self.detached_window.setCentralWidget(self)
-                self.detached_window.show()
-                self.detached = True
-                self.toolbar.detach_action.setText("Reattach")
-
-        self.toolbar.toolSelected.connect(tool_selected)
-        self.toolbar.detachPressed.connect(detach)
-        self.toolbar.undo.connect(self.plot_canvas.back)
-        self.toolbar.redo.connect(self.plot_canvas.forward)
-        self.toolbar.redraw.connect(self.draw)
-
-        def do_export():
-            try:
-                file = QFileDialog.getSaveFileName(self, "Save JSON")
-                if file and file[0] and self.plot_canvas and self.plot_canvas.get_canvas():
-                    with open(file[0], "w") as out_file:
-                        out_file.write(self.export_json())
-            except:
-                box = QMessageBox()
-                box.setIcon(QMessageBox.Critical)
-                box.setText("Error exporting file")
-                box.exec_()
-
-        def do_import():
-            try:
-                file = QFileDialog.getOpenFileName(self, "Open CSV")
-                if file and file[0]:
-                    with open(file[0], "r") as in_file:
-                        self.import_json(in_file.read())
-            except:
-                box = QMessageBox()
-                box.setIcon(QMessageBox.Critical)
-                box.setText("Error parsing file")
-                box.exec_()
-
-        self.toolbar.import_json.connect(do_import)
-        self.toolbar.export_json.connect(do_export)
-
-    def export_json(self):
-        return JSONExporter().to_json(self.plot_canvas.get_canvas())
-
-    def import_json(self, json):
-        self.draw(JSONExporter().from_json(json))
-
-    def draw(self, canvas):
-        self.toolbar.setVisible(True)
-        self.plot_canvas.set_canvas(canvas)
-
-
-class MainMenu(QMenuBar):
-
-    def __init__(self, parent=None, export_widgets=dict()):
-        super().__init__(parent)
-        self.export_widgets = export_widgets
-
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
-
-        file_menu = self.addMenu("File")
-        help_menu = self.addMenu("Help")
-
-        exit_action = QAction("Exit", self)
-        exit_action.setShortcuts(QKeySequence.Quit)
-        exit_action.triggered.connect(QApplication.closeAllWindows)
-
-        export_action = QAction("Export workspace", self)
-        export_action.triggered.connect(self.do_export)
-
-        import_action = QAction("Import workspace", self)
-        import_action.triggered.connect(self.do_import)
-
-        about_action = QAction("About Qt", self)
-        about_action.setShortcuts(QKeySequence.New)
-        about_action.setStatusTip("About Qt")
-        about_action.triggered.connect(QApplication.aboutQt)
-
-        lr_group = QActionGroup(self)
-        lr_group.setExclusive(True)
-
-        left_action = QAction("Left", self)
-        left_action.setChecked(False)
-        left_action.setCheckable(True)
-        left_action.setActionGroup(lr_group)
-
-        right_action = QAction("Right", self)
-        right_action.setCheckable(True)
-        right_action.setChecked(True)
-        right_action.setActionGroup(lr_group)
-
-        help_menu.addAction(left_action)
-        help_menu.addAction(right_action)
-        help_menu.addSection("Testsection")
-        help_menu.addAction(about_action)
-
-        file_menu.addAction(export_action)
-        file_menu.addAction(import_action)
-
-        file_menu.addAction(exit_action)
-
-
-
-    def do_export(self):
-        """Exports widgets from self.export_widget to one big json file"""
-        try:
-            file = QFileDialog.getSaveFileName(self, "Export workspace file")
-            if file and file[0]:
-                data = dict()
-                if self.export_widgets is not None:
-                    for k, v in self.export_widgets.items():
-                        if v is not None and hasattr(v, "export_json"):
-                            try:
-                                chunk = v.export_json()
-                                print("Exporting", v, k, chunk)
-                                data[k] = json.loads(chunk)
-                            except:
-                                print("Error exporting ", v , k)
-                        else:
-                            print("Skipping export widget", v, k)
-
-                with open(file[0], "w") as out_file:
-                    out_file.write(json.dumps(data, indent=4, sort_keys=True))
-        except :
-            box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
-            box.setText("Error exporting file")
-            box.exec_()
-
-    def do_import(self):
-        try:
-            file = QFileDialog.getOpenFileName(self, "Open workspace file")
-            if file and file[0]:
-
-                with open(file[0], "r") as in_file:
-                    data = json.loads(in_file.read())
-
-                    for k, v in self.export_widgets.items():
-                        if v is not None and hasattr(v, "import_json") and data.get(k) is not None:
-                            print("Importing",k,v)
-                            v.import_json(json.dumps(data.get(k)))
-
-
-        except:
-            box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
-            box.setText("Error parsing file")
-            box.exec_()
-            raise
-
-
-
-class StatusBar(QStatusBar):
-
-    def __init__(self):
-        super().__init__()
-        self.showMessage("Ready.")
-
-
-class Multiwindow(QMainWindow):
-    """This window closes all other open windows when itself gets closed"""
-
-    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        QApplication.closeAllWindows()
-        super().closeEvent(event)
+        return DataRangeSelector.RELATIVE_TIME, "Relative", form, ret,
