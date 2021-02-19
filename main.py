@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 
 import pandas
@@ -44,13 +45,14 @@ if __name__ == '__main__':
     currTime = datetime.now().isoformat(timespec='seconds')
     currTimeDelta = datetime.now() - timedelta(hours=1)
 
+    file_to_import = None
+
     # file_to_import = "csv/deadlock_stack.csv"
     # file_to_import = "csv/stream_example.csv"
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    #file_to_import = "csv/stream1.csv"
-    file_to_import = None
+    file_to_import = "csv/stream2.csv"
 
     app = QApplication(sys.argv)
 
@@ -61,7 +63,8 @@ if __name__ == '__main__':
         "RowSpan": {"label": "Row span"},
         "ColSpan": {"label": "Col span"},
         "Envelope": {},
-        "Alias": {}
+        "Alias": {},
+        "DecSamples": {"label": "Samples"}
     }
 
     model = {
@@ -74,6 +77,7 @@ if __name__ == '__main__':
     if file_to_import:
         model["table"] = pandas.read_csv(file_to_import, dtype=str, keep_default_na=False).values.tolist()
 
+    # This is a main reference to canvas that is drawn
     canvas = Canvas(grid=True)
     streamer = None
     stream_window = 3600
@@ -92,11 +96,11 @@ if __name__ == '__main__':
     stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
 
     preferences_window = PreferencesWindow()
-    preferences_window.apply.connect(right_column.draw)
+    preferences_window.apply.connect(partial(right_column.draw, canvas))
 
     right_column.toolbar.preferences.connect(preferences_window.show)
 
-    def draw():
+    def draw_clicked():
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
         time_model = range_selector.get_model()
         new_canvas = variables_table.create_canvas(time_model)
@@ -110,9 +114,9 @@ if __name__ == '__main__':
         dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
         variables_table.export_csv(os.path.join(dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
-        right_column.draw()
+        right_column.draw(canvas)
 
-    def stream():
+    def stream_clicked():
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         global streamer
 
@@ -124,7 +128,6 @@ if __name__ == '__main__':
         def do_stream():
             global streamer
             stream_dialog.hide()
-
 
             stream_canvas = variables_table.create_canvas(stream_window=windowField.value())
             canvas.rows = stream_canvas.rows
@@ -182,11 +185,6 @@ if __name__ == '__main__':
             buttons.layout().addWidget(cancelButton)
             dialog.layout().addWidget(buttons)
 
-            def apply_window(value):
-                stream_window = value
-
-
-
             return dialog
 
         stream_dialog = create_stream_dialog()
@@ -198,8 +196,8 @@ if __name__ == '__main__':
             streamer = None
             stream_button.setText("Stream")
 
-    draw_button.clicked.connect(draw)
-    stream_button.clicked.connect(stream)
+    draw_button.clicked.connect(draw_clicked)
+    stream_button.clicked.connect(stream_clicked)
 
     left_column_buttons = QWidget()
     left_column_buttons.setLayout(QHBoxLayout())
@@ -218,8 +216,10 @@ if __name__ == '__main__':
     central_widget.addWidget(left_column)
     central_widget.addWidget(right_column)
 
+    main_menu = MainMenu(export_widgets=dict(variables_table=variables_table, main_canvas=right_column, time_model=range_selector))
+
     main_widget = Multiwindow()
-    main_widget.setMenuBar(MainMenu())
+    main_widget.setMenuBar(main_menu)
     main_widget.setCentralWidget(central_widget)
     main_widget.setStatusBar(StatusBar())
     main_widget.show()
