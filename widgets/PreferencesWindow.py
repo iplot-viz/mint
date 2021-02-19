@@ -236,7 +236,6 @@ class PreferencesForm(QWidget):
         widget = QComboBox()
         widget._items = items
         if isinstance(items, dict):
-            print("DICT",items)
             for k, v in items.items():
                 widget.addItem(v, k)
         elif isinstance(items, list):
