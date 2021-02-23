@@ -3,7 +3,7 @@ import os
 import typing
 from functools import partial
 
-import dateutil
+import numpy as np
 import pandas
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
@@ -142,8 +142,8 @@ class VariablesTable(QWidget):
 
                         if x_axis_date and time_model is not None:
                             x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window,
-                                                begin=dateutil.parser.isoparse(time_model.get('ts_start')).timestamp(),
-                                                end=dateutil.parser.isoparse(time_model.get('ts_end')).timestamp())
+                                                begin=np.datetime64(time_model.get('ts_start'), 'ns').astype('int').item(),
+                                                end=np.datetime64(time_model.get('ts_end'), 'ns').astype('int').item())
                         else:
                             x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
 
