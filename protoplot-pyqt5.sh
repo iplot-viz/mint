@@ -20,6 +20,8 @@ echo "not adding qt5"
 else
 export PYTHONPATH=$PYTHONPATH:/opt/codac/apps/iplotlib-qt 
 fi
+export http_proxy=http://proxy.codac.iter.org:8080
+export https_proxy=https://proxy.codac.iter.org:8080
 
 if [[ $PYRUN == "Python 3.8"* ]]
 then

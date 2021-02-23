@@ -21,7 +21,7 @@
     <artifactId>protoplot-pyqt5</artifactId>
     <packaging>codac</packaging>
     <name>CODAC Core System Python3 plotting library which support Qt backend</name>
-<version>0.4.3</version>
+<version>0.4.6</version>
     <description>CODAC Core System Python 1-D tool for time traces</description>
     <url>http://www.iter.org/</url>
     <!--  parent pom.xml  -->
@@ -88,6 +88,7 @@
                                 <copy source="util" target="util"/>
                                 <copy source="widgets" target="widgets"/>
                                 <copy source="main.py" target="main.py"/>
+<copy source="gui" target="gui"/>
  <copy source="mydatasources.cfg" target="mydatasources.cfg"/>
 <copy source="protoplot-pyqt5.sh" target="protoplot-pyqt5.sh"/>
 <copy source="default_proto_env" target="default_proto_env"/>
@@ -102,6 +103,7 @@
                             <include type="file" source="csv" target="apps/protoplot-pyqt5/csv"/>
                             <include type="file" source="util" target="apps/protoplot-pyqt5/util"/>
                             <include type="file" source="widgets" target="apps/protoplot-pyqt5/widgets"/>
+<include type="file" source="gui" target="apps/protoplot-pyqt5/gui"/>
  <include type="file" source="main.py" target="apps/protoplot-pyqt5/main.py"/>
  <include type="file" source="mydatasources.cfg" target="apps/protoplot-pyqt5/conf/mydatasources.cfg"/>
 <include type="file" source="protoplot-pyqt5.sh" target="bin/protoplot-pyqt5" />
