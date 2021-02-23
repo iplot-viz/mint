@@ -46,7 +46,7 @@ if __name__ == '__main__':
             canvasImpl = sys.argv[1]
 
     currTime = datetime.now().isoformat(timespec='seconds')
-    currTimeDelta = datetime.now() - timedelta(hours=1)
+    currTimeDelta = datetime.now() - timedelta(days=7)
 
     file_to_import = None
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    file_to_import = "csv/stream2.csv"
+    # file_to_import = "csv/stream2.csv"
 
     app = QApplication(sys.argv)
 
