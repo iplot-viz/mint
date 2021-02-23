@@ -128,6 +128,7 @@ class VariablesTable(QWidget):
                     model[colnum][rownum][2][stacknum].append(signal)
 
         canvas = Canvas()
+        canvas.autoscale = False if x_axis_date else True
 
         if model.keys():
             canvas.cols = max(model.keys())

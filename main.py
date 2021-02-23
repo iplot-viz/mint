@@ -71,9 +71,9 @@ if __name__ == '__main__':
     }
 
     model = {
-        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
-        #"range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2021-01-08T20:17:40", "2021-01-15T20:27:40"]}
+        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T09:17:40", "2021-02-22T20:27:40"]}
 
     }
 
@@ -110,6 +110,7 @@ if __name__ == '__main__':
         canvas.rows = new_canvas.rows
         canvas.cols = new_canvas.cols
         canvas.plots = new_canvas.plots
+        canvas.autoscale = new_canvas.autoscale
         canvas.streaming = False
         preferences_window.set_canvas(canvas)
 
