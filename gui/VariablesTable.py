@@ -336,12 +336,12 @@ class DataRangeSelector(QWidget):
         mapper.addMapping(pulse_number, 0)
         mapper.toFirst()
 
-        form.layout().addRow(QLabel("Pulse number"), pulse_number)
+        form.layout().addRow(QLabel("Pulse id"), pulse_number)
 
         def ret():
             return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
 
-        return DataRangeSelector.PULSE_NUMBER, "Pulse number", form, ret,
+        return DataRangeSelector.PULSE_NUMBER, "Pulse id", form, ret,
 
     def _createTimeRangeForm(self):
         form = QWidget()
