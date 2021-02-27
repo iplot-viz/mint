@@ -29,7 +29,7 @@ from gui.PreferencesWindow import PreferencesWindow
 if __name__ == '__main__':
 
 
-    print("Running version 0.5.0")
+    print("Running version 0.6.0")
     da = DataAccess()
 
     UDAAccess.da = da
