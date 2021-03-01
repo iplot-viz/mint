@@ -29,7 +29,7 @@ from gui.PreferencesWindow import PreferencesWindow
 if __name__ == '__main__':
 
 
-    print("Running version 0.6.0")
+    print("Running version 0.5.0")
     da = DataAccess()
 
     UDAAccess.da = da
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     central_widget.addWidget(right_column)
 
     status_bar = StatusBar()
-    status_bar.showMessage("Tool version 0.6.0")
+    status_bar.showMessage("Tool version 0.5.0")
 
     main_menu = MainMenu(export_widgets=dict(variables_table=variables_table, main_canvas=right_column, time_model=range_selector))
 
