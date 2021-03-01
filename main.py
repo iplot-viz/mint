@@ -57,7 +57,7 @@ if __name__ == '__main__':
     # file_to_import = "csv/deadlock_example.csv"
     # file_to_import = "csv/pulses_example_one.csv"
     # file_to_import = "csv/envelope.csv"
-    file_to_import = "csv/nanosecond.csv"
+    #file_to_import = "csv/nanosecond.csv"
 
     app = QApplication(sys.argv)
 
@@ -73,11 +73,11 @@ if __name__ == '__main__':
     }
 
     model = {
-        # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
         # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:00:00", "2021-02-22T12:00:01"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2018-09-13T15:22:35.100", "2018-09-13T15:22:35.101 "]}
-        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:01:53.790", "2021-02-25T12:01:54.800"]}
+        #"range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:01:53.790", "2021-02-25T12:01:54.800"]}
 
     }
 
