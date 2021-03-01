@@ -10,12 +10,13 @@ from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringList
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
     QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
+from attr import dataclass
 from iplotlib.Axis import LinearAxis
 from iplotlib.Canvas import Canvas
 from iplotlib.Plot import Plot2D
 from iplotlib.Signal import UDAPulse
 
-
+#TODO: Focus on the stacked plot
 class VariablesTable(QWidget):
 
     canvasChanged = pyqtSignal(Canvas)
@@ -266,9 +267,9 @@ class PlotsModel(QAbstractTableModel):
 
 class DataRangeSelector(QWidget):
 
-    PULSE_NUMBER = 1
-    TIME_RANGE = 2
-    RELATIVE_TIME = 3
+    PULSE_NUMBER = "PULSE_NUMBER"
+    TIME_RANGE = "TIME_RANGE"
+    RELATIVE_TIME = "RELATIVE_TIME"
 
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
 
@@ -280,24 +281,71 @@ class DataRangeSelector(QWidget):
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
+
+        self.forms = dict()
+        self.selected = self.TIME_RANGE
+        self.models = dict()
+
+        self.radiogroup = QGroupBox()
+        self.radiogroup.setSizePolicy(QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
+        self.radiogroup.setLayout(QHBoxLayout())
+
         self._createStackedForm()
+
+    def addForm(self, label, widget):
+        self.forms[label] = widget
+        self.models[label] = None
+
+    def pulseNumberForm(self):
+        form = QWidget()
+        form.setLayout(QFormLayout())
+
+        pulse_number = QLineEdit()
+
+        model = QStringListModel(form)
+        # model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.PULSE_NUMBER and self.model.get('value') else [''])
+
+        mapper = QDataWidgetMapper(form)
+        mapper.setOrientation(Qt.Vertical)
+        mapper.setModel(model)
+        mapper.addMapping(pulse_number, 0)
+        mapper.toFirst()
+
+        form.layout().addRow(QLabel("Pulse number"), pulse_number)
+
+        def ret():
+            return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
+
+        return dict(label="Pulse number", form=form, model=model)
+
 
     def get_model(self):
         model = self.items[self.stack.currentIndex()][3]
         return model()
 
     def export_json(self):
-        return json.dumps(self.get_model())
+        return json.dumps(dict(mode=self.model.get('mode'), **self.get_model()))
 
     def import_json(self, json_string):
-        self.model = json.loads(json_string)
+        loaded = json.loads(json_string)
+        print("LOADED", loaded)
+        if loaded.get("ts_start") is not None and loaded.get("ts_end") is not None:
+            self.stack.setCurrentIndex(0)
+            self.radiogroup.layout().itemAt(0).widget().setChecked(True)
+            mapper = self.items[self.stack.currentIndex()][4]
+            mapper.model().setStringList([loaded.get("ts_start"), loaded.get("ts_end")])
+            mapper.toFirst()
+
+        elif loaded.get("pulsenb") is not None:
+            self.stack.setCurrentIndex(1)
+            self.radiogroup.layout().itemAt(1).widget().setChecked(True)
+            mapper = self.items[self.stack.currentIndex()][4]
+            mapper.model().setStringList([",".join(loaded.get("pulsenb"))])
+            mapper.toFirst()
+            print("MODEL",mapper.model())
 
     def _createStackedForm(self):
         self.items = [self._createTimeRangeForm(), self._createPusleNumberForm(), self._createRelativeTimeForm()]
-
-        radiogroup = QGroupBox()
-        radiogroup.setSizePolicy(QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
-        radiogroup.setLayout(QHBoxLayout())
 
         self.stack = QStackedWidget()
 
@@ -308,18 +356,18 @@ class DataRangeSelector(QWidget):
             self.stack.addWidget(item[2])
             button = QRadioButton(item[1])
             button.clicked.connect(partial(switchForm, idx))
-            radiogroup.layout().addWidget(button)
+            self.radiogroup.layout().addWidget(button)
 
             if self.model.get('mode') == item[0]:
                 button.setChecked(True)
                 self.stack.setCurrentIndex(idx)
 
+        self.layout().addWidget(self.radiogroup)
+        self.layout().addWidget(self.stack)
+
         if not self.model.get('mode'):
             self.stack.setCurrentIndex(0)
-            radiogroup.layout().itemAt(0).widget().setChecked(True)
-
-        self.layout().addWidget(radiogroup)
-        self.layout().addWidget(self.stack)
+            self.radiogroup.layout().itemAt(0).widget().setChecked(True)
 
     def _createPusleNumberForm(self):
         form = QWidget()
@@ -341,7 +389,7 @@ class DataRangeSelector(QWidget):
         def ret():
             return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
 
-        return DataRangeSelector.PULSE_NUMBER, "Pulse id", form, ret,
+        return DataRangeSelector.PULSE_NUMBER, "Pulse id", form, ret, mapper
 
     def _createTimeRangeForm(self):
         form = QWidget()
@@ -368,7 +416,7 @@ class DataRangeSelector(QWidget):
         def ret():
             return {"ts_start": model.stringList()[0], "ts_end": model.stringList()[1]}
 
-        return DataRangeSelector.TIME_RANGE, "Time range", form, ret
+        return DataRangeSelector.TIME_RANGE, "Time range", form, ret, mapper
 
 
     def _createRelativeTimeForm(self):
@@ -383,9 +431,19 @@ class DataRangeSelector(QWidget):
         relative_time = QComboBox()
         relative_time.setModel(values)
 
+        mapper = QDataWidgetMapper(form)
+
         form.layout().addRow(QLabel("From"), relative_time)
 
         def ret():
             return {"relative": options[relative_time.currentIndex()][0]}
 
-        return DataRangeSelector.RELATIVE_TIME, "Relative", form, ret,
+        return DataRangeSelector.RELATIVE_TIME, "Relative", form, ret, mapper
+
+
+    def mapWidget(self, widgetdict):
+        mapper = QDataWidgetMapper()
+        mapper.setOrientation(Qt.Vertical)
+
+        model = QStringListModel()
+        mapper.setModel(model)
