@@ -225,7 +225,8 @@ if __name__ == '__main__':
     central_widget.addWidget(right_column)
 
     status_bar = StatusBar()
-    status_bar.showMessage("Tool version 0.5.0")
+    status_bar.addPermanentWidget(QLabel("Tool version 0.5.0"))
+    # status_bar.showMessage("Tool version 0.5.0")
 
     main_menu = MainMenu(export_widgets=dict(variables_table=variables_table, main_canvas=right_column, time_model=range_selector))
 
