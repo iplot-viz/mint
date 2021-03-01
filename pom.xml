@@ -21,7 +21,7 @@
     <artifactId>protoplot-pyqt5</artifactId>
     <packaging>codac</packaging>
     <name>CODAC Core System Python3 plotting library which support Qt backend</name>
-<version>0.4.6</version>
+<version>0.5.0</version>
     <description>CODAC Core System Python 1-D tool for time traces</description>
     <url>http://www.iter.org/</url>
     <!--  parent pom.xml  -->
