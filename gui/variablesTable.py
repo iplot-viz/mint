@@ -5,27 +5,55 @@ from functools import partial
 
 import numpy as np
 import pandas
+from datetime import datetime
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
-    QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
-from attr import dataclass
-from iplotlib.Axis import LinearAxis
-from iplotlib.Canvas import Canvas
-from iplotlib.Plot import Plot2D
-from iplotlib.Signal import UDAPulse
+from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, \
+    QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
+    QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
+from iplotlib.core.axis import LinearAxis
+from iplotlib.core.canvas import Canvas
+from iplotlib.core.plot import PlotXY
+from iplotlib.data_access.dataAccessSignal import DataAccessSignal
 
-#TODO: Focus on the stacked plot
+import logging2.setupLogger as ls
+
+logger = ls.get_logger(__name__)
+
+
+def _get_begin_end(time_model):
+    """Extract begin and end timestamps if present in time_model"""
+    def str_to_ts(val): return np.datetime64(val, 'ns').astype('int').item()
+
+    if time_model is not None:
+        if 'ts_start' in time_model and 'ts_end' in time_model:
+            return str_to_ts(time_model['ts_start']), str_to_ts(time_model['ts_end'])
+        elif 'relative' in time_model:
+            end = int(np.datetime64(datetime.utcnow(), 'ns').astype('int64'))
+            start = end - 10 ** 9 * int(time_model.get('relative')) * time_model.get('base')
+            logger.info(F"Relative date start={start}({type(start)}) end={end}({type(end)}) delta: {end - start}")
+            return start, end
+    return None, None
+
+
+def _get_pulse_number(time_model):
+    """Extracts pulse numbers if present in time_model """
+    if time_model is not None and 'pulsenb' in time_model:
+        return time_model['pulsenb']
+    return None
+
+
 class VariablesTable(QWidget):
-
     canvasChanged = pyqtSignal(Canvas)
 
-    def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=Plot2D, default_dec_samples=1000):
+    def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=PlotXY,
+                 signal_class=DataAccessSignal, default_dec_samples=1000):
         super().__init__(parent)
 
         self.data_access = data_access
         self.plot_class = plot_class
+        self.signal_class = signal_class
         self.default_dec_samples = default_dec_samples
         self.header = header
         self.setLayout(QVBoxLayout())
@@ -44,7 +72,6 @@ class VariablesTable(QWidget):
             file = QFileDialog.getOpenFileName(self, "Open CSV")
             if file and file[0]:
                 self.import_csv(file[0])
-
 
         uda_toolbar = VairablesToolbar()
         uda_toolbar.exportCsv.connect(export_clicked)
@@ -72,7 +99,7 @@ class VariablesTable(QWidget):
         context_menu.addAction(self.style().standardIcon(getattr(QStyle, "SP_TrashIcon")), "Remove", remove_row)
         context_menu.popup(event.globalPos())
 
-    def _create_signals(self, row, time_model=None):
+    def _create_signals(self, row, time_model=None, ts_start=None, ts_end=None, pulsenb=None):
 
         def get_value(data_row, key):
             return data_row[list(self.header).index(key)]
@@ -82,15 +109,15 @@ class VariablesTable(QWidget):
                                  title=get_value(row, "Alias") or None,
                                  varname=get_value(row, "Variable"),
                                  envelope=get_value(row, "Envelope"),
-                                 dec_samples=get_value(row, "DecSamples") or self.default_dec_samples)
+                                 dec_samples=get_value(row, "DecSamples") or self.default_dec_samples,
+                                 ts_start=ts_start,
+                                 ts_end=ts_end
+                                 )
 
-            if time_model is not None:
-                if 'pulsenb' in time_model:
-                    signals = [UDAPulse(**signal_params, pulsenb=e, ts_relative=True) for e in time_model['pulsenb']]
-                else:
-                    signals = [UDAPulse(**signal_params, pulsenb=None, ts_relative=False, **time_model)]
+            if pulsenb is not None and len(pulsenb) > 0:
+                signals = [self.signal_class(**signal_params, pulsenb=e, ts_relative=True) for e in pulsenb]
             else:
-                signals = [UDAPulse(**signal_params)]
+                signals = [self.signal_class(**signal_params, ts_relative=False)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
@@ -104,15 +131,28 @@ class VariablesTable(QWidget):
         else:
             return None, 0, 0, 0, 1, 1
 
-    def create_canvas(self, time_model=None, stream_window=3600):
+    def create_canvas(self, time_model=None, stream_window=None):
         model = {}
 
         x_axis_date = False if time_model is not None and 'pulsenb' in time_model else True
         x_axis_follow = True if time_model is None else False
         x_axis_window = stream_window if time_model is None else None
 
+        pulse_number = _get_pulse_number(time_model)
+        if stream_window is not None and stream_window > 0:
+            now = np.datetime64(datetime.utcnow(), 'ns').astype('int').item()
+            print("************* NOW ",now)
+            (ts_start, ts_end) = now, now - stream_window
+
+        else:
+            (ts_start, ts_end) = _get_begin_end(time_model)
+
+        logger.info(F"Creating canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
+
         for row in self.table_model.model:
-            signals, colnum, rownum, stacknum, row_span, col_span = self._create_signals(row, time_model)
+            signals, colnum, rownum, stacknum, row_span, col_span = \
+                self._create_signals(row, time_model, ts_start, ts_end, pulse_number)
+
             if signals:
                 if colnum not in model:
                     model[colnum] = {}
@@ -139,21 +179,21 @@ class VariablesTable(QWidget):
             for colnum, rows in model.items():
                 for row in range(max(rows.keys())):
                     plot = None
-                    if row+1 in rows.keys():
+                    if row + 1 in rows.keys():
                         y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
 
-                        if x_axis_date and time_model is not None:
-                            x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window,
-                                                begin=np.datetime64(time_model.get('ts_start'), 'ns').astype('int').item(),
-                                                end=np.datetime64(time_model.get('ts_end'), 'ns').astype('int').item())
-                        else:
-                            x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
+                        x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
 
-                        plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row+1][0], col_span=rows[row+1][1])
-                        for stack, signals in rows[row+1][2].items():
+                        if x_axis_date and ts_start is not None and ts_end is not None:
+                            x_axis.begin = ts_start
+                            x_axis.end = ts_end
+
+                        plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
+                                               col_span=rows[row + 1][1])
+                        for stack, signals in rows[row + 1][2].items():
                             for signal in signals:
                                 plot.add_signal(signal, stack=stack)
-                    canvas.add_plot(plot, col=colnum-1)
+                    canvas.add_plot(plot, col=colnum - 1)
 
         return canvas
 
@@ -162,7 +202,7 @@ class VariablesTable(QWidget):
             df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
             return df.to_csv(file_path, header=self.uda_table_view.model().column_names, index=False)
         except:
-            print("Error when dumping variables to file:")
+            logger.info("Error when dumping variables to file:")
 
     def import_csv(self, file_path):
         try:
@@ -179,14 +219,13 @@ class VariablesTable(QWidget):
         df = pandas.DataFrame(self.uda_table_view.model().model[:-1])
         return df.to_json(orient='values')
 
-    def import_json(self, json):
-        df = pandas.read_json(json, dtype=str, orient='values')
+    def import_json(self, json_payload):
+        df = pandas.read_json(json_payload, dtype=str, orient='values')
         if not df.empty:
             self.uda_table_view.model().set_model(df.values.tolist())
 
 
 class VairablesToolbar(QWidget):
-
     exportCsv = pyqtSignal()
     importCsv = pyqtSignal()
 
@@ -197,9 +236,12 @@ class VairablesToolbar(QWidget):
         self.layout().setContentsMargins(QMargins())
 
         tb = QToolBar()
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/open_file.png")), "Open CSV", self.importCsv.emit)
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "../icons/save_as.png")), "Save CSV", self.exportCsv.emit)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "icons/open_file.png")), "Open CSV",
+                     self.importCsv.emit)
+        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "icons/save_as.png")), "Save CSV",
+                     self.exportCsv.emit)
         self.layout().addWidget(tb)
+
 
 class PlotsModel(QAbstractTableModel):
 
@@ -253,6 +295,7 @@ class PlotsModel(QAbstractTableModel):
             return False
 
     """Pad each array row with empty strings to self.columns length """
+
     def _expand_model(self, source):
         if source is not None:
             for row in source:
@@ -265,8 +308,8 @@ class PlotsModel(QAbstractTableModel):
         self.model = self._expand_model(model)
         self._add_empty_row()
 
-class DataRangeSelector(QWidget):
 
+class DataRangeSelector(QWidget):
     PULSE_NUMBER = "PULSE_NUMBER"
     TIME_RANGE = "TIME_RANGE"
     RELATIVE_TIME = "RELATIVE_TIME"
@@ -290,34 +333,11 @@ class DataRangeSelector(QWidget):
         self.radiogroup.setSizePolicy(QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
         self.radiogroup.setLayout(QHBoxLayout())
 
-        self._createStackedForm()
+        self._create_stacked_form()
 
-    def addForm(self, label, widget):
+    def add_form(self, label, widget):
         self.forms[label] = widget
         self.models[label] = None
-
-    def pulseNumberForm(self):
-        form = QWidget()
-        form.setLayout(QFormLayout())
-
-        pulse_number = QLineEdit()
-
-        model = QStringListModel(form)
-        # model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.PULSE_NUMBER and self.model.get('value') else [''])
-
-        mapper = QDataWidgetMapper(form)
-        mapper.setOrientation(Qt.Vertical)
-        mapper.setModel(model)
-        mapper.addMapping(pulse_number, 0)
-        mapper.toFirst()
-
-        form.layout().addRow(QLabel("Pulse number"), pulse_number)
-
-        def ret():
-            return {"pulsenb": [e for e in model.stringList()[0].split(',')]}
-
-        return dict(label="Pulse number", form=form, model=model)
-
 
     def get_model(self):
         model = self.items[self.stack.currentIndex()][3]
@@ -328,7 +348,7 @@ class DataRangeSelector(QWidget):
 
     def import_json(self, json_string):
         loaded = json.loads(json_string)
-        print("LOADED", loaded)
+
         if loaded.get("ts_start") is not None and loaded.get("ts_end") is not None:
             self.stack.setCurrentIndex(0)
             self.radiogroup.layout().itemAt(0).widget().setChecked(True)
@@ -342,10 +362,9 @@ class DataRangeSelector(QWidget):
             mapper = self.items[self.stack.currentIndex()][4]
             mapper.model().setStringList([",".join(loaded.get("pulsenb"))])
             mapper.toFirst()
-            print("MODEL",mapper.model())
 
-    def _createStackedForm(self):
-        self.items = [self._createTimeRangeForm(), self._createPusleNumberForm(), self._createRelativeTimeForm()]
+    def _create_stacked_form(self):
+        self.items = [self._create_timerange_form(), self._create_puslenumber_form(), self._create_relativerime_form()]
 
         self.stack = QStackedWidget()
 
@@ -369,14 +388,16 @@ class DataRangeSelector(QWidget):
             self.stack.setCurrentIndex(0)
             self.radiogroup.layout().itemAt(0).widget().setChecked(True)
 
-    def _createPusleNumberForm(self):
+    def _create_puslenumber_form(self):
         form = QWidget()
         form.setLayout(QFormLayout())
 
         pulse_number = QLineEdit()
 
         model = QStringListModel(form)
-        model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.PULSE_NUMBER and self.model.get('value') else [''])
+        model.setStringList(
+            self.model.get('value') if self.model.get('mode') == DataRangeSelector.PULSE_NUMBER and self.model.get(
+                'value') else [''])
 
         mapper = QDataWidgetMapper(form)
         mapper.setOrientation(Qt.Vertical)
@@ -391,7 +412,7 @@ class DataRangeSelector(QWidget):
 
         return DataRangeSelector.PULSE_NUMBER, "Pulse id", form, ret, mapper
 
-    def _createTimeRangeForm(self):
+    def _create_timerange_form(self):
         form = QWidget()
         form.setLayout(QFormLayout())
 
@@ -401,7 +422,9 @@ class DataRangeSelector(QWidget):
         to_time.setDisplayFormat(self.TIME_FORMAT)
 
         model = QStringListModel(form)
-        model.setStringList(self.model.get('value') if self.model.get('mode') == DataRangeSelector.TIME_RANGE and self.model.get('value') else ['', ''])
+        model.setStringList(
+            self.model.get('value') if self.model.get('mode') == DataRangeSelector.TIME_RANGE and self.model.get(
+                'value') else ['', ''])
 
         mapper = QDataWidgetMapper(form)
         mapper.setOrientation(Qt.Vertical)
@@ -418,12 +441,14 @@ class DataRangeSelector(QWidget):
 
         return DataRangeSelector.TIME_RANGE, "Time range", form, ret, mapper
 
-
-    def _createRelativeTimeForm(self):
+    def _create_relativerime_form(self):
         form = QWidget()
         form.setLayout(QFormLayout())
 
-        options = [(60, "Last minute"), (3600, "Last hour")]
+        time_input = QSpinBox()
+        time_input.setValue(1)
+
+        options = [(1, "Second(s)"), (60, "Minute(s)"), (60*60, "Hour(s)"), (24*60*60, "Day(s)")]
 
         values = QStringListModel()
         values.setStringList([e[1] for e in options])
@@ -433,17 +458,10 @@ class DataRangeSelector(QWidget):
 
         mapper = QDataWidgetMapper(form)
 
-        form.layout().addRow(QLabel("From"), relative_time)
+        form.layout().addRow(QLabel("Last"), time_input)
+        form.layout().addRow(QLabel(""), relative_time)
 
         def ret():
-            return {"relative": options[relative_time.currentIndex()][0]}
+            return {"relative": int(time_input.value()), "base": options[relative_time.currentIndex()][0]}
 
         return DataRangeSelector.RELATIVE_TIME, "Relative", form, ret, mapper
-
-
-    def mapWidget(self, widgetdict):
-        mapper = QDataWidgetMapper()
-        mapper.setOrientation(Qt.Vertical)
-
-        model = QStringListModel()
-        mapper.setModel(model)

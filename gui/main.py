@@ -4,6 +4,9 @@ from PyQt5 import QtGui
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar
 
+import logging2.setupLogger as ls
+
+logger = ls.get_logger(__name__)
 
 class MainMenu(QMenuBar):
 
@@ -67,12 +70,12 @@ class MainMenu(QMenuBar):
                         if v is not None and hasattr(v, "export_json"):
                             try:
                                 chunk = v.export_json()
-                                print("Exporting", v, k, chunk)
+                                logger.info(F"Exporting {k}:{v} chunk={chunk}")
                                 data[k] = json.loads(chunk)
                             except:
-                                print("Error exporting ", v , k)
+                                logger.error(F"Error exporting {k}:{v}")
                         else:
-                            print("Skipping export widget", v, k)
+                            logger.error(F"Skipping export widget {k}:{v}")
 
                 with open(file[0], "w") as out_file:
                     out_file.write(json.dumps(data, indent=4, sort_keys=True))
@@ -92,7 +95,6 @@ class MainMenu(QMenuBar):
 
                     for k, v in self.export_widgets.items():
                         if v is not None and hasattr(v, "import_json") and data.get(k) is not None:
-                            print("Importing",k,v)
                             v.import_json(json.dumps(data.get(k)))
 
 

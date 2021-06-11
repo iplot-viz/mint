@@ -4,60 +4,61 @@ from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
 
+from gui._version import __version__
+from iplotlib.core._version import __version__ as __iplotlib_version__
+
 import pandas
 from PyQt5.QtCore import QMargins
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
-from access.dataAccess import DataAccess
-from iplotlib.Canvas import Canvas
-from iplotlib.UDAAccess import UDAAccess
+from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
+from dataAccess.dataAccess import DataAccess
+from iplotlib.core.canvas import Canvas
+from iplotlib.data_access.dataAccessSignal import AccessHelper
+from iplotlib.qt.qtCanvasToolbar import CanvasToolbar
+
+import logging2.setupLogger as ls
+
+logger = ls.get_logger(__name__)
 
 try:
-    from qt.gnuplot.QtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
+    from iplotlib.impl.gnuplot.qt.qtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 except ModuleNotFoundError:
-    print("import qt gnuplot not installed ")
+    logger.error("import qt gnuplot not installed ")
 
-from qt.matplotlib.QtMatplotlibCanvas2 import QtMatplotlibCanvas2
-from utils.streamer import CanvasStreamer
+from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
+from iplotlib.data_access.streamer import CanvasStreamer
 
-from gui.Main import Multiwindow, MainMenu, StatusBar
-from gui.PlotCanvas import MainCanvas
-from gui.VariablesTable import VariablesTable, DataRangeSelector
-from gui.PreferencesWindow import PreferencesWindow
+from gui.main import Multiwindow, MainMenu, StatusBar
+from gui.variablesTable import VariablesTable, DataRangeSelector
+
 
 
 if __name__ == '__main__':
 
-
-    print("Running version 0.5.0")
+    logger.info("Running version {} iplotlib version {}".format(__version__, __iplotlib_version__))
     da = DataAccess()
 
-    UDAAccess.da = da
+    AccessHelper.da = da
 
-    ###we load the data source conf files
-    listDS=da.loadConfig()
+    # we load the data source conf files
+    listDS = da.loadConfig()
     defDS = da.getDefaultDSName()
-    if len(listDS)<1:
-        print ("no data sources found, exiting")
+    if len(listDS) < 1:
+        logger.error("no data sources found, exiting")
         sys.exit(-1)
 
-    #da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
+    # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
     canvasImpl = "MATPLOTLIB"
     if len(sys.argv) > 1:
         if sys.argv[1] == 'MATPLOTLIB' or sys.argv[1] == 'GNUPLOT':
             canvasImpl = sys.argv[1]
 
-    currTime = datetime.now().isoformat(timespec='seconds')
-    currTimeDelta = datetime.now() - timedelta(days=7)
-
     file_to_import = None
+    if len(sys.argv) > 2:
+        file_to_import = sys.argv[2]
 
-    # file_to_import = "csv/deadlock_stack.csv"
-    # file_to_import = "csv/stream_example.csv"
-    # file_to_import = "csv/deadlock_example.csv"
-    # file_to_import = "csv/pulses_example_one.csv"
-    # file_to_import = "csv/envelope.csv"
-    #file_to_import = "csv/nanosecond.csv"
+    currTime = datetime.utcnow().isoformat(timespec='seconds')
+    currTimeDelta = datetime.utcnow() - timedelta(days=7)
 
     app = QApplication(sys.argv)
 
@@ -73,8 +74,8 @@ if __name__ == '__main__':
     }
 
     model = {
-        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
-        # "range": {"mode": UDARangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+        # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:00:00", "2021-02-22T12:00:01"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2018-09-13T15:22:35.100", "2018-09-13T15:22:35.101 "]}
         #"range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:01:53.790", "2021-02-25T12:01:54.800"]}
@@ -90,22 +91,19 @@ if __name__ == '__main__':
     stream_window = 3600
 
     if canvasImpl == "MATPLOTLIB":
-        right_column = MainCanvas(plot_canvas=QtMatplotlibCanvas2(tight_layout=True), canvas=canvas)
-    else:
-        right_column = MainCanvas(plot_canvas=QtGnuplotMultiwidgetCanvas(), canvas=canvas)
+        right_column = QWidget()
+        right_column.setLayout(QVBoxLayout())
+        qt_canvas = QtMatplotlibCanvas(tight_layout=True)
+        right_column.layout().addWidget(CanvasToolbar(qt_canvas=qt_canvas))
+        right_column.layout().addWidget(qt_canvas)
 
     variables_table = VariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = DataRangeSelector(model=model.get("range"))
 
     draw_button = QPushButton("Draw")
-    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
+    draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
     stream_button = QPushButton("Stream")
-    stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "icons/plot.png")))
-
-    preferences_window = PreferencesWindow()
-    preferences_window.apply.connect(partial(right_column.draw, canvas))
-
-    right_column.toolbar.preferences.connect(preferences_window.show)
+    stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
 
     def draw_clicked():
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
@@ -116,35 +114,30 @@ if __name__ == '__main__':
         canvas.plots = new_canvas.plots
         canvas.autoscale = new_canvas.autoscale
         canvas.streaming = False
-        preferences_window.set_canvas(canvas)
 
-        right_column.toolbar.setVisible(True)
         dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
         variables_table.export_csv(os.path.join(dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
-        right_column.draw(canvas)
+        qt_canvas.set_canvas(canvas)
 
     def stream_clicked():
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         global streamer
 
-        windowField = QSpinBox()
+        window_field = QSpinBox()
 
         def stream_callback(signal):
-            right_column.plot_canvas.matplotlib_canvas.refresh_signal(signal)
+            qt_canvas.matplotlib_canvas.refresh_signal(signal)
 
         def do_stream():
             global streamer
             stream_dialog.hide()
-
-            stream_canvas = variables_table.create_canvas(stream_window=windowField.value())
+            stream_canvas = variables_table.create_canvas(stream_window=window_field.value())
             canvas.rows = stream_canvas.rows
             canvas.cols = stream_canvas.cols
             canvas.streaming = True
             canvas.plots = stream_canvas.plots
-            right_column.draw(canvas)
-
-            right_column.toolbar.setVisible(False)
+            qt_canvas.set_canvas(canvas)
 
             streamer = CanvasStreamer(da)
             streamer.start(canvas, stream_callback)
@@ -153,13 +146,9 @@ if __name__ == '__main__':
         def create_stream_dialog():
             dialog = QDialog(main_widget)
 
-            loginField = QLineEdit()
-            passwordField = QLineEdit()
-            passwordField.setEchoMode(QLineEdit.Password)
-            # windowField = QSpinBox()
-            windowField.setMinimum(1)
-            windowField.setMaximum(100000)
-            windowField.setValue(stream_window)
+            window_field.setMinimum(1)
+            window_field.setMaximum(100000)
+            window_field.setValue(stream_window)
 
             startButton = QPushButton("Start")
             startButton.clicked.connect(do_stream)
@@ -175,13 +164,11 @@ if __name__ == '__main__':
             windowWidget = QWidget()
             windowWidget.setLayout(QHBoxLayout())
             windowWidget.layout().setContentsMargins(QMargins())
-            windowWidget.layout().addWidget(windowField)
+            windowWidget.layout().addWidget(window_field)
             windowWidget.layout().addWidget(windowCombo)
 
             form = QWidget()
             form.setLayout(QFormLayout())
-            # form.layout().addRow("Login", loginField)
-            # form.layout().addRow("Password", passwordField)
             form.layout().addRow("Window", windowWidget)
             dialog.setLayout(QVBoxLayout())
             dialog.layout().addWidget(QLabel("Stream settings"))
@@ -225,15 +212,15 @@ if __name__ == '__main__':
     central_widget.addWidget(right_column)
 
     status_bar = StatusBar()
-    status_bar.addPermanentWidget(QLabel("Tool version 0.5.0"))
-    # status_bar.showMessage("Tool version 0.5.0")
+    status_bar.addPermanentWidget(QLabel("Tool version {} iplotlib {}".format(__version__, __iplotlib_version__)))
 
-    main_menu = MainMenu(export_widgets=dict(variables_table=variables_table, main_canvas=right_column, time_model=range_selector))
+    main_menu = MainMenu(export_widgets=dict(variables_table=variables_table, main_canvas=qt_canvas, time_model=range_selector))
 
     main_widget = Multiwindow()
     main_widget.setMenuBar(main_menu)
     main_widget.setCentralWidget(central_widget)
     main_widget.setStatusBar(status_bar)
+    main_widget.setWindowTitle("MINT: {}".format(os.getpid()))
     main_widget.show()
 
     app.setWindowIcon(main_widget.style().standardIcon(getattr(QStyle, "SP_BrowserReload")))
