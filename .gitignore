@@ -1,5 +1,15 @@
-# Files and directories to exclude from Git repository
-*~
+.idea/
 __pycache__/
-*.py[cod]
-*$py.class
+.pytest_cache/
+*.o
+moc_*.h
+moc_*.cpp
+.qmake.stash
+*.so
+*.so.*
+iplotlib/impl/gnuplot/qt/widget/gnuplotwidget/Makefile
+iplotlib/impl/gnuplot/qt/widget/pyqt5gnuplotwidget/sip*.h
+iplotlib/impl/gnuplot/qt/widget/pyqt5gnuplotwidget/sip*.cpp
+iplotlib/impl/gnuplot/qt/widget/pyqt5gnuplotwidget/build.sbf
+iplotlib/impl/gnuplot/qt/widget/pyqt5gnuplotwidget/Makefile
+iplotlib/impl/gnuplot/qt/widget/pyqt5gnuplotwidget/PyGnuplotWidget.exp

@@ -1,0 +1,8 @@
+#######################################################
+# Default environment variables for DAN API library
+#######################################################
+#PROTO_LOG_PATH=
+PROTO_LOG_LEVEL=INFO
+PROTO_LOG_FILENAME=protoplot-pyqt5.log
+DATASOURCESCONF=/opt/codac/apps/protoplot-pyqt5/conf/mydatasources.cfg
+

@@ -1,0 +1,120 @@
+<!--
+ Project       : CODAC Core System
+
+ Description   : CODAC Core System unit templates
+
+ Authors       : Anze Zagar
+
+ Copyright (c) : 2010-2021 ITER Organization,
+                 CS 90 046
+                 13067 St. Paul-lez-Durance Cedex
+                 France
+
+ This file is part of ITER CODAC software.
+ For the terms and conditions of redistribution or use of this software
+ refer to the file ITER-LICENSE.TXT located in the top level directory
+ of the distribution package.
+-->
+<!--suppress ALL -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.iter.codac.units</groupId>
+    <artifactId>protoplot-pyqt5</artifactId>
+    <packaging>codac</packaging>
+    <name>CODAC Core System Python3 plotting library which support Qt backend</name>
+<version>0.5.0</version>
+    <description>CODAC Core System Python 1-D tool for time traces</description>
+    <url>http://www.iter.org/</url>
+    <!--  parent pom.xml  -->
+    <parent>
+        <groupId>org.iter.codac.units</groupId>
+        <artifactId>maven-iter-settings</artifactId>
+        <version>6.3.0</version>
+    </parent>
+    <licenses>
+    </licenses>
+    <!--  project properties  -->
+    <properties>
+        <unit.type>module</unit.type>
+        <cached_prop.version>1.5.2</cached_prop.version>
+        <py.version>3.8</py.version>
+        <py1.version>38</py1.version>
+        <kiwi.version>1.3.1</kiwi.version>
+        <cycler.version>0.10.0</cycler.version>
+        <pyparsing.version>2.4.7</pyparsing.version>
+        <dateutil.version>2.8.1</dateutil.version>
+        <six.version>1.15.0</six.version>
+	<cppy.version>1.1.0</cppy.version>
+        <matplot.version>3.3.3</matplot.version>
+	<cached.version>4.2.0</cached.version>
+	<numpy.version>1.19.5</numpy.version>
+	<pandas.version>1.2.0</pandas.version>
+	<pillow.version>8.1.0</pillow.version>
+	<cachetools.version>4.2.0</cachetools.version>
+<pyqt5.version>5.15.2</pyqt5.version>
+<pyqt5sip.version>12.8.1</pyqt5sip.version>
+<pytz.version>2020.5</pytz.version>
+<sip.version>4.19.24</sip.version>
+<toml.version>0.10.2</toml.version>
+
+
+    </properties>
+    <!--  unit owner and developers  -->
+    <developers>
+        <developer>
+            <id>abadiel</id>
+            <roles>
+                <role>unit owner</role>
+            </roles>
+        </developer>
+        <developer>
+            <id>pmazur</id>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+        </developers>
+            <!--  configuration of how the project is built  -->
+            <build>
+                <!--  default phase is compile  -->
+                <!--  this command is executed if you just write 'mvn'  -->
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-iter-plugin</artifactId>
+                        <configuration>
+                            <init>
+                                <copy source="icons" target="icons"/>
+<copy source="csv" target="csv"/>
+                                <copy source="util" target="util"/>
+                                <copy source="widgets" target="widgets"/>
+                                <copy source="main.py" target="main.py"/>
+<copy source="gui" target="gui"/>
+ <copy source="mydatasources.cfg" target="mydatasources.cfg"/>
+<copy source="protoplot-pyqt5.sh" target="protoplot-pyqt5.sh"/>
+<copy source="default_proto_env" target="default_proto_env"/>
+
+                            </init>
+                        <packaging>
+                        <package>
+				<requires codac="true">python38-modules</requires>
+<requires codac="true">iplotlib-qt</requires>
+<requires >libicu</requires>
+<include type="file" source="icons" target="apps/protoplot-pyqt5/icons"/>
+                            <include type="file" source="csv" target="apps/protoplot-pyqt5/csv"/>
+                            <include type="file" source="util" target="apps/protoplot-pyqt5/util"/>
+                            <include type="file" source="widgets" target="apps/protoplot-pyqt5/widgets"/>
+<include type="file" source="gui" target="apps/protoplot-pyqt5/gui"/>
+ <include type="file" source="main.py" target="apps/protoplot-pyqt5/main.py"/>
+ <include type="file" source="mydatasources.cfg" target="apps/protoplot-pyqt5/conf/mydatasources.cfg"/>
+<include type="file" source="protoplot-pyqt5.sh" target="bin/protoplot-pyqt5" />
+<include type="config" source="default_proto_env" targetroot="CODAC_CONF" target="env.d/protoplot-pyqt5" />
+                        </package>
+
+
+                    </packaging>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
