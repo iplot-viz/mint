@@ -9,9 +9,8 @@ from datetime import datetime
 from PyQt5 import QtGui
 from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, \
-    QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
-    QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QRadioButton, \
+    QSizePolicy, QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY
@@ -316,11 +315,16 @@ class PlotsModel(QAbstractTableModel):
 
 
 class DataRangeSelector(QWidget):
+
     PULSE_NUMBER = "PULSE_NUMBER"
     TIME_RANGE = "TIME_RANGE"
     RELATIVE_TIME = "RELATIVE_TIME"
 
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
+
+    cancel_refresh = pyqtSignal()
+    refresh_activate = pyqtSignal()
+    refresh_deactivate = pyqtSignal()
 
     def __init__(self, parent=None, model=None):
         super().__init__(parent)
@@ -355,6 +359,9 @@ class DataRangeSelector(QWidget):
     def import_json(self, json_string):
         loaded = json.loads(json_string)
 
+
+
+
         if loaded.get("ts_start") is not None and loaded.get("ts_end") is not None:
             self.stack.setCurrentIndex(0)
             self.radiogroup.layout().itemAt(0).widget().setChecked(True)
@@ -367,6 +374,13 @@ class DataRangeSelector(QWidget):
             self.radiogroup.layout().itemAt(1).widget().setChecked(True)
             mapper = self.items[self.stack.currentIndex()][4]
             mapper.model().setStringList([",".join(loaded.get("pulsenb"))])
+            mapper.toFirst()
+
+        elif loaded.get("relative") is not None:
+            self.stack.setCurrentIndex(2)
+            self.radiogroup.layout().itemAt(2).widget().setChecked(True)
+            mapper = self.items[self.stack.currentIndex()][4]
+            mapper.model().setStringList([str(loaded.get("relative")), str(loaded.get("base")), str(loaded.get("auto_refresh"))])
             mapper.toFirst()
 
     def _create_stacked_form(self):
@@ -463,16 +477,48 @@ class DataRangeSelector(QWidget):
         relative_time = QComboBox()
         relative_time.setModel(values)
 
-        mapper = QDataWidgetMapper(form)
+        cancel_button = QPushButton()
+        cancel_button.setText("Cancel")
+        cancel_button.setDisabled(True)
+        cancel_button.clicked.connect(self.cancel_refresh.emit)
 
-        form.layout().addRow(QLabel("Last"), time_input)
-        form.layout().addRow(QLabel(""), relative_time)
+        self.refresh_activate.connect(partial(cancel_button.setDisabled, False))
+        self.refresh_deactivate.connect(partial(cancel_button.setDisabled, True))
+
+        model = QStringListModel(form)
+        # model.setStringList(
+        #     self.model.get('value') if self.model.get('mode') == DataRangeSelector.TIME_RANGE and self.model.get(
+        #         'value') else ['', ''])
+
+
 
         refresh_input = QSpinBox()
         refresh_input.setMinimum(5)
         refresh_input.setValue(5)
 
-        form.layout().addRow(QLabel("Refresh (mins)"), refresh_input)
+        time_widget = QWidget()
+        time_widget.setLayout(QHBoxLayout())
+        time_widget.layout().setContentsMargins(QMargins())
+        time_widget.layout().addWidget(time_input, 1)
+        time_widget.layout().addWidget(relative_time, 2)
+
+        refresh_widget = QWidget()
+        refresh_widget.setLayout(QHBoxLayout())
+        refresh_widget.layout().setContentsMargins(QMargins())
+        refresh_widget.layout().addWidget(refresh_input, 1)
+        refresh_widget.layout().addWidget(cancel_button, 2)
+
+        form.layout().addRow(QLabel("Last"), time_widget)
+        form.layout().addRow(QLabel("Refresh (mins)"), refresh_widget)
+
+        mapper = QDataWidgetMapper(form)
+        mapper.setOrientation(Qt.Vertical)
+        mapper.setModel(model)
+        mapper.addMapping(time_input, 0)
+        mapper.addMapping(relative_time, 1)
+        mapper.addMapping(refresh_input, 2)
+        mapper.toFirst()
+
 
         def ret():
             return {"relative": int(time_input.value()), "base": options[relative_time.currentIndex()][0], "auto_refresh":int(refresh_input.value())}

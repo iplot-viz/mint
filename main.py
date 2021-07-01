@@ -102,10 +102,34 @@ if __name__ == '__main__':
     variables_table = VariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = DataRangeSelector(model=model.get("range"))
 
+
     draw_button = QPushButton("Draw")
     draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
     stream_button = QPushButton("Stream")
     stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
+
+    def start_auto_refresh(canvas):
+        global refresh_timer
+        global range_selector
+
+        if canvas.auto_refresh:
+            logger.info(F"Scheduling canvas refresh in {canvas.auto_refresh} seconds")
+            refresh_timer = Timer(canvas.auto_refresh, draw_clicked)
+            refresh_timer.daemon = True
+            refresh_timer.start()
+            range_selector.refresh_activate.emit()
+
+    def stop_auto_refresh():
+        global refresh_timer
+        global range_selector
+
+        range_selector.refresh_deactivate.emit()
+        if refresh_timer is not None:
+            refresh_timer.cancel()
+
+
+    range_selector.cancel_refresh.connect(stop_auto_refresh)
+
 
     def draw_clicked():
         global refresh_timer
@@ -123,16 +147,11 @@ if __name__ == '__main__':
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
         variables_table.export_csv(os.path.join(dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
 
-        if refresh_timer is not None:
-            refresh_timer.cancel()
+        stop_auto_refresh()
 
         qt_canvas.set_canvas(canvas)
 
-        if canvas.auto_refresh:
-            logger.info(F"Scheduling canvas refresh in {canvas.auto_refresh} seconds")
-            refresh_timer = Timer(canvas.auto_refresh, draw_clicked)
-            refresh_timer.daemon = True
-            refresh_timer.start()
+        start_auto_refresh(canvas)
 
 
 
