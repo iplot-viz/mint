@@ -1,8 +1,8 @@
 import json
 
-from PyQt5 import QtGui
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar
+from qtpy import QtGui
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar
 
 import logging2.setupLogger as ls
 

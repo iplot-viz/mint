@@ -6,10 +6,10 @@ from functools import partial
 import numpy as np
 import pandas
 from datetime import datetime
-from PyQt5 import QtGui
-from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QRadioButton, \
+from qtpy import QtGui
+from qtpy.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, Qt, Signal
+from qtpy.QtGui import QIcon
+from qtpy.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QRadioButton, \
     QSizePolicy, QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
@@ -43,7 +43,7 @@ def _get_pulse_number(time_model):
 
 
 class VariablesTable(QWidget):
-    canvasChanged = pyqtSignal(Canvas)
+    canvasChanged = Signal(Canvas)
 
     def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=PlotXY,
                  signal_class=DataAccessSignal, default_dec_samples=1000):
@@ -231,8 +231,8 @@ class VariablesTable(QWidget):
 
 
 class VairablesToolbar(QWidget):
-    exportCsv = pyqtSignal()
-    importCsv = pyqtSignal()
+    exportCsv = Signal()
+    importCsv = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -268,7 +268,7 @@ class PlotsModel(QAbstractTableModel):
     def data(self, index, role):
         if role == Qt.DisplayRole or role == Qt.EditRole:
             return self.model[index.row()][index.column()]
-        return QVariant()
+        return None
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if role == Qt.EditRole:
@@ -322,9 +322,9 @@ class DataRangeSelector(QWidget):
 
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
 
-    cancel_refresh = pyqtSignal()
-    refresh_activate = pyqtSignal()
-    refresh_deactivate = pyqtSignal()
+    cancel_refresh = Signal()
+    refresh_activate = Signal()
+    refresh_deactivate = Signal()
 
     def __init__(self, parent=None, model=None):
         super().__init__(parent)

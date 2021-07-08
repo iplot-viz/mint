@@ -9,9 +9,9 @@ from gui._version import __version__
 from iplotlib.core._version import __version__ as __iplotlib_version__
 
 import pandas
-from PyQt5.QtCore import QMargins
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
+from qtpy.QtCore import QMargins
+from qtpy.QtGui import QIcon
+from qtpy.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
 from dataAccess.dataAccess import DataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
