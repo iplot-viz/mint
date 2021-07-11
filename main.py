@@ -5,7 +5,11 @@ from functools import partial
 from pathlib import Path
 from threading import Timer
 
+import matplotlib
+import argparse
+
 from gui._version import __version__
+from impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
 from iplotlib.core._version import __version__ as __iplotlib_version__
 
 import pandas
@@ -21,6 +25,22 @@ import logging2.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 
+
+parser = argparse.ArgumentParser(description='MINT application')
+parser.add_argument('IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
+parser.add_argument('-e', dest='export', metavar=('json_file', 'image_file'), help='Load canvas from JSON and save to file (PNG/SVG/PDF...)', nargs=2)
+parser.add_argument('-ew', dest='export_width', metavar='export_width', type=int, default=1920, help='Exported image width')
+parser.add_argument('-eh', dest='export_height', metavar='export_height', type=int, default=1080, help='Exported image height')
+parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi', type=int, default=100, help='Exported image DPI')
+parser.add_argument('-a', dest='csv_file', metavar='csv_file', help='Load variables table from file')
+
+
+args = parser.parse_args()
+
+# print(parser.print_help())
+
+# exit(1)
+
 try:
     from iplotlib.impl.gnuplot.qt.qtGnuplotMultiwidgetCanvas import QtGnuplotMultiwidgetCanvas
 except ModuleNotFoundError:
@@ -31,6 +51,24 @@ from iplotlib.data_access.streamer import CanvasStreamer
 
 from gui.main import Multiwindow, MainMenu, StatusBar
 from gui.variablesTable import VariablesTable, DataRangeSelector
+
+# TODO: Handle auto width/height
+# TODO: Switch exporting to canvas impl
+def export_to_file(canvas_filename, output_filename, dpi=300, width=18.5, height=10.5):
+    try:
+        with open(canvas_filename) as json_file:
+            matplotlib.rcParams["figure.dpi"] = dpi
+
+            canvas = Canvas.from_json(json_file.read())
+
+            mpl_canvas = MatplotlibCanvas()
+            mpl_canvas.figure.set_size_inches(width/dpi, height/dpi)
+            mpl_canvas.process_iplotlib_canvas(canvas)
+
+            mpl_canvas.figure.savefig(output_filename)
+    except FileNotFoundError:
+        logger.error(f"ERROR: Unable to open file: {canvas_filename}")
+
 
 
 
@@ -49,17 +87,16 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
-    canvasImpl = "MATPLOTLIB"
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'MATPLOTLIB' or sys.argv[1] == 'GNUPLOT':
-            canvasImpl = sys.argv[1]
+    canvasImpl = args.IMPL
 
-    file_to_import = None
-    if len(sys.argv) > 2:
-        file_to_import = sys.argv[2]
+    file_to_import = args.csv_file
 
     currTime = datetime.utcnow().isoformat(timespec='seconds')
     currTimeDelta = datetime.utcnow() - timedelta(days=7)
+
+    if args.export and len(args.export) == 2:
+        export_to_file(args.export[0], args.export[1], dpi=args.export_dpi, width=args.export_width, height=args.export_height)
+        exit(0)
 
     app = QApplication(sys.argv)
 
@@ -71,7 +108,10 @@ if __name__ == '__main__':
         "ColSpan": {"label": "Col span"},
         "Envelope": {},
         "Alias": {},
-        "DecSamples": {"label": "Samples"}
+        "DecSamples": {"label": "Samples"},
+        "PulseNumber": {},
+        "StartTime": {},
+        "EndTime": {}
     }
 
     model = {
@@ -148,6 +188,7 @@ if __name__ == '__main__':
 
         stop_auto_refresh()
 
+        qt_canvas.unfocus_plot()
         qt_canvas.set_canvas(canvas)
 
         start_auto_refresh(canvas)
@@ -172,6 +213,7 @@ if __name__ == '__main__':
             canvas.auto_refresh = stream_canvas.auto_refresh
             canvas.streaming = True
             canvas.plots = stream_canvas.plots
+            qt_canvas.unfocus_plot()
             qt_canvas.set_canvas(canvas)
 
             streamer = CanvasStreamer(da)
@@ -260,3 +302,4 @@ if __name__ == '__main__':
 
     app.setWindowIcon(main_widget.style().standardIcon(getattr(QStyle, "SP_BrowserReload")))
     sys.exit(app.exec_())
+

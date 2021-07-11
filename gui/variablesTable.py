@@ -105,22 +105,35 @@ class VariablesTable(QWidget):
                 return type_func(value)
             return value
 
+        def str_to_arr(value):
+                return None if value is None else [e.strip() for e in value.split(',')]
+
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
             signal_title = get_value(row, "Alias") or None
             if signal_title is not None and signal_title.isspace():
                 signal_title = None
+
+
+
+            signal_pulsenb = get_value(row, "PulseNumber", str_to_arr) or pulsenb
+            signal_start_ts = get_value(row, "StartTime") or ts_start
+            signal_end_ts = get_value(row, "EndTime") or ts_end
+
+            if signal_pulsenb:
+                signal_start_ts = None
+                signal_end_ts = None
 
             signal_params = dict(datasource=get_value(row, "DataSource"),
                                  title=signal_title,
                                  varname=get_value(row, "Variable"),
                                  envelope=get_value(row, "Envelope"),
                                  dec_samples=get_value(row, "DecSamples", int) or self.default_dec_samples,
-                                 ts_start=ts_start,
-                                 ts_end=ts_end
+                                 ts_start=signal_start_ts,
+                                 ts_end=signal_end_ts
                                  )
 
-            if pulsenb is not None and len(pulsenb) > 0:
-                signals = [self.signal_class(**signal_params, pulsenb=e, ts_relative=True) for e in pulsenb]
+            if signal_pulsenb is not None and len(signal_pulsenb) > 0:
+                signals = [self.signal_class(**signal_params, pulsenb=e, ts_relative=True) for e in signal_pulsenb]
             else:
                 signals = [self.signal_class(**signal_params, ts_relative=False)]
 
@@ -492,7 +505,7 @@ class DataRangeSelector(QWidget):
 
 
         refresh_input = QSpinBox()
-        refresh_input.setMinimum(5)
+        refresh_input.setMinimum(1)
         refresh_input.setValue(5)
 
         time_widget = QWidget()
