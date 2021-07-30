@@ -6,12 +6,11 @@ from functools import partial
 import numpy as np
 import pandas
 from datetime import datetime
-from PyQt5 import QtGui
-from PyQt5.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, QVariant, Qt, pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, \
-    QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QRadioButton, QSizePolicy, \
-    QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
+from qtpy import QtGui
+from qtpy.QtCore import QAbstractTableModel, QMargins, QModelIndex, QStringListModel, Qt, Signal
+from qtpy.QtGui import QIcon
+from qtpy.QtWidgets import QComboBox, QDataWidgetMapper, QDateTimeEdit, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QRadioButton, \
+    QSizePolicy, QSpinBox, QStackedWidget, QStyle, QTabWidget, QTableView, QToolBar, QVBoxLayout, QWidget
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY
@@ -32,7 +31,6 @@ def _get_begin_end(time_model):
         elif 'relative' in time_model:
             end = int(np.datetime64(datetime.utcnow(), 'ns').astype('int64'))
             start = end - 10 ** 9 * int(time_model.get('relative')) * time_model.get('base')
-            logger.info(F"Relative date start={start}({type(start)}) end={end}({type(end)}) delta: {end - start}")
             return start, end
     return None, None
 
@@ -45,7 +43,7 @@ def _get_pulse_number(time_model):
 
 
 class VariablesTable(QWidget):
-    canvasChanged = pyqtSignal(Canvas)
+    canvasChanged = Signal(Canvas)
 
     def __init__(self, parent=None, data_access=None, model=None, header=None, plot_class=PlotXY,
                  signal_class=DataAccessSignal, default_dec_samples=1000):
@@ -101,15 +99,22 @@ class VariablesTable(QWidget):
 
     def _create_signals(self, row, time_model=None, ts_start=None, ts_end=None, pulsenb=None):
 
-        def get_value(data_row, key):
-            return data_row[list(self.header).index(key)]
+        def get_value(data_row, key, type_func=str):
+            value = data_row[list(self.header).index(key)]
+            if value is not None and value != '':
+                return type_func(value)
+            return value
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
+            signal_title = get_value(row, "Alias") or None
+            if signal_title is not None and signal_title.isspace():
+                signal_title = None
+
             signal_params = dict(datasource=get_value(row, "DataSource"),
-                                 title=get_value(row, "Alias") or None,
+                                 title=signal_title,
                                  varname=get_value(row, "Variable"),
                                  envelope=get_value(row, "Envelope"),
-                                 dec_samples=get_value(row, "DecSamples") or self.default_dec_samples,
+                                 dec_samples=get_value(row, "DecSamples", int) or self.default_dec_samples,
                                  ts_start=ts_start,
                                  ts_end=ts_end
                                  )
@@ -133,15 +138,14 @@ class VariablesTable(QWidget):
 
     def create_canvas(self, time_model=None, stream_window=None):
         model = {}
-
         x_axis_date = False if time_model is not None and 'pulsenb' in time_model else True
         x_axis_follow = True if time_model is None else False
         x_axis_window = stream_window if time_model is None else None
 
+        refresh_interval = time_model.get('auto_refresh')*60 if time_model is not None and 'auto_refresh' in time_model else 0
         pulse_number = _get_pulse_number(time_model)
         if stream_window is not None and stream_window > 0:
             now = np.datetime64(datetime.utcnow(), 'ns').astype('int').item()
-            print("************* NOW ",now)
             (ts_start, ts_end) = now, now - stream_window
 
         else:
@@ -170,6 +174,7 @@ class VariablesTable(QWidget):
 
         canvas = Canvas()
         canvas.autoscale = False if x_axis_date else True
+        canvas.auto_refresh = refresh_interval
 
         if model.keys():
             canvas.cols = max(model.keys())
@@ -226,8 +231,8 @@ class VariablesTable(QWidget):
 
 
 class VairablesToolbar(QWidget):
-    exportCsv = pyqtSignal()
-    importCsv = pyqtSignal()
+    exportCsv = Signal()
+    importCsv = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -263,7 +268,7 @@ class PlotsModel(QAbstractTableModel):
     def data(self, index, role):
         if role == Qt.DisplayRole or role == Qt.EditRole:
             return self.model[index.row()][index.column()]
-        return QVariant()
+        return None
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if role == Qt.EditRole:
@@ -316,6 +321,10 @@ class DataRangeSelector(QWidget):
 
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
 
+    cancel_refresh = Signal()
+    refresh_activate = Signal()
+    refresh_deactivate = Signal()
+
     def __init__(self, parent=None, model=None):
         super().__init__(parent)
         if model is None:
@@ -349,6 +358,9 @@ class DataRangeSelector(QWidget):
     def import_json(self, json_string):
         loaded = json.loads(json_string)
 
+
+
+
         if loaded.get("ts_start") is not None and loaded.get("ts_end") is not None:
             self.stack.setCurrentIndex(0)
             self.radiogroup.layout().itemAt(0).widget().setChecked(True)
@@ -361,6 +373,13 @@ class DataRangeSelector(QWidget):
             self.radiogroup.layout().itemAt(1).widget().setChecked(True)
             mapper = self.items[self.stack.currentIndex()][4]
             mapper.model().setStringList([",".join(loaded.get("pulsenb"))])
+            mapper.toFirst()
+
+        elif loaded.get("relative") is not None:
+            self.stack.setCurrentIndex(2)
+            self.radiogroup.layout().itemAt(2).widget().setChecked(True)
+            mapper = self.items[self.stack.currentIndex()][4]
+            mapper.model().setStringList([str(loaded.get("relative")), str(loaded.get("base")), str(loaded.get("auto_refresh"))])
             mapper.toFirst()
 
     def _create_stacked_form(self):
@@ -446,6 +465,7 @@ class DataRangeSelector(QWidget):
         form.setLayout(QFormLayout())
 
         time_input = QSpinBox()
+        time_input.setMinimum(0)
         time_input.setValue(1)
 
         options = [(1, "Second(s)"), (60, "Minute(s)"), (60*60, "Hour(s)"), (24*60*60, "Day(s)")]
@@ -456,12 +476,50 @@ class DataRangeSelector(QWidget):
         relative_time = QComboBox()
         relative_time.setModel(values)
 
-        mapper = QDataWidgetMapper(form)
+        cancel_button = QPushButton()
+        cancel_button.setText("Cancel")
+        cancel_button.setDisabled(True)
+        cancel_button.clicked.connect(self.cancel_refresh.emit)
 
-        form.layout().addRow(QLabel("Last"), time_input)
-        form.layout().addRow(QLabel(""), relative_time)
+        self.refresh_activate.connect(partial(cancel_button.setDisabled, False))
+        self.refresh_deactivate.connect(partial(cancel_button.setDisabled, True))
+
+        model = QStringListModel(form)
+        # model.setStringList(
+        #     self.model.get('value') if self.model.get('mode') == DataRangeSelector.TIME_RANGE and self.model.get(
+        #         'value') else ['', ''])
+
+
+
+        refresh_input = QSpinBox()
+        refresh_input.setMinimum(5)
+        refresh_input.setValue(5)
+
+        time_widget = QWidget()
+        time_widget.setLayout(QHBoxLayout())
+        time_widget.layout().setContentsMargins(QMargins())
+        time_widget.layout().addWidget(time_input, 1)
+        time_widget.layout().addWidget(relative_time, 2)
+
+        refresh_widget = QWidget()
+        refresh_widget.setLayout(QHBoxLayout())
+        refresh_widget.layout().setContentsMargins(QMargins())
+        refresh_widget.layout().addWidget(refresh_input, 1)
+        refresh_widget.layout().addWidget(cancel_button, 2)
+
+        form.layout().addRow(QLabel("Last"), time_widget)
+        form.layout().addRow(QLabel("Refresh (mins)"), refresh_widget)
+
+        mapper = QDataWidgetMapper(form)
+        mapper.setOrientation(Qt.Vertical)
+        mapper.setModel(model)
+        mapper.addMapping(time_input, 0)
+        mapper.addMapping(relative_time, 1)
+        mapper.addMapping(refresh_input, 2)
+        mapper.toFirst()
+
 
         def ret():
-            return {"relative": int(time_input.value()), "base": options[relative_time.currentIndex()][0]}
+            return {"relative": int(time_input.value()), "base": options[relative_time.currentIndex()][0], "auto_refresh":int(refresh_input.value())}
 
         return DataRangeSelector.RELATIVE_TIME, "Relative", form, ret, mapper

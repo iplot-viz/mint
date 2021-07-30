@@ -3,14 +3,15 @@ import sys
 from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
+from threading import Timer
 
 from gui._version import __version__
 from iplotlib.core._version import __version__ as __iplotlib_version__
 
 import pandas
-from PyQt5.QtCore import QMargins
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
+from qtpy.QtCore import QMargins
+from qtpy.QtGui import QIcon
+from qtpy.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
 from dataAccess.dataAccess import DataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
@@ -89,6 +90,7 @@ if __name__ == '__main__':
     canvas = Canvas(grid=True)
     streamer = None
     stream_window = 3600
+    refresh_timer = None
 
     if canvasImpl == "MATPLOTLIB":
         right_column = QWidget()
@@ -105,20 +107,52 @@ if __name__ == '__main__':
     stream_button = QPushButton("Stream")
     stream_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
 
+    def start_auto_refresh(canvas):
+        global refresh_timer
+        global range_selector
+
+        if canvas.auto_refresh:
+            logger.info(F"Scheduling canvas refresh in {canvas.auto_refresh} seconds")
+            refresh_timer = Timer(canvas.auto_refresh, draw_clicked)
+            refresh_timer.daemon = True
+            refresh_timer.start()
+            range_selector.refresh_activate.emit()
+
+    def stop_auto_refresh():
+        global refresh_timer
+        global range_selector
+
+        range_selector.refresh_deactivate.emit()
+        if refresh_timer is not None:
+            refresh_timer.cancel()
+
+
+    range_selector.cancel_refresh.connect(stop_auto_refresh)
+
+
     def draw_clicked():
+        global refresh_timer
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
         time_model = range_selector.get_model()
         new_canvas = variables_table.create_canvas(time_model)
         canvas.rows = new_canvas.rows
         canvas.cols = new_canvas.cols
         canvas.plots = new_canvas.plots
+        canvas.auto_refresh = new_canvas.auto_refresh
         canvas.autoscale = new_canvas.autoscale
         canvas.streaming = False
 
         dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
         variables_table.export_csv(os.path.join(dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
+
+        stop_auto_refresh()
+
         qt_canvas.set_canvas(canvas)
+
+        start_auto_refresh(canvas)
+
+
 
     def stream_clicked():
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
@@ -135,6 +169,7 @@ if __name__ == '__main__':
             stream_canvas = variables_table.create_canvas(stream_window=window_field.value())
             canvas.rows = stream_canvas.rows
             canvas.cols = stream_canvas.cols
+            canvas.auto_refresh = stream_canvas.auto_refresh
             canvas.streaming = True
             canvas.plots = stream_canvas.plots
             qt_canvas.set_canvas(canvas)
