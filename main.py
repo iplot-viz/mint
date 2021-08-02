@@ -9,7 +9,7 @@ import matplotlib
 import argparse
 
 from gui._version import __version__
-from impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
+from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
 from iplotlib.core._version import __version__ as __iplotlib_version__
 
 import pandas
@@ -27,7 +27,7 @@ logger = ls.get_logger(__name__)
 
 
 parser = argparse.ArgumentParser(description='MINT application')
-parser.add_argument('IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
+parser.add_argument('-IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
 parser.add_argument('-e', dest='export', metavar=('json_file', 'image_file'), help='Load canvas from JSON and save to file (PNG/SVG/PDF...)', nargs=2)
 parser.add_argument('-ew', dest='export_width', metavar='export_width', type=int, default=1920, help='Exported image width')
 parser.add_argument('-eh', dest='export_height', metavar='export_height', type=int, default=1080, help='Exported image height')
@@ -115,8 +115,8 @@ if __name__ == '__main__':
     }
 
     model = {
-        # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
-        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
+        "range": {"mode": DataRangeSelector.TIME_RANGE, "value": [currTimeDelta.isoformat(timespec='seconds'), currTime]}
+        # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2020-10-19T20:17:40", "2020-10-19T20:27:40"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:00:00", "2021-02-22T12:00:01"]}
         # "range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2018-09-13T15:22:35.100", "2018-09-13T15:22:35.101 "]}
         #"range": {"mode": DataRangeSelector.TIME_RANGE, "value": ["2021-02-22T12:01:53.790", "2021-02-25T12:01:54.800"]}
