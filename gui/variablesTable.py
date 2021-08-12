@@ -106,14 +106,12 @@ class VariablesTable(QWidget):
             return value
 
         def str_to_arr(value):
-                return None if value is None else [e.strip() for e in value.split(',')]
+            return None if value is None else [e.strip() for e in value.split(',')]
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
             signal_title = get_value(row, "Alias") or None
             if signal_title is not None and signal_title.isspace():
                 signal_title = None
-
-
 
             signal_pulsenb = get_value(row, "PulseNumber", str_to_arr) or pulsenb
             signal_start_ts = get_value(row, "StartTime") or ts_start
@@ -505,7 +503,7 @@ class DataRangeSelector(QWidget):
 
 
         refresh_input = QSpinBox()
-        refresh_input.setMinimum(1)
+        refresh_input.setMinimum(5)
         refresh_input.setValue(5)
 
         time_widget = QWidget()
