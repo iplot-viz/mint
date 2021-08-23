@@ -1,6 +1,7 @@
 import json
 import os
 import typing
+from collections import namedtuple
 from functools import partial
 
 import numpy as np
@@ -19,6 +20,11 @@ from iplotlib.data_access.dataAccessSignal import DataAccessSignal
 import logging2.setupLogger as ls
 
 logger = ls.get_logger(__name__)
+
+
+SignalDescription = namedtuple('SignalDescription', ['signals', 'col_num', 'row_num', 'stack_num', 'row_span', 'col_span', 'pulsenb', 'start_ts', 'end_ts'], defaults=[None, 0, 0, 0, 1, 1, None, None, None])
+PlotDescription = namedtuple('PlotDescription', ['row_span','col_span','x_range','signals'], defaults=[None])
+
 
 
 def _get_begin_end(time_model):
@@ -108,18 +114,48 @@ class VariablesTable(QWidget):
         def str_to_arr(value):
             return None if value is None else [e.strip() for e in value.split(',')]
 
+        def parse_timestamp(value):
+            if isinstance(value, str):
+                try:
+                    if value.isnumeric():
+                        return int(value) if float(value) > 10**15 else float(value)
+                    else:
+                        return int(np.datetime64(value, 'ns'))
+                except:
+                    pass
+
+            return None
+            try:
+                #TODO: Check for 0 and pass it as number (it is prbably cheked fot rue/false)
+                #TODO: Is pulse number is overrider we discard start_time and end_time
+                #TODO: Check if overriding any value at row level resets all values from timerangeselector
+                #TODO: Use min/max from all plots when sharing x axis
+                if value is not None and value.isnumeric():
+                    num_val = float(value)
+                    print(f"\tNUM VAL ${num_val} of {value}")
+                    return int(value) if num_val > 10**15 else float(value)
+            except:
+                pass
+            return None
+
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
             signal_title = get_value(row, "Alias") or None
             if signal_title is not None and signal_title.isspace():
                 signal_title = None
 
-            signal_pulsenb = get_value(row, "PulseNumber", str_to_arr) or pulsenb
-            signal_start_ts = get_value(row, "StartTime") or ts_start
-            signal_end_ts = get_value(row, "EndTime") or ts_end
+            signal_pulsenb = pulsenb or None
+            signal_start_ts = ts_start or None
+            signal_end_ts = ts_end or None
 
-            if signal_pulsenb:
-                signal_start_ts = None
-                signal_end_ts = None
+            start_ts_override = get_value(row, "StartTime", parse_timestamp) or None
+            end_ts_override = get_value(row, "EndTime", parse_timestamp) or None
+            pulsenb_override = get_value(row, "PulseNumber", str_to_arr) or None
+
+            # If any of the override values is set we discard values from RangeSelector
+            if start_ts_override is not None or end_ts_override is not None or pulsenb_override is not None:
+                signal_pulsenb = pulsenb_override
+                signal_start_ts = start_ts_override
+                signal_end_ts = end_ts_override
 
             signal_params = dict(datasource=get_value(row, "DataSource"),
                                  title=signal_title,
@@ -143,9 +179,12 @@ class VariablesTable(QWidget):
             row_span = str(get_value(row, "RowSpan")) or 1
             col_span = str(get_value(row, "ColSpan")) or 1
 
-            return signals, int(col_num), int(row_num), int(stack_num), int(row_span), int(col_span)
+            return SignalDescription(signals=signals, col_num=int(col_num), row_num=int(row_num), stack_num=int(stack_num),
+                                     row_span=int(row_span), col_span=int(col_span), pulsenb=signal_pulsenb, start_ts=signal_start_ts, end_ts=signal_end_ts)
+            # return signals, int(col_num), int(row_num), int(stack_num), int(row_span), int(col_span), signal_pulsenb, signal_start_ts, signal_end_ts
+
         else:
-            return None, 0, 0, 0, 1, 1
+            return SignalDescription()
 
     def create_canvas(self, time_model=None, stream_window=None):
         model = {}
@@ -165,23 +204,28 @@ class VariablesTable(QWidget):
         logger.info(F"Creating canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
 
         for row in self.table_model.model:
-            signals, colnum, rownum, stacknum, row_span, col_span = \
-                self._create_signals(row, time_model, ts_start, ts_end, pulse_number)
+            desc = self._create_signals(row, time_model, ts_start, ts_end, pulse_number)
 
-            if signals:
-                if colnum not in model:
-                    model[colnum] = {}
-                if rownum not in model[colnum]:
-                    model[colnum][rownum] = [row_span, col_span, {}]
+            if desc.signals:
+                if desc.col_num not in model:
+                    model[desc.col_num] = {}
+                if desc.row_num not in model[desc.col_num]:
+                    model[desc.col_num][desc.row_num] = [desc.row_span, desc.col_span, {}, [desc.start_ts, desc.end_ts]]
                 else:
-                    existing = model[colnum][rownum]
-                    existing[0] = row_span if row_span > existing[0] else existing[0]
-                    existing[1] = col_span if col_span > existing[1] else existing[1]
+                    existing = model[desc.col_num][desc.row_num]
+                    existing[0] = desc.row_span if desc.row_span > existing[0] else existing[0]
+                    existing[1] = desc.col_span if desc.col_span > existing[1] else existing[1]
 
-                if stacknum not in model[colnum][rownum][2]:
-                    model[colnum][rownum][2][stacknum] = []
-                for signal in signals:
-                    model[colnum][rownum][2][stacknum].append(signal)
+                    if desc.start_ts is not None or desc.start_ts is not None:
+                        if existing[3][0] is None or desc.start_ts < existing[3][0]:
+                            existing[3][0] = desc.start_ts
+                        if existing[3][1] is None or desc.end_ts > existing[3][1]:
+                            existing[3][1] = desc.end_ts
+
+                if desc.stack_num not in model[desc.col_num][desc.row_num][2]:
+                    model[desc.col_num][desc.row_num][2][desc.stack_num] = []
+                for signal in desc.signals:
+                    model[desc.col_num][desc.row_num][2][desc.stack_num].append(signal)
 
         canvas = Canvas()
         canvas.autoscale = False if x_axis_date else True
@@ -200,9 +244,9 @@ class VariablesTable(QWidget):
 
                         x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
 
-                        if x_axis_date and ts_start is not None and ts_end is not None:
-                            x_axis.begin = ts_start
-                            x_axis.end = ts_end
+                        if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
+                            x_axis.begin = rows[row+1][3][0]
+                            x_axis.end = rows[row+1][3][1]
 
                         plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
                                                col_span=rows[row + 1][1])
