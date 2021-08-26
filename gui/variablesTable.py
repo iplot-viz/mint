@@ -109,33 +109,36 @@ class VariablesTable(QWidget):
             value = data_row[list(self.header).index(key)]
             if value is not None and value != '':
                 return type_func(value)
-            return value
+            return None
 
         def str_to_arr(value):
             return None if value is None else [e.strip() for e in value.split(',')]
 
+        #str.isnumeric() does not work for negative numbers
+        def is_numeric(val):
+            try:
+                float(val)
+            except:
+                return False
+            else:
+                return True
+
+        # TODO: Check for 0 and pass it as number (it is prbably cheked fot rue/false)
+        # TODO: Is pulse number is overrider we discard start_time and end_time
+        # TODO: Check if overriding any value at row level resets all values from timerangeselector
+        # TODO: Use min/max from all plots when sharing x axis
         def parse_timestamp(value):
             if isinstance(value, str):
                 try:
-                    if value.isnumeric():
+                    if is_numeric(value):
                         return int(value) if float(value) > 10**15 else float(value)
                     else:
                         return int(np.datetime64(value, 'ns'))
                 except:
+                    if len(value) > 0:
+                        logger.error(f"Unable to parse string '{value}' as timestamp")
                     pass
 
-            return None
-            try:
-                #TODO: Check for 0 and pass it as number (it is prbably cheked fot rue/false)
-                #TODO: Is pulse number is overrider we discard start_time and end_time
-                #TODO: Check if overriding any value at row level resets all values from timerangeselector
-                #TODO: Use min/max from all plots when sharing x axis
-                if value is not None and value.isnumeric():
-                    num_val = float(value)
-                    print(f"\tNUM VAL ${num_val} of {value}")
-                    return int(value) if num_val > 10**15 else float(value)
-            except:
-                pass
             return None
 
         if row and get_value(row, "DataSource") and get_value(row, "Variable"):
@@ -147,9 +150,10 @@ class VariablesTable(QWidget):
             signal_start_ts = ts_start or None
             signal_end_ts = ts_end or None
 
-            start_ts_override = get_value(row, "StartTime", parse_timestamp) or None
-            end_ts_override = get_value(row, "EndTime", parse_timestamp) or None
-            pulsenb_override = get_value(row, "PulseNumber", str_to_arr) or None
+            #this "or" here will cause 0 to convert to None
+            start_ts_override = get_value(row, "StartTime", parse_timestamp)
+            end_ts_override = get_value(row, "EndTime", parse_timestamp)
+            pulsenb_override = get_value(row, "PulseNumber", str_to_arr)
 
             # If any of the override values is set we discard values from RangeSelector
             if start_ts_override is not None or end_ts_override is not None or pulsenb_override is not None:
@@ -176,8 +180,8 @@ class VariablesTable(QWidget):
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
 
-            row_span = str(get_value(row, "RowSpan")) or 1
-            col_span = str(get_value(row, "ColSpan")) or 1
+            row_span = get_value(row, "RowSpan") or 1
+            col_span = get_value(row, "ColSpan") or 1
 
             return SignalDescription(signals=signals, col_num=int(col_num), row_num=int(row_num), stack_num=int(stack_num),
                                      row_span=int(row_span), col_span=int(col_span), pulsenb=signal_pulsenb, start_ts=signal_start_ts, end_ts=signal_end_ts)
@@ -201,7 +205,7 @@ class VariablesTable(QWidget):
         else:
             (ts_start, ts_end) = _get_begin_end(time_model)
 
-        logger.info(F"Creating canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
+        logger.info(F"Creating2 canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
 
         for row in self.table_model.model:
             desc = self._create_signals(row, time_model, ts_start, ts_end, pulse_number)
@@ -247,6 +251,8 @@ class VariablesTable(QWidget):
                         if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
                             x_axis.begin = rows[row+1][3][0]
                             x_axis.end = rows[row+1][3][1]
+                            x_axis.original_begin = x_axis.begin
+                            x_axis.original_end = x_axis.end
 
                         plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
                                                col_span=rows[row + 1][1])
