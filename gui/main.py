@@ -4,7 +4,7 @@ from qtpy import QtGui
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar
 
-import logging2.setupLogger as ls
+import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 

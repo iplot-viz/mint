@@ -17,7 +17,7 @@ from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY
 from iplotlib.data_access.dataAccessSignal import DataAccessSignal
 
-import logging2.setupLogger as ls
+import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 

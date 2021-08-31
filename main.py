@@ -16,12 +16,12 @@ import pandas
 from qtpy.QtCore import QMargins
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QApplication, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QSpinBox, QSplitter, QStyle, QVBoxLayout, QWidget
-from dataAccess.dataAccess import DataAccess
+from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
 from iplotlib.qt.qtCanvasToolbar import CanvasToolbar
 
-import logging2.setupLogger as ls
+import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 
