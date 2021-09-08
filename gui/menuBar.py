@@ -1,6 +1,5 @@
 import json
 
-from qtpy import QtGui
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QMainWindow, QMenuBar, QMessageBox, QSizePolicy, QStatusBar
 
@@ -8,13 +7,15 @@ import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 
-class MainMenu(QMenuBar):
+
+class MainMenuBar(QMenuBar):
 
     def __init__(self, parent=None, export_widgets=dict()):
         super().__init__(parent)
         self.export_widgets = export_widgets
 
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
+        self.setSizePolicy(QSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Maximum))
 
         file_menu = self.addMenu("File")
         help_menu = self.addMenu("Help")
@@ -57,8 +58,6 @@ class MainMenu(QMenuBar):
 
         file_menu.addAction(exit_action)
 
-
-
     def do_export(self):
         """Exports widgets from self.export_widget to one big json file"""
         try:
@@ -79,7 +78,7 @@ class MainMenu(QMenuBar):
 
                 with open(file[0], "w") as out_file:
                     out_file.write(json.dumps(data, indent=4, sort_keys=True))
-        except :
+        except:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
             box.setText("Error exporting file")
@@ -97,26 +96,9 @@ class MainMenu(QMenuBar):
                         if v is not None and hasattr(v, "import_json") and data.get(k) is not None:
                             v.import_json(json.dumps(data.get(k)))
 
-
         except:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
             box.setText("Error parsing file")
             box.exec_()
             raise
-
-
-
-class StatusBar(QStatusBar):
-
-    def __init__(self):
-        super().__init__()
-        self.showMessage("Ready.")
-
-
-class Multiwindow(QMainWindow):
-    """This window closes all other open windows when itself gets closed"""
-
-    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        QApplication.closeAllWindows()
-        super().closeEvent(event)
