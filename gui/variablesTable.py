@@ -141,7 +141,7 @@ class VariablesTable(QWidget):
 
             return None
 
-        if row and get_value(row, "DataSource") and get_value(row, "Variable"):
+        if row and get_value(row, "DataSource") and get_value(row, "Variable") and get_value(row, "Stack"):
             signal_title = get_value(row, "Alias") or None
             if signal_title is not None and signal_title.isspace():
                 signal_title = None
@@ -176,6 +176,7 @@ class VariablesTable(QWidget):
                 signals = [self.signal_class(**signal_params, ts_relative=False)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
+	
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
