@@ -123,9 +123,6 @@ class VariablesTable(QWidget):
             else:
                 return True
 
-        # TODO: Check for 0 and pass it as number (it is prbably cheked fot rue/false)
-        # TODO: Is pulse number is overrider we discard start_time and end_time
-        # TODO: Check if overriding any value at row level resets all values from timerangeselector
         # TODO: Use min/max from all plots when sharing x axis
         def parse_timestamp(value):
             if isinstance(value, str):
@@ -141,7 +138,7 @@ class VariablesTable(QWidget):
 
             return None
 
-        if row and get_value(row, "DataSource") and get_value(row, "Variable") and get_value(row, "Stack"):
+        if row and get_value(row, "DataSource") and get_value(row, "Variable"):
             signal_title = get_value(row, "Alias") or None
             if signal_title is not None and signal_title.isspace():
                 signal_title = None
@@ -155,11 +152,30 @@ class VariablesTable(QWidget):
             end_ts_override = get_value(row, "EndTime", parse_timestamp)
             pulsenb_override = get_value(row, "PulseNumber", str_to_arr)
 
+            logger.info(f"*Overrides for {get_value(row, 'Variable')}: pulsenb={pulsenb_override} start={start_ts_override} end={end_ts_override}")
+
             # If any of the override values is set we discard values from RangeSelector
-            if start_ts_override is not None or end_ts_override is not None or pulsenb_override is not None:
+            # if start_ts_override is not None or end_ts_override is not None or pulsenb_override is not None:
+            #     signal_pulsenb = pulsenb_override
+            #     signal_start_ts = start_ts_override
+            #     signal_end_ts = end_ts_override
+
+            ts_threshold = 10**10
+
+            if pulsenb_override is not None:
                 signal_pulsenb = pulsenb_override
                 signal_start_ts = start_ts_override
                 signal_end_ts = end_ts_override
+
+            if start_ts_override is not None:
+                signal_start_ts = start_ts_override
+
+            if end_ts_override is not None:
+                signal_end_ts = end_ts_override
+
+            if signal_start_ts is not None and signal_end_ts is not None and signal_start_ts >= ts_threshold and signal_end_ts >= ts_threshold:
+                signal_pulsenb = None
+
 
             signal_params = dict(datasource=get_value(row, "DataSource"),
                                  title=signal_title,
@@ -176,7 +192,6 @@ class VariablesTable(QWidget):
                 signals = [self.signal_class(**signal_params, ts_relative=False)]
 
             stack_val = str(get_value(row, "Stack")).split('.')
-	
             col_num = int(stack_val[0]) if len(stack_val) > 0 and stack_val[0] else 1
             row_num = int(stack_val[1]) if len(stack_val) > 1 and stack_val[1] else 1
             stack_num = int(stack_val[2]) if len(stack_val) > 2 and stack_val[2] else 1
@@ -206,7 +221,7 @@ class VariablesTable(QWidget):
         else:
             (ts_start, ts_end) = _get_begin_end(time_model)
 
-        logger.info(F"Creating2 canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
+        logger.info(F"Creating canvas ts_start={ts_start} ts_end={ts_end} pulsenb={pulse_number} stream_window={stream_window}")
 
         for row in self.table_model.model:
             desc = self._create_signals(row, time_model, ts_start, ts_end, pulse_number)
@@ -221,7 +236,7 @@ class VariablesTable(QWidget):
                     existing[0] = desc.row_span if desc.row_span > existing[0] else existing[0]
                     existing[1] = desc.col_span if desc.col_span > existing[1] else existing[1]
 
-                    if desc.start_ts is not None or desc.start_ts is not None:
+                    if desc.start_ts is not None or desc.end_ts is not None:
                         if existing[3][0] is None or desc.start_ts < existing[3][0]:
                             existing[3][0] = desc.start_ts
                         if existing[3][1] is None or desc.end_ts > existing[3][1]:
@@ -249,7 +264,7 @@ class VariablesTable(QWidget):
 
                         x_axis = LinearAxis(is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
 
-                        if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
+                        if rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
                             x_axis.begin = rows[row+1][3][0]
                             x_axis.end = rows[row+1][3][1]
                             x_axis.original_begin = x_axis.begin
