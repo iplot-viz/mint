@@ -21,7 +21,7 @@ class DataRange(QObject):
     def properties(self):
         return {}
     
-    def human_readable_name(self) -> str:
+    def label(self) -> str:
         if self.mode == DataRange.PULSE_NUMBER:
             return "Pulse Id"
         elif self.mode == DataRange.RELATIVE_TIME:
@@ -29,8 +29,8 @@ class DataRange(QObject):
         elif self.mode == DataRange.TIME_RANGE:
             return "Time range"
         
-    def to_dict(self) -> dict:
+    def toDict(self) -> dict:
         return dict(mode=self.mode, **self.properties())
     
-    def from_dict(self, contents: dict):
+    def fromDict(self, contents: dict):
         self.mapper.toFirst()

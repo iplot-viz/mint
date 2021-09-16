@@ -71,6 +71,7 @@ if __name__ == '__main__':
     #########################################################################
     # 3. Processing context
     ctx = Context()
+    AccessHelper.ctx = ctx
 
     #########################################################################
     # 4. Plot canvas
@@ -94,13 +95,13 @@ if __name__ == '__main__':
 
     #########################################################################
     # 5. Prepare model and header for variables table
-    curr_time = datetime.utcnow().isoformat(timespec='seconds')
-    curr_time_delta = datetime.utcnow() - timedelta(days=7)
+    tNow = datetime.utcnow().isoformat(timespec='seconds')
+    tNowDeltaSevenD = datetime.utcnow() - timedelta(days=7)
 
     model = {
         "range": {
             "mode": DataRange.TIME_RANGE,
-            "value": [curr_time_delta.isoformat(timespec='seconds'), curr_time]}
+            "value": [tNowDeltaSevenD.isoformat(timespec='seconds'), tNow]}
     }
 
     header = {
@@ -121,29 +122,28 @@ if __name__ == '__main__':
     }
 
     # Preload the table from a CSV file, if provided
-    file_to_import = args.csv_file
-    if file_to_import:
+    if args.csv_file:
         model["table"] = pandas.read_csv(
-            file_to_import, dtype=str, keep_default_na=False).values.tolist()
+            args.csv_file, dtype=str, keep_default_na=False).values.tolist()
 
     app = QApplication(sys.argv)
-    main_win = MainWindow(canvas, ctx, da, header, model, impl=args.IMPL)
+    mainWin = MainWindow(canvas, ctx, da, header, model, impl=args.IMPL)
 
     if workspace_file:
         with open(workspace_file) as json_file:
             payload = json.loads(json_file.read())
             if payload.get("variables_table"):
                 json_str = json.dumps(payload.get("variables_table"))
-                main_win.variables_table.import_json(json_str)
+                mainWin.variables_table.import_json(json_str)
             if payload.get("range_selector"):
                 json_str = json.dumps(payload.get("range_selector"))
-                main_win.range_selector.import_json(json_str)
+                mainWin.range_selector.import_json(json_str)
 
-    main_win.status_bar.addPermanentWidget(
+    mainWin.status_bar.addPermanentWidget(
         QLabel("Tool version {} iplotlib {}".format(__version__, __iplotlib_version__)))
 
-    main_win.setWindowTitle("MINT: {}".format(os.getpid()))
-    main_win.show()
-    app.setWindowIcon(main_win.style().standardIcon(
+    mainWin.setWindowTitle("MINT: {}".format(os.getpid()))
+    mainWin.show()
+    app.setWindowIcon(mainWin.style().standardIcon(
         getattr(QStyle, "SP_BrowserReload")))
     sys.exit(app.exec_())

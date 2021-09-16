@@ -2,7 +2,7 @@ from iplotLogging import setupLogger as sl
 
 logger = sl.get_logger(__name__, level="INFO")
 
-def verifyDataRangeModel(model: dict):
+def check_data_range(model: dict):
     try:
         assert(model is not None)
     except AssertionError:
@@ -29,7 +29,7 @@ def verifyDataRangeModel(model: dict):
     
     return True
 
-def verifyTableModel(model: dict):
+def check_table(model: dict):
     try:
         assert(model is not None)
     except AssertionError:
