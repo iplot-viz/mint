@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from datetime import datetime, timedelta
@@ -5,11 +6,9 @@ from functools import partial
 from pathlib import Path
 from threading import Timer
 
-import matplotlib
 import argparse
 
 from gui._version import __version__
-from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
 from iplotlib.core._version import __version__ as __iplotlib_version__
 
 import pandas
@@ -28,12 +27,12 @@ logger = ls.get_logger(__name__)
 
 parser = argparse.ArgumentParser(description='MINT application')
 parser.add_argument('-IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
-parser.add_argument('-e', dest='export', metavar=('json_file', 'image_file'), help='Load canvas from JSON and save to file (PNG/SVG/PDF...)', nargs=2)
+parser.add_argument('-d', dest='csv_file', metavar='csv_file', help='Load variables table from file')
+parser.add_argument('-w', dest='json_file', metavar='json_file', help='Load a workspace from json file')
+parser.add_argument('-e', dest='image_file', metavar='image_file', help='Load canvas from JSON and save to file (PNG/SVG/PDF...)')
 parser.add_argument('-ew', dest='export_width', metavar='export_width', type=int, default=1920, help='Exported image width')
 parser.add_argument('-eh', dest='export_height', metavar='export_height', type=int, default=1080, help='Exported image height')
 parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi', type=int, default=100, help='Exported image DPI')
-parser.add_argument('-a', dest='csv_file', metavar='csv_file', help='Load variables table from file')
-
 
 args = parser.parse_args()
 
@@ -46,30 +45,22 @@ try:
 except ModuleNotFoundError:
     logger.error("import qt gnuplot not installed ")
 
-from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
 from iplotlib.data_access.streamer import CanvasStreamer
 
 from gui.main import Multiwindow, MainMenu, StatusBar
 from gui.variablesTable import VariablesTable, DataRangeSelector
 
-# TODO: Handle auto width/height
-# TODO: Switch exporting to canvas impl
-def export_to_file(canvas_filename, output_filename, dpi=300, width=18.5, height=10.5):
+def export_to_file(impl: str, canvas: Canvas, output_filename, **kwargs):
     try:
-        with open(canvas_filename) as json_file:
-            matplotlib.rcParams["figure.dpi"] = dpi
-
-            canvas = Canvas.from_json(json_file.read())
-
+        if impl.lower() == "matplotlib":
+            import matplotlib
+            matplotlib.rcParams["figure.dpi"] = kwargs.get('dpi')
+            from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
+            
             mpl_canvas = MatplotlibCanvas()
-            mpl_canvas.figure.set_size_inches(width/dpi, height/dpi)
-            mpl_canvas.process_iplotlib_canvas(canvas)
-
-            mpl_canvas.figure.savefig(output_filename)
+            mpl_canvas.export_image(output_filename, canvas=canvas, **kwargs)
     except FileNotFoundError:
-        logger.error(f"ERROR: Unable to open file: {canvas_filename}")
-
-
+        logger.error(f"Unable to open file: {output_filename}")
 
 
 if __name__ == '__main__':
@@ -89,13 +80,26 @@ if __name__ == '__main__':
     # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
     canvasImpl = args.IMPL
 
-    file_to_import = args.csv_file
+    var_table_file = args.csv_file
+    workspace_file = args.json_file
 
     currTime = datetime.utcnow().isoformat(timespec='seconds')
     currTimeDelta = datetime.utcnow() - timedelta(days=7)
 
-    if args.export and len(args.export) == 2:
-        export_to_file(args.export[0], args.export[1], dpi=args.export_dpi, width=args.export_width, height=args.export_height)
+    # This is a main reference to canvas that is drawn
+    if workspace_file:
+        with open(workspace_file) as f:
+            payload = json.loads(f.read())
+            if payload.get("main_canvas"):
+                json_str = json.dumps(payload.get("main_canvas"))
+                canvas = Canvas.from_json(json_str)
+            else:
+                logger.error(f"Failed to load main_canvas from {workspace_file}")
+    else:
+        canvas = Canvas(grid=True)
+
+    if args.image_file:
+        export_to_file(canvasImpl, canvas, args.image_file, dpi=args.export_dpi, width=args.export_width, height=args.export_height)
         exit(0)
 
     app = QApplication(sys.argv)
@@ -123,16 +127,15 @@ if __name__ == '__main__':
 
     }
 
-    if file_to_import:
-        model["table"] = pandas.read_csv(file_to_import, dtype=str, keep_default_na=False).values.tolist()
+    if var_table_file:
+        model["table"] = pandas.read_csv(var_table_file, dtype=str, keep_default_na=False).values.tolist()
 
-    # This is a main reference to canvas that is drawn
-    canvas = Canvas(grid=True)
     streamer = None
     stream_window = 3600
     refresh_timer = None
 
     if canvasImpl == "MATPLOTLIB":
+        from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
         right_column = QWidget()
         right_column.setLayout(QVBoxLayout())
         qt_canvas = QtMatplotlibCanvas(tight_layout=True)
@@ -141,6 +144,16 @@ if __name__ == '__main__':
 
     variables_table = VariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = DataRangeSelector(model=model.get("range"))
+
+    if workspace_file:
+        with open(workspace_file) as json_file:
+            payload = json.loads(json_file.read())
+            if payload.get("variables_table"):
+                json_str = json.dumps(payload.get("variables_table"))
+                variables_table.import_json(json_str)
+            if payload.get("range_selector"):
+                json_str = json.dumps(payload.get("range_selector"))
+                range_selector.import_json(json_str)
 
     draw_button = QPushButton("Draw")
     draw_button.setIcon(QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
