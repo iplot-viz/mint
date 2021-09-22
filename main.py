@@ -26,7 +26,7 @@ logger = ls.get_logger(__name__)
 
 
 parser = argparse.ArgumentParser(description='MINT application')
-parser.add_argument('-IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
+parser.add_argument('-IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/VTK/...)', default="MATPLOTLIB")
 parser.add_argument('-d', dest='csv_file', metavar='csv_file', help='Load variables table from file')
 parser.add_argument('-w', dest='json_file', metavar='json_file', help='Load a workspace from json file')
 parser.add_argument('-e', dest='image_file', metavar='image_file', help='Load canvas from JSON and save to file (PNG/SVG/PDF...)')
@@ -59,6 +59,8 @@ def export_to_file(impl: str, canvas: Canvas, output_filename, **kwargs):
             
             mpl_canvas = MatplotlibCanvas()
             mpl_canvas.export_image(output_filename, canvas=canvas, **kwargs)
+        elif impl.lower() == "vtk":
+            canvas.export_image(output_filename, **kwargs)
     except FileNotFoundError:
         logger.error(f"Unable to open file: {output_filename}")
 
@@ -133,14 +135,19 @@ if __name__ == '__main__':
     streamer = None
     stream_window = 3600
     refresh_timer = None
+    
+    right_column = QWidget()
+    right_column.setLayout(QVBoxLayout())
 
     if canvasImpl == "MATPLOTLIB":
         from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
-        right_column = QWidget()
-        right_column.setLayout(QVBoxLayout())
         qt_canvas = QtMatplotlibCanvas(tight_layout=True)
-        right_column.layout().addWidget(CanvasToolbar(qt_canvas=qt_canvas))
-        right_column.layout().addWidget(qt_canvas)
+    elif canvasImpl.lower() == "vtk":
+        from iplotlib.impl.vtk.qt import QtVTKCanvas
+        qt_canvas = QtVTKCanvas()
+
+    right_column.layout().addWidget(CanvasToolbar(qt_canvas=qt_canvas))
+    right_column.layout().addWidget(qt_canvas)
 
     variables_table = VariablesTable(data_access=da, header=header, model=model.get("table"))
     range_selector = DataRangeSelector(model=model.get("range"))
