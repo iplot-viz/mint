@@ -28,18 +28,3 @@ def check_data_range(model: dict):
         return False
     
     return True
-
-def check_table(model: dict):
-    try:
-        assert(model is not None)
-    except AssertionError:
-        logger.warning("model must be non-null")
-        return False
-    
-    try:
-        assert("table" in model.keys())
-    except AssertionError:
-        logger.warning("model is corrupt. Cannot find table")
-        return False
-
-    return True
