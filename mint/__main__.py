@@ -7,7 +7,7 @@ import sys
 
 from qtpy.QtWidgets import QApplication, QLabel, QStyle
 
-from iplotlib.core.canvas import Canvas
+from iplotlib.core import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
 from iplotDataAccess.dataAccess import DataAccess
 from iplotProcessing.core import Context
@@ -47,8 +47,8 @@ def main():
     #########################################################################
     # 1. Parse arguments
     parser = argparse.ArgumentParser(description='MINT application')
-    parser.add_argument('-IMPL', metavar='CANVAS_IMPL',
-                        help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
+    parser.add_argument('-impl', metavar='canvas_impl',
+                        help='Use canvas implementation (matplotlib/vtk...)', default="matplotlib")
     parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
                         help='Load blueprint from .json file', default=DEFAULT_BLUEPRINT_FILE)
     parser.add_argument('-d', dest='csv_file', metavar='csv_file',
@@ -75,9 +75,8 @@ def main():
         sys.exit(-1)
 
     # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
-    canvasImpl = args.IMPL
+    canvasImpl = args.impl
 
-    var_table_file = args.csv_file
     workspace_file = args.json_file
     #########################################################################
     # 3. Processing context
@@ -98,12 +97,10 @@ def main():
             else:
                 logger.error(
                     f"Failed to load main_canvas from {workspace_file}")
-    else:
-        canvas = Canvas(grid=True)
 
     if args.image_file:
         export_to_file(canvasImpl, canvas, args.image_file, dpi=args.export_dpi,
-                       width=args.export_width, height=args.export_height)
+                    width=args.export_width, height=args.export_height)
         exit(0)
 
     #########################################################################
@@ -119,7 +116,7 @@ def main():
 
 
     app = QApplication(sys.argv)
-    mainWin = MTMainWindow(canvas, ctx, da, model, blueprint=args.blueprint_file, impl=args.IMPL)
+    mainWin = MTMainWindow(canvas, ctx, da, model, blueprint=args.blueprint_file, impl=canvasImpl)
     # Preload the table from a CSV file, if provided
     if args.csv_file:
         mainWin.variables_table.importCsv(args.csv_file)

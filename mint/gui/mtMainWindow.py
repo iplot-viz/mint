@@ -2,7 +2,8 @@ import os
 from functools import partial
 from pathlib import Path
 from threading import Timer
-from iplotProcessing.core.context import SignalDescription
+
+from qtpy import QtCore, QtGui, QtWidgets
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
@@ -10,9 +11,10 @@ from iplotlib.core.plot import PlotXY
 from iplotlib.data_access import DataAccessSignal
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.qt.qtCanvasToolbar import CanvasToolbar
+from iplotlib.qt import QtPlotCanvasFactory
+
 from iplotDataAccess.dataAccess import DataAccess
-from iplotLogging import setupLogger as sl
-from iplotProcessing.core import Context
+from iplotProcessing.core import Context, SignalDescription
 from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
 
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
@@ -22,9 +24,8 @@ from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalTable import MTSignalTable
 from mint.tools.sanity_checks import check_data_range
 
-from qtpy import QtCore, QtGui, QtWidgets
 
-
+from iplotLogging import setupLogger as sl
 logger = sl.get_logger(__name__, "INFO")
 
 
