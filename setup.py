@@ -43,5 +43,6 @@ setuptools.setup(
     package_data = {
         "mint": ["csv/*.csv", "workspaces/*"],
         "mint.gui": ["icons/*.png", "res/*.ui"],
+        "mint": ["mydatasources.cfg"]
     }
 )
