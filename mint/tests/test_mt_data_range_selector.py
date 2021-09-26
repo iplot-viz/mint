@@ -3,7 +3,8 @@ import sys
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QApplication
-from gui.dataRangeSelector import DataRangeSelector, DataRange
+from mint.gui.mtDataRangeSelector import MTDataRangeSelector
+from mint.models import MTGenericAccessMode
 
 def quit_app():
     global app
@@ -13,9 +14,9 @@ def quit_app():
 
 dirname = os.path.dirname(os.path.abspath(__file__))
 
-mappings = {"mode": DataRange.TIME_RANGE, "value": ['', '']}
+mappings = {"mode": MTGenericAccessMode.TIME_RANGE, "value": ['', '']}
 app = QApplication([])
-selector = DataRangeSelector(mappings)
+selector = MTDataRangeSelector(mappings)
 selector.importJson(open(os.path.join(dirname, "test.json")).read())
 
 selector.show()

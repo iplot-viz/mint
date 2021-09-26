@@ -1,14 +1,13 @@
 from PySide2.QtWidgets import QVBoxLayout
 from qtpy.QtWidgets import QApplication, QWidget, QPushButton
-from gui.streamerDialog import StreamerDialog
-
+from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 
 app = QApplication([])
 
 win = QWidget()
 win.setLayout(QVBoxLayout())
 
-swin = StreamerDialog()
+swin = MTStreamConfigurator()
 swin.streamStarted.connect(lambda: print("start"))
 
 btn = QPushButton("open streamer dialog now", win)
