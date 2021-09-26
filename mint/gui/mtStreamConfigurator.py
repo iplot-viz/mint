@@ -1,12 +1,13 @@
 from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QDialog
-from gui.compiled.ui_streamerconfig import Ui_StreamerConfig
+
+from mint.gui.compiled.ui_streamerconfig import Ui_StreamerConfig
 
 from iplotLogging import setupLogger as sl
 
 logger = sl.get_logger(__name__, "INFO")
 
-class StreamConfigurator(QDialog):
+class MTStreamConfigurator(QDialog):
     streamStarted = Signal()
 
     def __init__(self, parent=None, **kwargs):

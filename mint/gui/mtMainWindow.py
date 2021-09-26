@@ -13,14 +13,14 @@ from iplotlib.qt.qtCanvasToolbar import CanvasToolbar
 from iplotDataAccess.dataAccess import DataAccess
 from iplotLogging import setupLogger as sl
 from iplotProcessing.core import Context
+from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
 
-from gui.dataRangeSelector import DataRangeSelector
-from gui.menuBar import MainMenuBar
-from gui.statusBar import StatusBar
-from gui.streamConfigurator import StreamConfigurator
-from gui.variablesTable import VariablesTable
-
-from common.sanity_checks import check_data_range
+from mint.gui.mtDataRangeSelector import MTDataRangeSelector
+from mint.gui.mtMenuBar import MTMenuBar
+from mint.gui.mtStatusBar import MTStatusBar
+from mint.gui.mtStreamConfigurator import MTStreamConfigurator
+from mint.gui.mtSignalTable import MTSignalTable
+from mint.tools.sanity_checks import check_data_range
 
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -28,15 +28,22 @@ from qtpy import QtCore, QtGui, QtWidgets
 logger = sl.get_logger(__name__, "INFO")
 
 
-class MainWindow(QtWidgets.QMainWindow):
+class MTMainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, canvas: Canvas, context: Context, da: DataAccess, header: dict, model: dict, impl: str = "matplotlib", parent=None, **kwargs):
+    def __init__(self, 
+        canvas: Canvas, 
+        context: Context, 
+        da: DataAccess, 
+        model: dict, 
+        blueprint: os.PathLike=DEFAULT_BLUEPRINT_FILE, 
+        impl: str = "matplotlib", 
+        parent=None, 
+        **kwargs):
         super().__init__(parent, **kwargs)
 
         self.canvas = canvas
         self.context = context
         self.da = da
-        self.header = header
         self.plot_class = PlotXY
 
         self.default_dec_samples = 1000
@@ -46,7 +53,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.model = model
         self.refreshTimer = None
 
-        self.streamerCfgWidget = StreamConfigurator(self)
+        self.streamerCfgWidget = MTStreamConfigurator(self)
 
         self.right_column = QtWidgets.QWidget()
         self.right_column.setLayout(QtWidgets.QVBoxLayout())
@@ -62,8 +69,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_column.layout().addWidget(self.toolbar)
         self.right_column.layout().addWidget(self.qt_canvas)
 
-        self.variables_table = VariablesTable(header=header, model=self.model.get("table"), parent=self)
-        self.range_selector = DataRangeSelector(self.model.get("range"), parent=self)
+        self.variables_table = MTSignalTable(blueprint=blueprint, parent=self)
+        self.range_selector = MTDataRangeSelector(self.model.get("range"), parent=self)
 
         self.draw_button = QtWidgets.QPushButton("Draw")
         self.draw_button.setIcon(
@@ -89,9 +96,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.central_widget.addWidget(self.left_column)
         self.central_widget.addWidget(self.right_column)
 
-        self.status_bar = StatusBar(parent=self)
+        self.status_bar = MTStatusBar(parent=self)
 
-        self.menu_bar = MainMenuBar(export_widgets=dict(
+        self.menu_bar = MTMenuBar(export_widgets=dict(
             variables_table=self.variables_table,
             main_canvas=self.qt_canvas,
             time_model=self.range_selector))
@@ -128,7 +135,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
         Path(dump_dir).mkdir(parents=True, exist_ok=True)
-        self.variables_table.export_csv(os.path.join(
+        self.variables_table.exportCsv(os.path.join(
             dump_dir, "variables_table_" + str(os.getpid()) + ".csv"))
 
         self.stop_auto_refresh()
@@ -207,13 +214,13 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             ts, te = self.range_selector.getTimeRange()
 
-        params = dict(default_dec_samples=self.default_dec_samples, default_ts_start=ts, default_ts_end=te, default_pulse_nb=pulse_number)
+        params = dict(dec_samples=self.default_dec_samples, ts_start=ts, ts_end=te, pulse_nb=pulse_number)
         logger.info(f"Creating canvas {params}, stream={stream}, stream_window={stream_window}")
 
         self.context.reset()
         layout_plan = {}
         signal_descr_handler = partial(self.build_layout_plan, layout_plan)
-        self.context.import_dataframe(self.variables_table.exportDataframe(), signal_class=DataAccessSignal, assort_signals=signal_descr_handler, **params)
+        self.context.import_dataframe(self.variables_table.getModel().get_dataframe(), signal_class=DataAccessSignal, assort_signals=signal_descr_handler, **params)
         self.context.build()
 
         logger.info("Built context")

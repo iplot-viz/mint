@@ -4,7 +4,7 @@ from qtpy.QtCore import QMargins, Signal
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QHBoxLayout, QToolBar, QWidget
 
-class VairablesToolbar(QWidget):
+class MTSignalsToolBar(QWidget):
     exportCsv = Signal()
     importCsv = Signal()
 

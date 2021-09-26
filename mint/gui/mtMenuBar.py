@@ -8,7 +8,7 @@ import iplotLogging.setupLogger as ls
 logger = ls.get_logger(__name__)
 
 
-class MainMenuBar(QMenuBar):
+class MTMenuBar(QMenuBar):
 
     def __init__(self, parent=None, export_widgets=dict()):
         super().__init__(parent)
