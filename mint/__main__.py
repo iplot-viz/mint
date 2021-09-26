@@ -1,57 +1,68 @@
 import argparse
 from datetime import datetime, timedelta
+import importlib_metadata
 import json
 import os
-import pandas
 import sys
 
 from qtpy.QtWidgets import QApplication, QLabel, QStyle
 
-from iplotlib.core._version import __version__ as __iplotlib_version__
 from iplotlib.core.canvas import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
 from iplotDataAccess.dataAccess import DataAccess
 from iplotProcessing.core import Context
+from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
 
-from gui._version import __version__
-from gui.dataRanges.dataRange import DataRange
-from gui.mainWindow import MainWindow
+from mint._version import __version__
+from mint.models import MTGenericAccessMode
+from mint.gui.mtMainWindow import MTMainWindow
 
 import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
+iplotdataaccess_version = importlib_metadata.version('iplotDataAccess')
+iplotlib_version = importlib_metadata.version('iplotlib')
+iplotlogging_version = importlib_metadata.version('iplotLogging')
+iplotprocessing_version = importlib_metadata.version('iplotProcessing')
 
 
-def export_to_file(impl: str, canvas: Canvas, output_filename, **kwargs):
+def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
     try:
         if impl.lower() == "matplotlib":
             import matplotlib
             matplotlib.rcParams["figure.dpi"] = kwargs.get('dpi')
             from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
-            
+
             mpl_canvas = MatplotlibCanvas()
-            mpl_canvas.export_image(output_filename, canvas=canvas, **kwargs)
-        elif impl.lower() == "vtk":
-            canvas.export_image(output_filename, **kwargs)
+            mpl_canvas.export_image(canvas_filename, canvas=canvas, **kwargs)
     except FileNotFoundError:
-        logger.error(f"Unable to open file: {output_filename}")
+        logger.error(f"Unable to open file: {canvas_filename}")
 
 
-if __name__ == '__main__':
+def main():
 
     logger.info("Running version {} iplotlib version {}".format(
-        __version__, __iplotlib_version__))
+        __version__, iplotlib_version))
 
     #########################################################################
     # 1. Parse arguments
     parser = argparse.ArgumentParser(description='MINT application')
-    parser.add_argument('-IMPL', metavar='CANVAS_IMPL', help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/VTK/...)', default="MATPLOTLIB")
-    parser.add_argument('-d', dest='csv_file', metavar='csv_file', help='Load variables table from file')
-    parser.add_argument('-w', dest='json_file', metavar='json_file', help='Load a workspace from json file')
-    parser.add_argument('-e', dest='image_file', metavar='image_file', help='Load canvas from JSON and save to file (PNG/SVG/PDF...)')
-    parser.add_argument('-ew', dest='export_width', metavar='export_width', type=int, default=1920, help='Exported image width')
-    parser.add_argument('-eh', dest='export_height', metavar='export_height', type=int, default=1080, help='Exported image height')
-    parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi', type=int, default=100, help='Exported image DPI')
+    parser.add_argument('-IMPL', metavar='CANVAS_IMPL',
+                        help='Use canvas implementation (MATPLOTLIB/GNUPOLOT/...)', default="MATPLOTLIB")
+    parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
+                        help='Load blueprint from .json file', default=DEFAULT_BLUEPRINT_FILE)
+    parser.add_argument('-d', dest='csv_file', metavar='csv_file',
+                        help='Load variables table from file')
+    parser.add_argument('-w', dest='json_file', metavar='json_file',
+                        help='Load a workspace from json file')
+    parser.add_argument('-e', dest='image_file', metavar='image_file',
+                        help='Load canvas from JSON and save to file (PNG/SVG/PDF...)')
+    parser.add_argument('-ew', dest='export_width', metavar='export_width',
+                        type=int, default=1920, help='Exported image width')
+    parser.add_argument('-eh', dest='export_height', metavar='export_height',
+                        type=int, default=1080, help='Exported image height')
+    parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi',
+                        type=int, default=100, help='Exported image DPI')
 
     args = parser.parse_args()
 
@@ -85,12 +96,14 @@ if __name__ == '__main__':
                 json_str = json.dumps(payload.get("main_canvas"))
                 canvas = Canvas.from_json(json_str)
             else:
-                logger.error(f"Failed to load main_canvas from {workspace_file}")
+                logger.error(
+                    f"Failed to load main_canvas from {workspace_file}")
     else:
         canvas = Canvas(grid=True)
 
     if args.image_file:
-        export_to_file(canvasImpl, canvas, args.image_file, dpi=args.export_dpi, width=args.export_width, height=args.export_height)
+        export_to_file(canvasImpl, canvas, args.image_file, dpi=args.export_dpi,
+                       width=args.export_width, height=args.export_height)
         exit(0)
 
     #########################################################################
@@ -100,34 +113,16 @@ if __name__ == '__main__':
 
     model = {
         "range": {
-            "mode": DataRange.TIME_RANGE,
+            "mode": MTGenericAccessMode.TIME_RANGE,
             "value": [tNowDeltaSevenD.isoformat(timespec='seconds'), tNow]}
     }
 
-    header = {
-        "DataSource": {"label": "DS"},
-        "Variable": {},
-        "Stack": {},
-        "RowSpan": {"label": "Row span"},
-        "ColSpan": {"label": "Col span"},
-        "Envelope": {},
-        "Alias": {},
-        "x": {},
-        "y": {},
-        "z": {},
-        "DecSamples": {"label": "Samples"},
-        "PulseNumber": {},
-        "StartTime": {},
-        "EndTime": {}
-    }
-
-    # Preload the table from a CSV file, if provided
-    if args.csv_file:
-        model["table"] = pandas.read_csv(
-            args.csv_file, dtype=str, keep_default_na=False).values.tolist()
 
     app = QApplication(sys.argv)
-    mainWin = MainWindow(canvas, ctx, da, header, model, impl=args.IMPL)
+    mainWin = MTMainWindow(canvas, ctx, da, model, blueprint=args.blueprint_file, impl=args.IMPL)
+    # Preload the table from a CSV file, if provided
+    if args.csv_file:
+        mainWin.variables_table.importCsv(args.csv_file)
 
     if workspace_file:
         with open(workspace_file) as json_file:
@@ -140,10 +135,14 @@ if __name__ == '__main__':
                 mainWin.range_selector.import_json(json_str)
 
     mainWin.status_bar.addPermanentWidget(
-        QLabel("Tool version {} iplotlib {}".format(__version__, __iplotlib_version__)))
+        QLabel("Tool version {} iplotlib {}".format(__version__, iplotlib_version)))
 
     mainWin.setWindowTitle("MINT: {}".format(os.getpid()))
     mainWin.show()
     app.setWindowIcon(mainWin.style().standardIcon(
         getattr(QStyle, "SP_BrowserReload")))
     sys.exit(app.exec_())
+
+
+if __name__ == '__main__':
+    main()
