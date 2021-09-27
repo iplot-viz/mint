@@ -1,0 +1,2 @@
+DS,Variable,Stack,Row span,Col span,Envelope,Alias,Samples,PulseNumber,StartTime,EndTime,x,y,z,Plot type
+codacuda,CWS-SCSU-HR00:ML0004-LT-XI,1.1,,,,ml0004,,,,,"convolve(${self}.time, ones(5), 'valid').astype(int64)","convolve(${self}.data, ones(5), 'valid')",,
