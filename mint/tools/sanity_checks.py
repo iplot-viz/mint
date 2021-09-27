@@ -1,3 +1,6 @@
+# Description: Checks data access model
+# Author: Jaswant Sai Panchumarti
+
 from iplotLogging import setupLogger as sl
 
 logger = sl.get_logger(__name__, level="INFO")

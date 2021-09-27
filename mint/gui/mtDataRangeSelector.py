@@ -1,3 +1,9 @@
+# Description: A widget to select data access modes and configure individual
+#              mode specific parameters. (start time, end time or pulse number or relative time, etc)
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 from datetime import datetime
 from functools import partial
 import numpy as np

@@ -1,3 +1,6 @@
+# Description: Commonly used converters.
+# Author: Piotr Mazur
+
 import numpy as np
 
 def str_to_arr(value):

@@ -1,3 +1,8 @@
+# Description: A menu bar with commonly used actions (workspace, help, etc)
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 import json
 
 from qtpy.QtGui import QKeySequence

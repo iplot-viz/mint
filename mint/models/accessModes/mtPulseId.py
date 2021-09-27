@@ -1,3 +1,6 @@
+# Description: Implements a data access mode with pulse id's.
+# Author: Jaswant Sai Panchumarti
+
 from qtpy.QtWidgets import QLabel, QLineEdit
 from qtpy.QtCore import Qt
 

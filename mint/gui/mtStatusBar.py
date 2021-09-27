@@ -1,3 +1,8 @@
+# Description: A status bar widget.
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 from qtpy.QtWidgets import QStatusBar
 
 class MTStatusBar(QStatusBar):

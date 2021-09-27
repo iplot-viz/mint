@@ -1,3 +1,9 @@
+# Description: A main window embedding a table of signals' description on the right
+#               and a Qt iplotlib canvas on the left.
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 import os
 from functools import partial
 from pathlib import Path
@@ -11,7 +17,6 @@ from iplotlib.core.plot import PlotXY
 from iplotlib.data_access import DataAccessSignal
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.qt.qtCanvasToolbar import CanvasToolbar
-from iplotlib.qt import QtPlotCanvasFactory
 
 from iplotDataAccess.dataAccess import DataAccess
 from iplotProcessing.core import Context, SignalDescription

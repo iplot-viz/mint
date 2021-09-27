@@ -1,3 +1,8 @@
+# Description: A light-weight translation of a dataframe to benefit QTableView
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 import os
 import pandas as pd
 import typing
@@ -29,6 +34,10 @@ class MTSignalsModel(QAbstractTableModel):
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if role == Qt.EditRole:
+
+            if ',' in value:
+                value.replace('"', "'") # replaces " with ' if value has , in it.
+
             self._data.iloc[index.row()][index.column()] = value
 
             if index.row() == self._data.index.size - 1:

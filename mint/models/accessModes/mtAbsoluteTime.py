@@ -1,3 +1,6 @@
+# Description: Implements an absolute time model.
+# Author: Jaswant Sai Panchumarti
+
 from qtpy.QtWidgets import QDateTimeEdit, QLabel
 from qtpy.QtCore import Qt
 

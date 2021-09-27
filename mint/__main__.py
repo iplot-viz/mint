@@ -1,3 +1,8 @@
+# Description: The MINT application to interact and explore data signals from codac databases and IMAS IDSs
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 import argparse
 from datetime import datetime, timedelta
 import importlib_metadata

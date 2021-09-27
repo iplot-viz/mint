@@ -1,3 +1,6 @@
+# Description: Implements a relative time model.
+# Author: Jaswant Sai Panchumarti
+
 from qtpy.QtWidgets import QComboBox, QLabel, QHBoxLayout, QPushButton, QSpinBox, QWidget
 from qtpy.QtCore import QMargins, QStringListModel, Qt, Signal
 

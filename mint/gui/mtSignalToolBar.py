@@ -1,3 +1,8 @@
+# Description: A toolbar to import/save signals' description
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 import os
 
 from qtpy.QtCore import QMargins, Signal

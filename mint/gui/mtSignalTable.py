@@ -1,3 +1,9 @@
+# Description: A GUI to explore and create signals in an iplotProcessing context.
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+#  Sept 2021: Add iplotProcessing context [Jaswant Sai Panchumarti]
+
 import pandas as pd
 import sys
 import os
@@ -71,7 +77,8 @@ class MTSignalTable(QWidget):
 
     def exportCsv(self, file_path=None):
         try:
-            return self.table_view.model().get_dataframe().to_csv(file_path, index=False)
+            df = self.table_view.model().get_dataframe() # type: pd.DataFrame
+            return df.to_csv(file_path, index=False)
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)

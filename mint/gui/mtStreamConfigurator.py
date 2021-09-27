@@ -1,3 +1,8 @@
+# Description: A widget to configure options for streaming signal data.
+# Author: Piotr Mazur
+# Changelog:
+#  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
 from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QDialog
 
@@ -34,13 +39,13 @@ class MTStreamConfigurator(QDialog):
         self.ui.cancelButton.clicked.connect(self.hide)
 
     def timeWindow(self) -> int:
-        return self.ui.windowSpinBox.value()
+        return int(self.ui.windowSpinBox.value())
 
     def isActivated(self) -> bool:
         return self.streamer is not None
 
     def activate(self):
-        self.streamerCfgWidget.show()
+        self.show()
 
     def deActivate(self):
         self.streamer.stop()

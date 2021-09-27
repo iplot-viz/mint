@@ -1,3 +1,6 @@
+# Description: An abstract model to describe data access modes.
+# Author: Jaswant Sai Panchumarti
+
 from qtpy.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
 from qtpy.QtCore import QObject, QStringListModel
 
