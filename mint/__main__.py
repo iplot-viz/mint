@@ -29,7 +29,7 @@ iplotdataaccess_version = importlib_metadata.version('iplotDataAccess')
 iplotlib_version = importlib_metadata.version('iplotlib')
 iplotlogging_version = importlib_metadata.version('iplotLogging')
 iplotprocessing_version = importlib_metadata.version('iplotProcessing')
-
+DEFAULT_DATA_SOURCES_CFG = os.path.join(os.path.dirname(__file__), 'mydatasources.cfg')
 
 def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
     try:
@@ -43,6 +43,16 @@ def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
     except FileNotFoundError:
         logger.error(f"Unable to open file: {canvas_filename}")
 
+def load_data_sources(da: DataAccess):
+    try:
+        if len(da.loadConfig()) < 1:
+            return False
+        else:
+            return True
+    except (OSError, IOError, FileNotFoundError) as e:
+        logger.warning(f"no data source file, fallback to {DEFAULT_DATA_SOURCES_CFG}")
+        os.environ.update({'DATASOURCESCONF': DEFAULT_DATA_SOURCES_CFG})
+        return load_data_sources(da)
 
 def main():
 
@@ -74,11 +84,11 @@ def main():
     #########################################################################
     # 2. Data access handle
     da = DataAccess()
-    AccessHelper.da = da
-    if len(da.loadConfig()) < 1:
+    if not load_data_sources(da):
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
+    AccessHelper.da = da
     # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
     canvasImpl = args.impl
 
