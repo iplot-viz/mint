@@ -56,9 +56,6 @@ def load_data_sources(da: DataAccess):
 
 def main():
 
-    logger.info("Running version {} iplotlib version {}".format(
-        __version__, iplotlib_version))
-
     #########################################################################
     # 1. Parse arguments
     parser = argparse.ArgumentParser(description='MINT application')
@@ -78,8 +75,12 @@ def main():
                         type=int, default=1080, help='Exported image height')
     parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi',
                         type=int, default=100, help='Exported image DPI')
+    parser.add_argument('--version', action='version', version=f"{parser.prog} - {__version__}")
 
     args = parser.parse_args()
+
+    logger.info("Running version {} iplotlib version {}".format(
+        __version__, iplotlib_version))
 
     #########################################################################
     # 2. Data access handle
