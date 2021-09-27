@@ -4,10 +4,11 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
-import os
 from functools import partial
 from pathlib import Path
 from threading import Timer
+import os
+import pkgutil
 
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -79,16 +80,16 @@ class MTMainWindow(QtWidgets.QMainWindow):
         self.range_selector = MTDataRangeSelector(self.model.get("range"), parent=self)
 
         self.draw_button = QtWidgets.QPushButton("Draw")
-        self.draw_button.setIcon(
-            QtGui.QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
-        self.streamButton = QtWidgets.QPushButton("Stream")
-        self.streamButton.setIcon(
-            QtGui.QIcon(os.path.join(os.path.dirname(__file__), "gui/icons/plot.png")))
+        pxmap = QtGui.QPixmap()
+        pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/plot.png'))
+        self.draw_button.setIcon(QtGui.QIcon(pxmap))
+        self.stream_button = QtWidgets.QPushButton("Stream")
+        self.stream_button.setIcon(QtGui.QIcon(pxmap))
 
         self.left_column_buttons = QtWidgets.QWidget()
         self.left_column_buttons.setLayout(QtWidgets.QHBoxLayout())
         self.left_column_buttons.layout().setContentsMargins(QtCore.QMargins())
-        self.left_column_buttons.layout().addWidget(self.streamButton)
+        self.left_column_buttons.layout().addWidget(self.stream_button)
         self.left_column_buttons.layout().addWidget(self.draw_button)
 
         self.left_column = QtWidgets.QWidget()
@@ -115,7 +116,7 @@ class MTMainWindow(QtWidgets.QMainWindow):
 
         # Setup connections
         self.draw_button.clicked.connect(self.draw_clicked)
-        self.streamButton.clicked.connect(self.stream_clicked)
+        self.stream_button.clicked.connect(self.stream_clicked)
         self.streamerCfgWidget.streamStarted.connect(self.do_stream)
         self.range_selector.cancelRefresh.connect(self.stop_auto_refresh)
 
@@ -155,10 +156,10 @@ class MTMainWindow(QtWidgets.QMainWindow):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         if not self.streamerCfgWidget.isActivated():
             self.streamerCfgWidget.activate()
-            self.streamButton.setText("Stop")
+            self.stream_button.setText("Stop")
         else:
             self.streamerCfgWidget.deActivate()
-            self.streamButton.setText("Stream")
+            self.stream_button.setText("Stream")
 
     def stream_callback(self, signal):
         self.qt_canvas.matplotlib_canvas.refresh_signal(signal)
@@ -172,7 +173,7 @@ class MTMainWindow(QtWidgets.QMainWindow):
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
         self.streamerCfgWidget.streamer.start(self.canvas, self.stream_callback)
-        self.streamButton.setText("Stop")
+        self.stream_button.setText("Stop")
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         QtWidgets.QApplication.closeAllWindows()

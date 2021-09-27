@@ -3,11 +3,12 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
-import os
+import pkgutil
 
 from qtpy.QtCore import QMargins, Signal
-from qtpy.QtGui import QIcon
+from qtpy.QtGui import QIcon, QPixmap
 from qtpy.QtWidgets import QHBoxLayout, QToolBar, QWidget
+
 
 class MTSignalsToolBar(QWidget):
     exportCsv = Signal()
@@ -19,9 +20,16 @@ class MTSignalsToolBar(QWidget):
         self.setLayout(QHBoxLayout())
         self.layout().setContentsMargins(QMargins())
 
+        open_pxmap = QPixmap()
+        open_pxmap.loadFromData(pkgutil.get_data(
+            'mint.gui', 'icons/open_file.png'))
+        save_pxmap = QPixmap()
+        save_pxmap.loadFromData(pkgutil.get_data(
+            'mint.gui', 'icons/save_as.png'))
+
         tb = QToolBar()
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "icons/open_file.png")), "Open CSV",
+        tb.addAction(QIcon(open_pxmap), "Open CSV",
                      self.importCsv.emit)
-        tb.addAction(QIcon(os.path.join(os.path.dirname(__file__), "icons/save_as.png")), "Save CSV",
+        tb.addAction(QIcon(save_pxmap), "Save CSV",
                      self.exportCsv.emit)
         self.layout().addWidget(tb)
