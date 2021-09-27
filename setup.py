@@ -41,7 +41,7 @@ setuptools.setup(
         'console_scripts': ['mint = mint.__main__:main', 'mint-signal-table = mint.gui.mtSignalTable:main']
     },
     package_data = {
-        "mint": ["csv/*.csv", "workspaces/*"],
+        "mint.data": ["csv/*", "workspaces/*"],
         "mint.gui": ["icons/*.png", "res/*.ui"],
         "mint": ["mydatasources.cfg"]
     }
