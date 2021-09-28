@@ -33,9 +33,9 @@ setuptools.setup(
     packages=setuptools.find_packages(where='.'),
     python_requires=">=3.8",
     install_requires=[
-        "iplotlib >= 0.2.0", # bump to 0.3.0 in release/0.8.0
-        "iplotDataAccess >= 0.1.0", # bump to 0.2.0 in release/0.8.0
-        "iplotProcessing >= 0.1.0" # bump to 0.2.0 in release/0.8.0
+        "iplotlib >= 0.3.0",
+        "iplotDataAccess >= 0.2.0",
+        "iplotProcessing >= 0.2.0"
     ],
     entry_points={
         'console_scripts': ['mint = mint.__main__:main', 'mint-signal-table = mint.gui.mtSignalTable:main']
