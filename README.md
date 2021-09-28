@@ -11,7 +11,7 @@ Following features are currently supported:
 
 ## Running the example
 
-* Edit `loadmod.sh` in order to update path for: Gnuplot binary, Gnuplot widget libs, UDA lib and iterplot lib
-    * Also edit the `UDA_HOST` variable if needed
-* Include loadmod.sh into current environment: `. loadmod.sh`
-* Run the example: `python main.py`
+Install
+`$pip install .`
+Run
+`$ mint`
