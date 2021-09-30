@@ -167,6 +167,7 @@ class MTMainWindow(IplotQtMainWindow):
         return super().redo()
 
     def reDraw(self):
+        self.draw_clicked()
         return super().reDraw()
     
     def detach(self):
@@ -259,6 +260,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.stop_auto_refresh()
 
+        self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
 
