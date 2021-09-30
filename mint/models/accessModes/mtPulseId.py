@@ -1,8 +1,8 @@
 # Description: Implements a data access mode with pulse id's.
 # Author: Jaswant Sai Panchumarti
 
-from qtpy.QtWidgets import QLabel, QLineEdit
-from qtpy.QtCore import Qt
+from PySide2.QtWidgets import QLabel, QLineEdit
+from PySide2.QtCore import Qt
 
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 

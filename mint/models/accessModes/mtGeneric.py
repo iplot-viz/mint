@@ -1,8 +1,8 @@
 # Description: An abstract model to describe data access modes.
 # Author: Jaswant Sai Panchumarti
 
-from qtpy.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
-from qtpy.QtCore import QObject, QStringListModel
+from PySide2.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
+from PySide2.QtCore import QObject, QStringListModel
 
 class MTGenericAccessMode(QObject):
     PULSE_NUMBER = "PULSE_NUMBER"

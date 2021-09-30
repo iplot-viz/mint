@@ -33,7 +33,7 @@ setuptools.setup(
     packages=setuptools.find_packages(where='.'),
     python_requires=">=3.8",
     install_requires=[
-        "iplotlib >= 0.3.0",
+        "iplotlib",
         "iplotDataAccess >= 0.2.0",
         "iplotProcessing >= 0.2.0"
     ],

@@ -1,7 +1,7 @@
 # Description: Test run the stream configurator widget.
 # Author: Jaswant Sai Panchumarti
 
-from qtpy.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout
+from PySide2.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 
 app = QApplication([])

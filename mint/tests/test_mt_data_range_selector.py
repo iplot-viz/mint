@@ -4,8 +4,8 @@
 import os
 import sys
 
-from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QApplication
+from PySide2.QtCore import Qt
+from PySide2.QtWidgets import QApplication
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.models import MTGenericAccessMode
 

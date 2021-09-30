@@ -7,7 +7,7 @@ import os
 import pandas as pd
 import typing
 
-from qtpy.QtCore import QAbstractTableModel, QModelIndex, Qt
+from PySide2.QtCore import QAbstractTableModel, QModelIndex, Qt
 
 from iplotProcessing.core import Environment
 from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE

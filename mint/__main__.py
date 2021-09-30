@@ -10,7 +10,7 @@ import json
 import os
 import sys
 
-from qtpy.QtWidgets import QApplication, QLabel, QStyle
+from PySide2.QtWidgets import QApplication, QLabel, QStyle
 
 from iplotlib.core import Canvas
 from iplotlib.data_access.dataAccessSignal import AccessHelper
@@ -135,19 +135,19 @@ def main():
     mainWin = MTMainWindow(canvas, ctx, da, model, blueprint=args.blueprint_file, impl=canvasImpl)
     # Preload the table from a CSV file, if provided
     if args.csv_file:
-        mainWin.variables_table.importCsv(args.csv_file)
+        mainWin.sigTable.importCsv(args.csv_file)
 
     if workspace_file:
         with open(workspace_file) as json_file:
             payload = json.loads(json_file.read())
-            if payload.get("variables_table"):
-                json_str = json.dumps(payload.get("variables_table"))
-                mainWin.variables_table.import_json(json_str)
+            if payload.get("sigTable"):
+                json_str = json.dumps(payload.get("sigTable"))
+                mainWin.sigTable.import_json(json_str)
             if payload.get("range_selector"):
                 json_str = json.dumps(payload.get("range_selector"))
                 mainWin.range_selector.import_json(json_str)
 
-    mainWin.status_bar.addPermanentWidget(
+    mainWin.statusBar().addPermanentWidget(
         QLabel("Tool version {} iplotlib {}".format(__version__, iplotlib_version)))
 
     mainWin.setWindowTitle("MINT: {}".format(os.getpid()))

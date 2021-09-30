@@ -8,9 +8,9 @@ import pandas as pd
 import sys
 import os
 
-from qtpy.QtCore import QMargins, Signal
-from qtpy.QtGui import QContextMenuEvent
-from qtpy.QtWidgets import QFileDialog, QMenu, QMessageBox, QStyle, QTabWidget, QTableView, QVBoxLayout, QWidget, QSizePolicy
+from PySide2.QtCore import QMargins, Signal
+from PySide2.QtGui import QContextMenuEvent
+from PySide2.QtWidgets import QFileDialog, QMenu, QMessageBox, QStyle, QTabWidget, QTableView, QVBoxLayout, QWidget, QSizePolicy
 
 from iplotlib.core.canvas import Canvas
 from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
@@ -112,7 +112,7 @@ class MTSignalTable(QWidget):
 
 def main():
     import argparse
-    from qtpy.QtWidgets import QApplication
+    from PySide2.QtWidgets import QApplication
     
     parser = argparse.ArgumentParser('Quick demonstration of Signal Table')
     parser.add_argument('-b', '--blueprint', help="Path to blueprint.json file", default=DEFAULT_BLUEPRINT_FILE, type=str)
