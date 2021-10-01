@@ -159,6 +159,7 @@ class MTMainWindow(IplotQtMainWindow):
         super().wireConnections()
         self.toolBar.exportAction.triggered.connect(self.onExport)
         self.toolBar.importAction.triggered.connect(self.onImport)
+        self.toolBar.redrawAction.triggered.connect(self.draw_clicked)
 
     def undo(self):
         return super().undo()
@@ -167,9 +168,8 @@ class MTMainWindow(IplotQtMainWindow):
         return super().redo()
 
     def reDraw(self):
-        self.draw_clicked()
-        return super().reDraw()
-    
+        self.draw_clicked(no_build=True)
+
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
             # we detach now.
@@ -204,7 +204,8 @@ class MTMainWindow(IplotQtMainWindow):
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
-            box.setText(f"Error {str(e)}: saving workspace to file: {file_path}")
+            box.setText(
+                f"Error {str(e)}: saving workspace to file: {file_path}")
             logger.exception(e)
             box.exec_()
             return
@@ -223,7 +224,8 @@ class MTMainWindow(IplotQtMainWindow):
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
-            box.setText(f"Error {str(e)}: loading workspace from file: {file_path}")
+            box.setText(
+                f"Error {str(e)}: loading workspace from file: {file_path}")
             logger.exception(e)
             box.exec_()
             return
@@ -248,15 +250,15 @@ class MTMainWindow(IplotQtMainWindow):
         if self.refreshTimer is not None:
             self.refreshTimer.cancel()
 
-    def draw_clicked(self):
+    def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
-        self.build_layout()
-
-        dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
-        Path(dump_dir).mkdir(parents=True, exist_ok=True)
-        self.sigTable.exportCsv(os.path.join(
-            dump_dir, "sigTable_" + str(os.getpid()) + ".csv"))
+        if not no_build:
+            self.build_layout()
+            dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
+            Path(dump_dir).mkdir(parents=True, exist_ok=True)
+            self.sigTable.exportCsv(os.path.join(
+                dump_dir, "sigTable_" + str(os.getpid()) + ".csv"))
 
         self.stop_auto_refresh()
 
