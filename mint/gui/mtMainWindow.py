@@ -4,35 +4,36 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
-from functools import partial
+from collections import defaultdict
+from dataclasses import fields
 import json
 from pathlib import Path
-from threading import Timer
 import os
 import pkgutil
+from threading import Timer
 import typing
 
-from PySide2.QtCore import QMargins, Qt, Slot
+from PySide2.QtCore import QMargins, Qt
 from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
-from PySide2.QtWidgets import QAction, QActionGroup, QApplication, QDockWidget, QFileDialog, QHBoxLayout, QMainWindow, QMessageBox, QPushButton, QSplitter, QVBoxLayout, QWidget
+from PySide2.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QHBoxLayout, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY
-from iplotlib.data_access import DataAccessSignal
+from iplotlib.core.plot import PlotXY, Plot
+from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
+from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 
 from iplotDataAccess.dataAccess import DataAccess
-from iplotProcessing.core import Context, SignalDescription
-from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
 
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
-from mint.gui.mtMenuBar import MTMenuBar
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
-from mint.gui.mtSignalTable import MTSignalTable
+from mint.gui.mtSignalConfigurator import MTSignalConfigurator
+from mint.models.utils import mtBlueprintParser as mtbp
+from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 
 
@@ -44,26 +45,42 @@ class MTMainWindow(IplotQtMainWindow):
 
     def __init__(self,
                  canvas: Canvas,
-                 context: Context,
                  da: DataAccess,
                  model: dict,
-                 blueprint: os.PathLike = DEFAULT_BLUEPRINT_FILE,
+                 data_dir: os.PathLike = '.',
+                 data_sources: list = [],
+                 blueprint: dict = mtbp.DEFAULT_BLUEPRINT,
                  impl: str = "matplotlib",
+                 signal_class: type = IplotSignalAdapter,
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
         self.canvas = canvas
-        self.context = context
         self.da = da
         self.plot_class = PlotXY
-
+        self.signal_class = signal_class
         self.refreshTimer = None
-        self.default_dec_samples = 1000
 
         check_data_range(model)
         self.model = model
+        self.sigCfgWidget = MTSignalConfigurator(
+            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'))
+        self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"),)
+
+        self._data_dir = data_dir
+        self._progressBar = QProgressBar()
+        self._statusBar = MTStatusBar()
 
         super().__init__(parent=parent, flags=flags)
+
+        self.sigCfgWidget.setParent(self)
+        self.dataRangeSelector.setParent(self)
+        self._statusBar.setParent(self)
+        self._progressBar.setParent(self)
+        self._progressBar.setMinimum(0)
+        self._progressBar.setMaximum(100)
+        self._progressBar.hide()
+        self._statusBar.addPermanentWidget(self._progressBar)
 
         self.graphicsArea = QWidget(self)
         self.graphicsArea.setLayout(QVBoxLayout())
@@ -80,32 +97,6 @@ class MTMainWindow(IplotQtMainWindow):
             self.canvasStack.addWidget(QtVTKCanvas(
                 canvas=self.canvas, parent=self.canvasStack))
 
-        self.sigTable = MTSignalTable(blueprint=blueprint, parent=self)
-        self.dataRangeSelector = MTDataRangeSelector(
-            self.model.get("range"), parent=self)
-
-        self.draw_button = QPushButton("Draw")
-        pxmap = QPixmap()
-        pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/plot.png'))
-        self.draw_button.setIcon(QIcon(pxmap))
-        self.stream_button = QPushButton("Stream")
-        self.stream_button.setIcon(QIcon(pxmap))
-
-        self.daWidgetButtons = QWidget(self)
-        self.daWidgetButtons.setLayout(QHBoxLayout())
-        self.daWidgetButtons.layout().setContentsMargins(QMargins())
-        self.daWidgetButtons.layout().addWidget(self.stream_button)
-        self.daWidgetButtons.layout().addWidget(self.draw_button)
-
-        self.dataAccessWidget = QWidget(self)
-        self.dataAccessWidget.setLayout(QVBoxLayout())
-        self.dataAccessWidget.layout().setContentsMargins(QMargins())
-        self.dataAccessWidget.layout().addWidget(self.dataRangeSelector)
-        self.dataAccessWidget.layout().addWidget(self.sigTable)
-        self.dataAccessWidget.layout().addWidget(self.daWidgetButtons)
-
-        self._statusBar = MTStatusBar(parent=self)
-
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
 
@@ -118,28 +109,50 @@ class MTMainWindow(IplotQtMainWindow):
         about_action.setStatusTip("About Qt")
         about_action.triggered.connect(QApplication.aboutQt)
 
-        lr_group = QActionGroup(self.menuBar())
-        lr_group.setExclusive(True)
-
-        left_action = QAction("Left", self.menuBar())
-        left_action.setChecked(False)
-        left_action.setCheckable(True)
-        left_action.setActionGroup(lr_group)
-
-        right_action = QAction("Right", self.menuBar())
-        right_action.setCheckable(True)
-        right_action.setChecked(True)
-        right_action.setActionGroup(lr_group)
-
-        help_menu.addAction(left_action)
-        help_menu.addAction(right_action)
         help_menu.addSection("Testsection")
         help_menu.addAction(about_action)
 
         file_menu.addAction(self.toolBar.exportAction)
         file_menu.addAction(self.toolBar.importAction)
+        file_menu.addAction(self.sigCfgWidget.toolBar().openAction)
+        file_menu.addAction(self.sigCfgWidget.toolBar().saveAction)
+
+        ds_menu = file_menu.addMenu("Data Sources")
+        self.ds_action_grp = QActionGroup(self.menuBar())
+        self.ds_action_grp.setExclusive(True)
+        self.ds_actions = []
+        for ds_name in data_sources:
+            ds_action = QAction(ds_name)
+            ds_action.setCheckable(True)
+            self.ds_actions.append(ds_action)
+
+        for act in self.ds_actions:
+            self.ds_action_grp.addAction(act)
+            ds_menu.addAction(act)
+        self.ds_action_grp.triggered.connect(self.setDefaultDSAction)
+        self.ds_actions[0].trigger()
 
         file_menu.addAction(exit_action)
+
+        self.drawBtn = QPushButton("Draw")
+        pxmap = QPixmap()
+        pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/plot.png'))
+        self.drawBtn.setIcon(QIcon(pxmap))
+        self.streamBtn = QPushButton("Stream")
+        self.streamBtn.setIcon(QIcon(pxmap))
+
+        self.daWidgetButtons = QWidget(self)
+        self.daWidgetButtons.setLayout(QHBoxLayout())
+        self.daWidgetButtons.layout().setContentsMargins(QMargins())
+        self.daWidgetButtons.layout().addWidget(self.streamBtn)
+        self.daWidgetButtons.layout().addWidget(self.drawBtn)
+
+        self.dataAccessWidget = QWidget(self)
+        self.dataAccessWidget.setLayout(QVBoxLayout())
+        self.dataAccessWidget.layout().setContentsMargins(QMargins())
+        self.dataAccessWidget.layout().addWidget(self.dataRangeSelector)
+        self.dataAccessWidget.layout().addWidget(self.sigCfgWidget)
+        self.dataAccessWidget.layout().addWidget(self.daWidgetButtons)
 
         self._centralWidget = QSplitter(self)
         self._centralWidget.setOrientation(Qt.Horizontal)
@@ -149,26 +162,40 @@ class MTMainWindow(IplotQtMainWindow):
         self.setStatusBar(self._statusBar)
 
         # Setup connections
-        self.draw_button.clicked.connect(self.draw_clicked)
-        self.stream_button.clicked.connect(self.stream_clicked)
-        self.streamerCfgWidget.streamStarted.connect(self.do_stream)
-        self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
-        self.resize(1280, 720)
+        self.drawBtn.clicked.connect(self.drawClicked)
+        self.streamBtn.clicked.connect(self.streamClicked)
+        self.streamerCfgWidget.streamStarted.connect(self.doStream)
+        self.dataRangeSelector.cancelRefresh.connect(self.stopAutoRefresh)
+        self.resize(1920, 1080)
 
     def wireConnections(self):
         super().wireConnections()
+        self.sigCfgWidget.statusChanged.connect(self._statusBar.showMessage)
+        self.sigCfgWidget.buildAborted.connect(self.onTableAbort)
+        self.sigCfgWidget.buildStarted.connect(self._progressBar.show)
+        self.sigCfgWidget.buildFinished.connect(self._progressBar.hide)
+        self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
         self.toolBar.exportAction.triggered.connect(self.onExport)
         self.toolBar.importAction.triggered.connect(self.onImport)
-        self.toolBar.redrawAction.triggered.connect(self.draw_clicked)
+
+    def setDefaultDSAction(self, action: QAction):
+        self.sigCfgWidget.model.blueprint.get(
+            'DataSource')['default'] = action.text()
+
+    def onTableAbort(self, message):
+        logger.error(message)
+
+        box = QMessageBox()
+        box.setIcon(QMessageBox.Critical)
+        box.setWindowTitle("Table Build Failed")
+        box.setText(message)
+        box.exec_()
 
     def undo(self):
         return super().undo()
 
     def redo(self):
         return super().redo()
-
-    def reDraw(self):
-        self.draw_clicked(no_build=True)
 
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
@@ -177,6 +204,7 @@ class MTMainWindow(IplotQtMainWindow):
             self._floatingWindow.setWindowTitle(self.windowTitle())
             self._floatingWindow.show()
             self.toolBar.detachAction.setText('Reattach')
+            self.sigCfgWidget.resizeViewsToContents()
         elif self.toolBar.detachAction.text() == 'Reattach':
             # we attach now.
             self.toolBar.detachAction.setText('Detach')
@@ -185,143 +213,223 @@ class MTMainWindow(IplotQtMainWindow):
             self._floatingWindow.hide()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save workspaces as ..")
+        file = QFileDialog.getSaveFileName(
+            self, "Save workspaces as ..", filter='*.json')
         if file and file[0]:
-            self.exportWorkspace(file[0])
+            if not file[0].endswith('.json'):
+                file[0] += '.json'
+            self.export_json(file[0])
+            self._data_dir = os.path.dirname(file[0])
 
     def onImport(self):
-        file = QFileDialog.getOpenFileName(self, "Open a workspace ..")
+        file = QFileDialog.getOpenFileName(
+            self, "Open a workspace ..", dir=os.path.join(self._data_dir, 'workspaces'))
         if file and file[0]:
-            self.importWorkspace(file[0])
+            self._data_dir = os.path.dirname(file[0])
+            self.import_json(file[0])
 
-    # TODO: Implement this.
-    def importWorkspace(self, file_path: os.PathLike):
+    def indicateBusy(self):
+        self._progressBar.setMinimum(0)
+        self._progressBar.setMaximum(0)
+        self._progressBar.show()
+
+    def indicateReady(self):
+        self._progressBar.hide()
+        self._progressBar.setMinimum(0)
+        self._progressBar.setMaximum(100)
+        self.statusBar().showMessage('Ready.')
+
+    def export_dict(self) -> dict:
+        self.indicateBusy()
         workspace = {}
+        workspace.update({'data_range': self.dataRangeSelector.export_dict()})
+        workspace.update({'signal_cfg': self.sigCfgWidget.export_dict()})
+        workspace.update(
+            {'main_canvas': self.canvasStack.currentWidget().export_dict()})
+        self.indicateReady()
+        return workspace
+
+    def import_dict(self, input_dict: dict):
+        self.indicateBusy()
+        if input_dict.get('time_model'): # old style
+            data_range = input_dict.get('time_model')
+            delete_keys_from_dict(input_dict, ['dec_samples'])
+        else:
+            data_range = input_dict.get('data_range')
+        self.dataRangeSelector.import_dict(data_range)
+
+        main_canvas = input_dict.get('main_canvas')
+        self.canvas = Canvas.from_dict(main_canvas)
+
+        ts, te = self.dataRangeSelector.getTimeRange()
+        pulse_number = self.dataRangeSelector.getPulseNumber()
+        da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
+
+        signal_cfg = input_dict.get('signal_cfg') or input_dict
+        if signal_cfg:
+            self.sigCfgWidget.import_dict(signal_cfg)
+
+        ParserHelper.env.clear()  # Removes existing aliased signals.
+        path = []
+        # Reset every waypoint to status 'Ready'
+        for waypt in self.sigCfgWidget.build(**da_params):
+            path.append(waypt)
+            if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
+                continue
+            plot = self.canvas.plots[waypt.col_num -
+                                     1][waypt.row_num - 1]  # type: Plot
+            old_signal = plot.signals[str(
+                waypt.stack_num)][waypt.signal_stack_id]
+            self.sigCfgWidget.setStatusMessage(f"Clearing {waypt} ..")
+            self.sigCfgWidget.model.update_signal_data(waypt.idx, old_signal)
+
+        ParserHelper.env.clear()  # Removes added aliased signals.
+        self.indicateReady()
+        self.sigCfgWidget.setStatusMessage("Update signals ..")
+        self.sigCfgWidget.beginBuild()
+        self.sigCfgWidget.setProgress(0)
+        path_len = len(path)
+        # Travel the path and update each signal parameters from workspace and get the data.
+        for i, waypt in enumerate(path):
+
+            if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
+                signal = waypt.func(*waypt.args, **waypt.kwargs)
+                self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
+                self.sigCfgWidget.setProgress(i * 100 / path_len)
+                self.sigCfgWidget.model.update_signal_data(
+                    waypt.idx, signal, True)
+                continue
+
+            plot = self.canvas.plots[waypt.col_num -
+                                     1][waypt.row_num - 1]  # type: Plot
+            old_signal = plot.signals[str(
+                waypt.stack_num)][waypt.signal_stack_id]
+
+            params = dict()
+            for f in fields(old_signal):
+                if f.name == 'children':  # Don't copy children.
+                    continue
+                else:
+                    params.update({f.name: getattr(old_signal, f.name)})
+            new_signal = waypt.func(
+                *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+
+            self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
+            self.sigCfgWidget.setProgress(i * 100 / path_len)
+            self.sigCfgWidget.model.update_signal_data(
+                waypt.idx, new_signal, True)
+
+            # Replace signal.
+            plot.signals[str(waypt.stack_num)
+                         ][waypt.signal_stack_id] = new_signal
+
+        self.sigCfgWidget.setProgress(100)
+
+        self.indicateBusy()
+        self.canvasStack.currentWidget().set_canvas(self.canvas)
+        self.canvasStack.refreshLinks()
+        self.indicateReady()
+
+    def import_json(self, file_path: os.PathLike):
+        self.statusBar().showMessage(f"Importing {file_path} ..")
         try:
-            raise NotImplementedError("Not implemented")
-            with open(file_path) as f:
-                workspace.update(json.loads(f.read()))
+            with open(file_path, mode='r') as f:
+                payload = f.read()
+                payload = payload.replace("data_access.dataAccessSignal.DataAccessSignal",
+                                "interface.iplotSignalAdapter.IplotSignalAdapter")
+                replacements = {'varname': 'name',
+                                'datasource': 'data_source',
+                                'pulsenb': 'pulse_nb'}
+                for f, r in replacements.items():
+                    payload = payload.replace(f, r)
+                self.import_dict(json.loads(payload))
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
             box.setText(
-                f"Error {str(e)}: saving workspace to file: {file_path}")
+                f"Error {str(e)}: cannot import workspace from file: {file_path}")
             logger.exception(e)
             box.exec_()
+            self.indicateReady()
             return
 
-        # 1. import signals table.
-        # 2. import canvas -> plots -> (axes, signals)
-        # 3. import data range selector.
-        # 3. finalize context
-        pass
-
-    # TODO: Implement this.
-    def exportWorkspace(self, file_path: os.PathLike):
-        workspace = {}
+    def export_json(self, file_path: os.PathLike):
+        self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
-            raise NotImplementedError("Not implemented")
+            with open(file_path, mode='w') as f:
+                f.write(json.dumps(self.export_dict()))
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
             box.setText(
-                f"Error {str(e)}: loading workspace from file: {file_path}")
+                f"Error {str(e)}: cannot export workspace to file: {file_path}")
             logger.exception(e)
             box.exec_()
+            self.indicateReady()
             return
 
-        # 1. export signals table.
-        # 2. export canvas -> plots -> (axes, signals)
-        # 3. export data range selector.
-        pass
-
-    def start_auto_refresh(self):
+    def startAutoRefresh(self):
         if self.canvas.auto_refresh:
             logger.info(
                 F"Scheduling canvas refresh in {self.canvas.auto_refresh} seconds")
             self.refreshTimer = Timer(
-                self.canvas.auto_refresh, self.draw_clicked)
+                self.canvas.auto_refresh, self.drawClicked)
             self.refreshTimer.daemon = True
             self.refreshTimer.start()
             self.dataRangeSelector.refreshActivate.emit()
 
-    def stop_auto_refresh(self):
+    def stopAutoRefresh(self):
         self.dataRangeSelector.refreshDeactivate.emit()
         if self.refreshTimer is not None:
             self.refreshTimer.cancel()
 
-    def draw_clicked(self, no_build: bool = False):
+    def drawClicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
         if not no_build:
-            self.build_layout()
+            self.build()
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
-            self.sigTable.exportCsv(os.path.join(
-                dump_dir, "sigTable_" + str(os.getpid()) + ".csv"))
+            self.sigCfgWidget.export_csv(os.path.join(
+                dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
 
-        self.stop_auto_refresh()
+        self.stopAutoRefresh()
 
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
 
-        self.start_auto_refresh()
+        self.startAutoRefresh()
 
-    def stream_clicked(self):
+    def streamClicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         if not self.streamerCfgWidget.isActivated():
             self.streamerCfgWidget.activate()
-            self.stream_button.setText("Stop")
+            self.streamBtn.setText("Stop")
         else:
             self.streamerCfgWidget.deActivate()
-            self.stream_button.setText("Stream")
+            self.streamBtn.setText("Stream")
 
-    def stream_callback(self, signal):
+    def streamCallback(self, signal):
         self.canvasStack.currentWidget().matplotlib_canvas.refresh_signal(signal)
 
-    def do_stream(self):
+    def doStream(self):
         self.streamerCfgWidget.hide()
-        self.build_layout(stream=True)
+        self.build(stream=True)
 
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
         self.streamerCfgWidget.streamer.start(
-            self.canvas, self.stream_callback)
-        self.stream_button.setText("Stop")
+            self.canvas, self.streamCallback)
+        self.streamBtn.setText("Stop")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
-    def build_layout_plan(self, plan: dict, descrp: SignalDescription) -> None:
-        if not (descrp.signals and descrp.stack_num and descrp.col_num and descrp.row_num):
-            return
-        if descrp.col_num not in plan:
-            plan[descrp.col_num] = {}
-        if descrp.row_num not in plan[descrp.col_num]:
-            plan[descrp.col_num][descrp.row_num] = [descrp.row_span,
-                                                    descrp.col_span, {}, [descrp.start_ts, descrp.end_ts]]
-        else:
-            existing = plan[descrp.col_num][descrp.row_num]
-            existing[0] = descrp.row_span if descrp.row_span > existing[0] else existing[0]
-            existing[1] = descrp.col_span if descrp.col_span > existing[1] else existing[1]
-
-            if descrp.start_ts is not None or descrp.start_ts is not None:
-                if existing[3][0] is None or descrp.start_ts < existing[3][0]:
-                    existing[3][0] = descrp.start_ts
-                if existing[3][1] is None or descrp.end_ts > existing[3][1]:
-                    existing[3][1] = descrp.end_ts
-
-        if descrp.stack_num not in plan[descrp.col_num][descrp.row_num][2]:
-            plan[descrp.col_num][descrp.row_num][2][descrp.stack_num] = []
-        for signal in descrp.signals:
-            plan[descrp.col_num][descrp.row_num][2][descrp.stack_num].append(
-                signal)
-
-    def build_layout(self, stream=False):
+    def build(self, stream=False):
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.timeWindow()
@@ -338,21 +446,6 @@ class MTMainWindow(IplotQtMainWindow):
         else:
             ts, te = self.dataRangeSelector.getTimeRange()
 
-        params = dict(dec_samples=self.default_dec_samples,
-                      ts_start=ts, ts_end=te, pulse_nb=pulse_number)
-        logger.info(
-            f"Creating canvas {params}, stream={stream}, stream_window={stream_window}")
-
-        self.context.reset()
-        layout_plan = {}
-        signal_descr_handler = partial(self.build_layout_plan, layout_plan)
-        self.context.import_dataframe(self.sigTable.getModel().get_dataframe(
-        ), signal_class=DataAccessSignal, assort_signals=signal_descr_handler, **params)
-        self.context.build()
-
-        logger.info("Built context")
-        logger.debug(f"{self.context.env}")
-
         if stream:
             self.canvas.auto_refresh = refresh_interval
             self.canvas.autoscale = Canvas.autoscale
@@ -360,36 +453,77 @@ class MTMainWindow(IplotQtMainWindow):
             self.canvas.auto_refresh = Canvas.auto_refresh
             self.canvas.autoscale = x_axis_date
 
-        logger.debug(f"Layout plan: {layout_plan}")
+        da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
+        plan = dict()
 
-        if layout_plan.keys():
-            self.canvas.cols = max(layout_plan.keys())
-            self.canvas.rows = max([max(e.keys())
-                                   for e in layout_plan.values()])
-            self.canvas.plots = [[] for _ in range(self.canvas.cols)]
+        for waypt in self.sigCfgWidget.build(**da_params):
 
-            for colnum, rows in layout_plan.items():
-                for row in range(max(rows.keys())):
-                    plot = None
-                    if row + 1 in rows.keys():
-                        y_axes = [LinearAxis()
-                                  for _ in range(len(rows[row + 1][2].items()))]
+            if not waypt.func and not waypt.args:
+                continue
+            if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
+                signal = waypt.func(*waypt.args, **waypt.kwargs)
+                self.sigCfgWidget.model.update_signal_data(
+                    waypt.idx, signal, True)
+                continue
 
-                        x_axis = LinearAxis(
-                            is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
+            if waypt.col_num not in plan:
+                plan[waypt.col_num] = {}
 
-                        if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
-                            x_axis.begin = rows[row+1][3][0]
-                            x_axis.end = rows[row+1][3][1]
-                            x_axis.original_begin = x_axis.begin
-                            x_axis.original_end = x_axis.end
+            if waypt.row_num not in plan[waypt.col_num]:
+                plan[waypt.col_num][waypt.row_num] = [waypt.row_span,
+                                                      waypt.col_span,
+                                                      defaultdict(list),
+                                                      [waypt.ts_start, waypt.ts_end]]
 
-                        plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
-                                               col_span=rows[row + 1][1])
-                        for stack, signals in rows[row + 1][2].items():
-                            for signal in signals:
-                                plot.add_signal(signal, stack=stack)
-                    self.canvas.add_plot(plot, col=colnum - 1)
+            else:
+                existing = plan[waypt.col_num][waypt.row_num]
+                existing[0] = waypt.row_span if waypt.row_span > existing[0] else existing[0]
+                existing[1] = waypt.col_span if waypt.col_span > existing[1] else existing[1]
 
+                if waypt.ts_start is not None or waypt.ts_start is not None:
+                    if existing[3][0] is None or waypt.ts_start < existing[3][0]:
+                        existing[3][0] = waypt.ts_start
+                    if existing[3][1] is None or waypt.ts_end > existing[3][1]:
+                        existing[3][1] = waypt.ts_end
+
+            signal = waypt.func(*waypt.args, **waypt.kwargs)
+            self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
+                signal)
+
+        self.build_canvas(self.canvas, plan, x_axis_date,
+                          x_axis_follow, x_axis_window)
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
+
+    def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
+        if not plan.keys():
+            return
+
+        canvas.cols = max(plan.keys())
+        canvas.rows = max([max(e.keys())
+                           for e in plan.values()])
+        canvas.plots = [[] for _ in range(canvas.cols)]
+
+        for colnum, rows in plan.items():
+            for row in range(max(rows.keys())):
+                plot = None
+                if row + 1 in rows.keys():
+                    y_axes = [LinearAxis()
+                              for _ in range(len(rows[row + 1][2].items()))]
+
+                    x_axis = LinearAxis(
+                        is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
+
+                    if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
+                        x_axis.begin = rows[row+1][3][0]
+                        x_axis.end = rows[row+1][3][1]
+                        x_axis.original_begin = x_axis.begin
+                        x_axis.original_end = x_axis.end
+
+                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
+                                           col_span=rows[row + 1][1])
+                    for stack, signals in rows[row + 1][2].items():
+                        for signal in signals:
+                            plot.add_signal(signal, stack=stack)
+                self.canvas.add_plot(plot, col=colnum - 1)

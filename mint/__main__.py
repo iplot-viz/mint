@@ -5,31 +5,36 @@
 
 import argparse
 from datetime import datetime, timedelta
-import importlib_metadata
+from importlib import metadata
 import json
 import os
 import sys
 
+from PySide2.QtGui import QGuiApplication
 from PySide2.QtWidgets import QApplication, QLabel, QStyle
 
 from iplotlib.core import Canvas
-from iplotlib.data_access.dataAccessSignal import AccessHelper
+from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
 from iplotDataAccess.dataAccess import DataAccess
-from iplotProcessing.core import Context
-from iplotProcessing.core.environment import DEFAULT_BLUEPRINT_FILE
 
 from mint._version import __version__
 from mint.models import MTGenericAccessMode
+from mint.models.utils import mtBlueprintParser as mtbp
 from mint.gui.mtMainWindow import MTMainWindow
 
 import iplotLogging.setupLogger as ls
 
+
 logger = ls.get_logger(__name__)
-iplotdataaccess_version = importlib_metadata.version('iplotDataAccess')
-iplotlib_version = importlib_metadata.version('iplotlib')
-iplotlogging_version = importlib_metadata.version('iplotLogging')
-iplotprocessing_version = importlib_metadata.version('iplotProcessing')
-DEFAULT_DATA_SOURCES_CFG = os.path.join(os.path.dirname(__file__), 'mydatasources.cfg')
+iplotdataaccess_version = metadata.version('iplotDataAccess')
+iplotlib_version = metadata.version('iplotlib')
+iplotlogging_version = metadata.version('iplotLogging')
+iplotprocessing_version = metadata.version('iplotProcessing')
+
+EXEC_PATH = os.path.dirname(__file__)
+DEFAULT_DATA_SOURCES_CFG = os.path.join(EXEC_PATH, 'mydatasources.cfg')
+DEFAULT_DATA_PATH = os.path.join(EXEC_PATH, 'data')
+
 
 def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
     try:
@@ -43,6 +48,7 @@ def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
     except FileNotFoundError:
         logger.error(f"Unable to open file: {canvas_filename}")
 
+
 def load_data_sources(da: DataAccess):
     try:
         if len(da.loadConfig()) < 1:
@@ -50,9 +56,11 @@ def load_data_sources(da: DataAccess):
         else:
             return True
     except (OSError, IOError, FileNotFoundError) as e:
-        logger.warning(f"no data source file, fallback to {DEFAULT_DATA_SOURCES_CFG}")
+        logger.warning(
+            f"no data source file, fallback to {DEFAULT_DATA_SOURCES_CFG}")
         os.environ.update({'DATASOURCESCONF': DEFAULT_DATA_SOURCES_CFG})
         return load_data_sources(da)
+
 
 def main():
 
@@ -62,7 +70,7 @@ def main():
     parser.add_argument('-impl', metavar='canvas_impl',
                         help='Use canvas implementation (matplotlib/vtk...)', default="matplotlib")
     parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
-                        help='Load blueprint from .json file', default=DEFAULT_BLUEPRINT_FILE)
+                        help='Load blueprint from .json file', default=None)
     parser.add_argument('-d', dest='csv_file', metavar='csv_file',
                         help='Load variables table from file')
     parser.add_argument('-w', dest='json_file', metavar='json_file',
@@ -75,7 +83,8 @@ def main():
                         type=int, default=1080, help='Exported image height')
     parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi',
                         type=int, default=100, help='Exported image DPI')
-    parser.add_argument('--version', action='version', version=f"{parser.prog} - {__version__}")
+    parser.add_argument('--version', action='version',
+                        version=f"{parser.prog} - {__version__}")
 
     args = parser.parse_args()
 
@@ -94,66 +103,76 @@ def main():
     canvasImpl = args.impl
 
     workspace_file = args.json_file
-    #########################################################################
-    # 3. Processing context
-    ctx = Context()
-    AccessHelper.ctx = ctx
 
     #########################################################################
     # 4. Plot canvas
     canvas = Canvas(grid=True)
 
-    # This is a main reference to canvas that is drawn
-    if workspace_file:
-        with open(workspace_file) as f:
-            payload = json.loads(f.read())
-            if payload.get("main_canvas"):
-                json_str = json.dumps(payload.get("main_canvas"))
-                canvas = Canvas.from_json(json_str)
-            else:
-                logger.error(
-                    f"Failed to load main_canvas from {workspace_file}")
-
-    if args.image_file:
-        export_to_file(canvasImpl, canvas, args.image_file, dpi=args.export_dpi,
-                    width=args.export_width, height=args.export_height)
-        exit(0)
-
     #########################################################################
-    # 5. Prepare model and header for variables table
+    # 5. Prepare model for data range
     tNow = datetime.utcnow().isoformat(timespec='seconds')
     tNowDeltaSevenD = datetime.utcnow() - timedelta(days=7)
 
-    model = {
+    time_model = {
         "range": {
             "mode": MTGenericAccessMode.TIME_RANGE,
             "value": [tNowDeltaSevenD.isoformat(timespec='seconds'), tNow]}
     }
 
+    if args.blueprint_file:
+        try:
+            blueprint = json.load(args.blueprint_file)
+        except Exception as e:
+            logger.warning(
+                f"Exception {e} occurred for blueprint file: {args.blueprint_file}")
+            blueprint = mtbp.DEFAULT_BLUEPRINT
+    else:
+        blueprint = mtbp.DEFAULT_BLUEPRINT
 
     app = QApplication(sys.argv)
-    mainWin = MTMainWindow(canvas, ctx, da, model, blueprint=args.blueprint_file, impl=canvasImpl)
-    # Preload the table from a CSV file, if provided
-    if args.csv_file:
-        mainWin.sigTable.importCsv(args.csv_file)
 
-    if workspace_file:
-        with open(workspace_file) as json_file:
-            payload = json.loads(json_file.read())
-            if payload.get("sigTable"):
-                json_str = json.dumps(payload.get("sigTable"))
-                mainWin.sigTable.import_json(json_str)
-            if payload.get("range_selector"):
-                json_str = json.dumps(payload.get("range_selector"))
-                mainWin.range_selector.import_json(json_str)
+    logger.debug(f"Detected {len(QGuiApplication.screens())} screen (s)")
+    max_width = 0
+    for screen in QGuiApplication.screens():
+        max_width = max(screen.geometry().width(), max_width)
+    logger.debug(f"Detected max screen width: {max_width}")
+    AccessHelper.num_samples = max_width
+    logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
+
+    data_sources = [AccessHelper.da.getDefaultDSName()]
+    for ds_name in AccessHelper.da.dslist.keys():
+        if ds_name not in data_sources:
+            data_sources.append(ds_name)
+
+    mainWin = MTMainWindow(canvas,
+                           da,
+                           time_model,
+                           DEFAULT_DATA_PATH,
+                           data_sources=data_sources,
+                           blueprint=blueprint,
+                           impl=canvasImpl,
+                           signal_class=IplotSignalAdapter)
 
     mainWin.statusBar().addPermanentWidget(
         QLabel("Tool version {} iplotlib {}".format(__version__, iplotlib_version)))
+
+    # Preload the table from a CSV file, if provided
+    if args.csv_file:
+        mainWin.sigCfgWidget.import_csv(args.csv_file)
+
+    if workspace_file:
+        mainWin.import_json(workspace_file)
+
+        if args.image_file:
+            export_to_file(canvasImpl, mainWin.canvas, args.image_file, dpi=args.export_dpi,
+                        width=args.export_width, height=args.export_height)
+            exit(0)
 
     mainWin.setWindowTitle("MINT: {}".format(os.getpid()))
     mainWin.show()
     app.setWindowIcon(mainWin.style().standardIcon(
         getattr(QStyle, "SP_BrowserReload")))
+
     sys.exit(app.exec_())
 
 

@@ -7,12 +7,10 @@ import pkgutil
 
 from PySide2.QtCore import QMargins, Signal
 from PySide2.QtGui import QIcon, QPixmap
-from PySide2.QtWidgets import QHBoxLayout, QToolBar, QWidget
+from PySide2.QtWidgets import QAction, QHBoxLayout, QToolBar, QWidget
 
 
 class MTSignalsToolBar(QWidget):
-    exportCsv = Signal()
-    importCsv = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,9 +25,11 @@ class MTSignalsToolBar(QWidget):
         save_pxmap.loadFromData(pkgutil.get_data(
             'mint.gui', 'icons/save_as.png'))
 
+        self.openAction = QAction(QIcon(open_pxmap), "Open CSV")
+        self.saveAction = QAction(QIcon(save_pxmap), "Save CSV")
+        
         tb = QToolBar()
-        tb.addAction(QIcon(open_pxmap), "Open CSV",
-                     self.importCsv.emit)
-        tb.addAction(QIcon(save_pxmap), "Save CSV",
-                     self.exportCsv.emit)
+        tb.addAction(self.openAction)
+        tb.addAction(self.saveAction)
+
         self.layout().addWidget(tb)

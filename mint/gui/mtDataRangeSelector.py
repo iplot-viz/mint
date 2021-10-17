@@ -71,17 +71,22 @@ class MTDataRangeSelector(QWidget):
     def getModel(self):
         return self.accesModes[self.stack.currentIndex()].to_dict()
 
-    def exportJson(self):
+    def export_dict(self) -> dict:
         item = self.accesModes[self.stack.currentIndex()]
-        return json.dumps(item.toDict())
+        return item.toDict()
 
-    def importJson(self, json_string):
-        contents = json.loads(json_string)
+    def import_dict(self, input_dict: dict):
         idx = [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER,
-               MTGenericAccessMode.RELATIVE_TIME].index(contents.get('mode'))
+               MTGenericAccessMode.RELATIVE_TIME].index(input_dict.get('mode'))
         self.radioGroup.layout().itemAt(idx).widget().click()
         item = self.accesModes[self.stack.currentIndex()]
-        item.fromDict(contents)
+        item.fromDict(input_dict)
+
+    def exportJson(self) -> str:
+        return json.dumps(self.export_dict())
+
+    def importJson(self, json_string):
+        self.import_dict(json.loads(json_string))
 
     def selectPage(self, pageId: int):
         self.stack.setCurrentIndex(pageId)
@@ -114,7 +119,9 @@ class MTDataRangeSelector(QWidget):
             ts_start = ts_end - 10 ** 9 * int(time_base)
             return ts_start, ts_end
         else:
-            return None, None
+            ts_start = model.properties().get("ts_start")
+            ts_end = model.properties().get("ts_end")
+            return ts_start, ts_end
 
     def getAutoRefresh(self) -> int:
         model = self.accesModes[self.stack.currentIndex()]
