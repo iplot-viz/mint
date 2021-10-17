@@ -38,10 +38,10 @@ setuptools.setup(
         "iplotProcessing >= 0.2.0"
     ],
     entry_points={
-        'console_scripts': ['mint = mint.__main__:main', 'mint-signal-table = mint.gui.mtSignalTable:main']
+        'console_scripts': ['mint = mint.__main__:main', 'mint-signal-cfg = mint.gui.mtSignalConfigurator:main']
     },
     package_data = {
-        "mint.data": ["csv/*", "workspaces/*"],
+        "mint.data": ["csv/*", "workspaces/*", 'blueprint.json'],
         "mint.gui": ["icons/*.png", "res/*.ui"],
         "mint": ["mydatasources.cfg"]
     }
