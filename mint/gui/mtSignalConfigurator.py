@@ -13,7 +13,7 @@ import typing
 
 from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Signal
 from PySide2.QtGui import QContextMenuEvent
-from PySide2.QtWidgets import QFileDialog, QMenu, QMessageBox, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
+from PySide2.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter
 from iplotProcessing.tools.parsers import Parser
@@ -141,17 +141,28 @@ class MTSignalConfigurator(QWidget):
 
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
+        
+        self.parseBtn = QPushButton("Parse", self)
+        self.parseBtn.clicked.connect(self.onParseButtonPressed)
 
         for wdgt in self._signal_item_widgets:
             wdgt.setModel(self._model)
             wdgt.import_dict(NEAT_VIEW.get(wdgt.windowTitle()))
             self._tabs.addTab(wdgt, wdgt.windowTitle())
-
+        
+        
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.layout().addWidget(self._toolbar)
         self.layout().addWidget(self._tabs)
+        self.layout().addWidget(self.parseBtn)
         self.model.dataChanged.connect(self.resizeViewsToContents)
+
+    def onParseButtonPressed(self, val: bool):
+        logger.debug('Build order:')
+        for waypt in self.build():
+            logger.debug(f'Row: {waypt.idx}')
+        self.resizeViewsToContents()
 
     def toolBar(self) -> MTSignalsToolBar:
         return self._toolbar
@@ -180,7 +191,6 @@ class MTSignalConfigurator(QWidget):
             self._csv_dir = os.path.dirname(file[0])
 
     def onImport(self):
-        print(self._csv_dir)
         file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)
         if file and file[0]:
             self.import_csv(file[0])
@@ -232,8 +242,6 @@ class MTSignalConfigurator(QWidget):
             df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
-                self.build(fetch_data=False)
-                self.resizeViewsToContents()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
@@ -276,13 +284,10 @@ class MTSignalConfigurator(QWidget):
         self.buildFinished.emit()
 
     def build(self, **kwargs) -> typing.Iterator[Waypoint]:
-
         self.beginBuild()
         self.setProgress(0.0)
         self.setStatusMessage("Parsing table ..")
         QCoreApplication.instance().processEvents()
-
-        logger.info(f"Creating signals, default_params: {kwargs}")
 
         # Load defaults from keyword args
         for key in mtbp.get_keys_with_override(self._model.blueprint):
@@ -344,7 +349,7 @@ class MTSignalConfigurator(QWidget):
                 yield from self._traverse(graph, k)
 
         self.setProgress(100)
-        self.setStatusMessage("Done.")
+        self.setStatusMessage("Ready.")
         self.endBuild()
 
     def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> typing.Iterator[Waypoint]:
@@ -392,10 +397,33 @@ def main():
     else:
         blueprint = mtbp.DEFAULT_BLUEPRINT
 
-    sigTable = MTSignalConfigurator(blueprint=blueprint)
-    sigTable.resize(1280, 720)
-    sigTable.show()
+    mainWin = QMainWindow()
+    progressBar = QProgressBar(mainWin)
+    mainWin.statusBar().addPermanentWidget(progressBar)
+    progressBar.hide()
+
+    sigTable = MTSignalConfigurator(blueprint=blueprint, parent=mainWin)
+    sigTable.statusChanged.connect(mainWin.statusBar().showMessage)
+    sigTable.progressChanged.connect(progressBar.setValue)
+    sigTable.buildStarted.connect(progressBar.show)
+    sigTable.buildFinished.connect(progressBar.hide)
+    sigTable.buildAborted.connect(show_msg)
+
+    # parseBtn = QPushButton("Parse", sigTable)
+    # sigTable.layout().addWidget(parseBtn)
+    # parseBtn.clicked.connect(sigTable.build())
+
+    mainWin.setCentralWidget(sigTable)
 
     if isinstance(args.input, str) and args.input.endswith('.csv'):
         sigTable.import_csv(args.input)
+    mainWin.show()
+    mainWin.resize(1280, 720)
     sys.exit(app.exec_())
+
+def show_msg(self, message):
+    box = QMessageBox()
+    box.setIcon(QMessageBox.Critical)
+    box.setWindowTitle("Table parse failed")
+    box.setText(message)
+    box.exec_()

@@ -13,7 +13,7 @@ import pkgutil
 from threading import Timer
 import typing
 
-from PySide2.QtCore import QMargins, Qt
+from PySide2.QtCore import QCoreApplication, QMargins, Qt
 from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
 from PySide2.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QHBoxLayout, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
@@ -232,12 +232,15 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
         self._progressBar.show()
+        self.statusBar().showMessage('Hang on ..')
+        QCoreApplication.processEvents()
 
     def indicateReady(self):
         self._progressBar.hide()
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self.statusBar().showMessage('Ready.')
+        QCoreApplication.processEvents()
 
     def export_dict(self) -> dict:
         self.indicateBusy()
@@ -280,7 +283,6 @@ class MTMainWindow(IplotQtMainWindow):
                                      1][waypt.row_num - 1]  # type: Plot
             old_signal = plot.signals[str(
                 waypt.stack_num)][waypt.signal_stack_id]
-            self.sigCfgWidget.setStatusMessage(f"Clearing {waypt} ..")
             self.sigCfgWidget.model.update_signal_data(waypt.idx, old_signal)
 
         ParserHelper.env.clear()  # Removes added aliased signals.
