@@ -1,0 +1,354 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$id": "mint-bp-schema-0.8.1",
+  "title": "MINT Signal Model Description",
+  "type": "object",
+  "properties": {
+    "DataSource": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "default",
+        "label",
+        "type"
+      ]
+    },
+    "Variable": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "default",
+        "type"
+      ]
+    },
+    "Stack": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "no_construct": {
+          "type": "boolean"
+        },
+        "type_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "default",
+        "no_construct",
+        "type"
+      ]
+    },
+    "RowSpan": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "integer"
+        },
+        "no_construct": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "code_name",
+        "type",
+        "default",
+        "no_construct"
+      ]
+    },
+    "ColSpan": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "integer"
+        },
+        "no_construct": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "code_name",
+        "type",
+        "default",
+        "no_construct"
+      ]
+    },
+    "Envelope": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "Alias": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "PulseNumber": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "override": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default",
+        "override"
+      ]
+    },
+    "StartTime": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "override": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default",
+        "override"
+      ]
+    },
+    "EndTime": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "override": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default",
+        "override"
+      ]
+    },
+    "x": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "y": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "z": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "PlotType": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "code_name": {
+          "type": "string"
+        },
+        "type_name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "code_name",
+        "type",
+        "default"
+      ]
+    },
+    "Status": {
+      "type": "object",
+      "properties": {
+        "code_name": {
+          "type": "string"
+        },
+        "no_construct": {
+          "type": "boolean"
+        },
+        "no_export":{
+          "type": "boolean"
+        },
+        "type_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code_name",
+        "no_construct",
+        "no_export",
+        "type"
+      ]
+    }
+  },
+  "required": [
+    "DataSource",
+    "Variable",
+    "Stack",
+    "RowSpan",
+    "ColSpan",
+    "Envelope",
+    "Alias",
+    "PulseNumber",
+    "StartTime",
+    "EndTime",
+    "x",
+    "y",
+    "z",
+    "PlotType",
+    "Status"
+  ]
+}

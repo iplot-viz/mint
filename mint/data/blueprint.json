@@ -1,0 +1,88 @@
+{   
+    "$schema": "https://git.iter.org/projects/VIS/repos/mint/browse/mint/data/mint.schema.json",
+    "DataSource": {
+        "code_name": "data_source",
+        "default": "",
+        "label": "DS",
+        "type_name": "str"
+    },
+    "Variable": {
+        "code_name": "name",
+        "default": "",
+        "type_name": "str"
+    },
+    "Stack": {
+        "code_name": "stack_val",
+        "default": "",
+        "no_construct": true,
+        "type_name": "str"
+    },
+    "RowSpan": {
+        "label": "Row span",
+        "code_name": "row_span",
+        "type_name": "int",
+        "default": 1,
+        "no_construct": true
+    },
+    "ColSpan": {
+        "label": "Col span",
+        "code_name": "col_span",
+        "type_name": "int",
+        "default": 1,
+        "no_construct": true
+    },
+    "Envelope": {
+        "code_name": "envelope",
+        "type_name": "bool",
+        "default": ""
+    },
+    "Alias": {
+        "code_name": "alias",
+        "type_name": "str",
+        "default": ""
+    },
+    "PulseNumber": {
+        "code_name": "pulse_nb",
+        "type_name": "mint.tools.table_parser.str_to_arr",
+        "default": "",
+        "override": true
+    },
+    "StartTime": {
+        "code_name": "ts_start",
+        "type_name": "mint.tools.table_parser.parse_timestamp",
+        "default": "",
+        "override": true
+    },
+    "EndTime": {
+        "code_name": "ts_end",
+        "type_name": "mint.tools.table_parser.parse_timestamp",
+        "default": "",
+        "override": true
+    },
+    "x": {
+        "code_name": "x_expr",
+        "type_name": "str",
+        "default": "${self}.time"
+    },
+    "y": {
+        "code_name": "y_expr",
+        "type_name": "str",
+        "default": "${self}.data"
+    },
+    "z": {
+        "code_name": "z_expr",
+        "type_name": "str",
+        "default": "${self}.data_secondary"
+    },
+    "PlotType": {
+        "label": "Plot type",
+        "code_name": "plot_type",
+        "type_name": "str",
+        "default": "PlotXY"
+    },
+    "Status": {
+        "code_name": "status_info",
+        "no_construct": true,
+        "type_name": "iplotlib.interface.iplotSignalAdapter.StatusInfo"
+    }
+}
