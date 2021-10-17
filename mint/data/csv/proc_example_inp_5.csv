@@ -1,2 +1,2 @@
-DS,Variable,Stack,Row span,Col span,Envelope,Alias,Samples,PulseNumber,StartTime,EndTime,x,y,z,Plot type
-codacuda,CWS-SCSU-HR00:ML0004-LT-XI,1.1,,,,ml0004,,,,,${self}.time,max(${self}.data),,
+DS,Variable,Stack,Row span,Col span,Envelope,Alias,PulseNumber,StartTime,EndTime,x,y,z,Plot type,Status
+codacuda,CWS-SCSU-HR00:ML0004-LT-XI,1.1,,,,ml0004,,,,${self}.time,np.max(${self}.data) * np.ones(${self}.data.size),,,Success | 61033 points
