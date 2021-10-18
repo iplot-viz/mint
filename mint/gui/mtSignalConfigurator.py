@@ -29,15 +29,35 @@ import iplotLogging.setupLogger as ls
 
 logger = ls.get_logger(__name__)
 
+# These variables act as a signle point reference to define the title of the tabs.
+ALL_VIEW_NAME = "All"
 DA_VIEW_NAME = "Data-Access"
 PLAYOUT_VIEW_NAME = "Plot-Layout"
 PROC_VIEW_NAME = "Data-Processing"
 
+# This is a pre-defined state for the signal-views.
 NEAT_VIEW = {
-    "Data-Access": {
+    ALL_VIEW_NAME: {
         "DS": True,
         "Variable": True,
         "Stack": True,
+        "Row span": True,
+        "Col span": True,
+        "Envelope": True,
+        "Alias": True,
+        "PulseNumber": True,
+        "StartTime": True,
+        "EndTime": True,
+        "x": True,
+        "y": True,
+        "z": True,
+        "Plot type": True,
+        "Status": True
+    },
+    DA_VIEW_NAME: {
+        "DS": True,
+        "Variable": True,
+        "Stack": False,
         "Row span": False,
         "Col span": False,
         "Envelope": True,
@@ -51,7 +71,7 @@ NEAT_VIEW = {
         "Plot type": False,
         "Status": True
     },
-    "Plot-Layout": {
+    PLAYOUT_VIEW_NAME: {
         "DS": True,
         "Variable": True,
         "Stack": True,
@@ -68,7 +88,7 @@ NEAT_VIEW = {
         "Plot type": True,
         "Status": True
     },
-    "Data-Processing": {
+    PROC_VIEW_NAME: {
         "DS": True,
         "Variable": True,
         "Stack": False,
@@ -134,7 +154,8 @@ class MTSignalConfigurator(QWidget):
         self._toolbar.openAction.triggered.connect(self.onImport)
         self._toolbar.saveAction.triggered.connect(self.onExport)
 
-        self._signal_item_widgets = [MTSignalItemView(DA_VIEW_NAME, parent=self),
+        self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
+                                     MTSignalItemView(DA_VIEW_NAME, parent=self),
                                      MTSignalItemView(
                                          PLAYOUT_VIEW_NAME, parent=self),
                                      MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
@@ -149,8 +170,7 @@ class MTSignalConfigurator(QWidget):
             wdgt.setModel(self._model)
             wdgt.import_dict(NEAT_VIEW.get(wdgt.windowTitle()))
             self._tabs.addTab(wdgt, wdgt.windowTitle())
-        
-        
+
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.layout().addWidget(self._toolbar)
@@ -266,7 +286,8 @@ class MTSignalConfigurator(QWidget):
         # 1. view options.
         view_options = input_dict.get('view_options') or NEAT_VIEW
         for view in self._signal_item_widgets:
-            view.import_dict(view_options.get(view.windowTitle()))
+            key = view.windowTitle()
+            view.import_dict(view_options.get(key) or NEAT_VIEW.get(key))
         self._tabs.currentWidget().show()
         QCoreApplication.processEvents()
 

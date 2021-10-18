@@ -15,7 +15,7 @@ class MTSignalItemView(QWidget):
         self.setLayout(QVBoxLayout())
         
         self._view = view_type(parent=self) # type: QAbstractItemView
-        self._options = QGroupBox(title, parent=self)
+        self._options = QGroupBox('Columns', parent=self)
         
         self.layout().addWidget(self._options)
         self.layout().addWidget(self._view)
