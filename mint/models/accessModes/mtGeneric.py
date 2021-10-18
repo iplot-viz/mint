@@ -4,6 +4,7 @@
 from PySide2.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
 from PySide2.QtCore import QObject, QStringListModel
 
+
 class MTGenericAccessMode(QObject):
     PULSE_NUMBER = "PULSE_NUMBER"
     RELATIVE_TIME = "RELATIVE_TIME"
@@ -19,9 +20,13 @@ class MTGenericAccessMode(QObject):
         self.mapper = QDataWidgetMapper(self.form)
         self.mapper.setModel(self.model)
 
+    @staticmethod
+    def getSupportedModes():
+        return [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER, MTGenericAccessMode.PULSE_NUMBER]
+
     def properties(self):
         return {}
-    
+
     def label(self) -> str:
         if self.mode == MTGenericAccessMode.PULSE_NUMBER:
             return "Pulse Id"
@@ -29,9 +34,9 @@ class MTGenericAccessMode(QObject):
             return "Relative"
         elif self.mode == MTGenericAccessMode.TIME_RANGE:
             return "Time range"
-        
+
     def toDict(self) -> dict:
         return dict(mode=self.mode, **self.properties())
-    
+
     def fromDict(self, contents: dict):
         self.mapper.toFirst()

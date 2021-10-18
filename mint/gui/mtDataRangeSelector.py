@@ -16,6 +16,9 @@ from PySide2.QtWidgets import QGroupBox, QHBoxLayout, QRadioButton, QSizePolicy,
 from mint.tools.converters import to_unix_time_stamp
 from mint.models import MTGenericAccessMode, MTAbsoluteTime, MTPulseId, MTRelativeTime
 
+from iplotLogging import setupLogger as sl
+
+logger = sl.get_logger(__name__)
 
 class MTDataRangeSelector(QWidget):
     modeChanged = Signal()
@@ -76,9 +79,19 @@ class MTDataRangeSelector(QWidget):
         return item.toDict()
 
     def import_dict(self, input_dict: dict):
-        idx = [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER,
-               MTGenericAccessMode.RELATIVE_TIME].index(input_dict.get('mode'))
-        self.radioGroup.layout().itemAt(idx).widget().click()
+        # older versions of MINT did not set the appropriate mode in the workspace.
+        # for ex: even if pulse numbers were specified, the 'mode' key was set to TIME_RANGE.
+        # We fix that inconsistency here.
+        for idx, mode_name in enumerate(MTGenericAccessMode.getSupportedModes()):
+            if any([k in input_dict.keys() for k in self.accesModes[idx].properties().keys()]):
+                input_dict.update({'mode': mode_name})
+                self.radioGroup.layout().itemAt(idx).widget().click()
+                break
+        else: # cannot understand input_dict, log error and fail.
+            msg = f"Failed to initialize DataRangeSelector. data_range = {input_dict}"
+            logger.error(msg)
+            raise Exception(msg)
+
         item = self.accesModes[self.stack.currentIndex()]
         item.fromDict(input_dict)
 
@@ -119,9 +132,16 @@ class MTDataRangeSelector(QWidget):
             ts_start = ts_end - 10 ** 9 * int(time_base)
             return ts_start, ts_end
         else:
-            ts_start = model.properties().get("ts_start")
-            ts_end = model.properties().get("ts_end")
-            return ts_start, ts_end
+            time_base = model.properties().get("base")
+            try:
+                t_start = float(model.properties().get("t_start")) * int(time_base)
+            except (ValueError, TypeError):
+                t_start = ''
+            try:
+                t_end = float(model.properties().get("t_end")) * int(time_base)
+            except (ValueError, TypeError):
+                t_end = ''
+            return t_start, t_end
 
     def getAutoRefresh(self) -> int:
         model = self.accesModes[self.stack.currentIndex()]

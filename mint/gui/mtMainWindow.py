@@ -256,11 +256,11 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicateBusy()
         if input_dict.get('time_model'): # old style
             data_range = input_dict.get('time_model')
-            delete_keys_from_dict(input_dict, ['dec_samples'])
         else:
             data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
 
+        delete_keys_from_dict(input_dict, ['dec_samples'])
         main_canvas = input_dict.get('main_canvas')
         self.canvas = Canvas.from_dict(main_canvas)
 

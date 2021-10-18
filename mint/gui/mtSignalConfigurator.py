@@ -421,7 +421,7 @@ def main():
     mainWin.resize(1280, 720)
     sys.exit(app.exec_())
 
-def show_msg(self, message):
+def show_msg(message):
     box = QMessageBox()
     box.setIcon(QMessageBox.Critical)
     box.setWindowTitle("Table parse failed")

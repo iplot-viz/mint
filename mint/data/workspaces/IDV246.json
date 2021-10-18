@@ -1,4 +1,13 @@
 {
+    "data_range": {
+        "mode": "PULSE_NUMBER",
+        "pulse_nb": [
+            "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123"
+        ],
+        "base": 1,
+        "t_start": "",
+        "t_end": ""
+    },
     "signal_cfg": {
         "view_options": {
             "Data-Access": {
@@ -58,7 +67,7 @@
                 "$schema": "https://git.iter.org/projects/VIS/repos/mint/browse/mint/data/mint.schema.json",
                 "DataSource": {
                     "code_name": "data_source",
-                    "default": "",
+                    "default": "codacuda",
                     "label": "DS",
                     "type_name": "str"
                 },
@@ -100,19 +109,21 @@
                 "PulseNumber": {
                     "code_name": "pulse_nb",
                     "type_name": "mint.tools.table_parser.str_to_arr",
-                    "default": null,
+                    "default": [
+                        "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123"
+                    ],
                     "override": true
                 },
                 "StartTime": {
                     "code_name": "ts_start",
                     "type_name": "mint.tools.table_parser.parse_timestamp",
-                    "default": 1633849702000000000,
+                    "default": "",
                     "override": true
                 },
                 "EndTime": {
                     "code_name": "ts_end",
                     "type_name": "mint.tools.table_parser.parse_timestamp",
-                    "default": 1634454502000000000,
+                    "default": "",
                     "override": true
                 },
                 "x": {
@@ -158,7 +169,7 @@
                     "",
                     "",
                     "",
-                    "Success | 61216 points"
+                    "Success | 672 points"
                 ],
                 [
                     "codacuda",
@@ -175,7 +186,7 @@
                     "",
                     "",
                     "",
-                    "Success | 104737 points"
+                    "Success | 1166 points"
                 ],
                 [
                     "codacuda",
@@ -192,21 +203,38 @@
                     "",
                     "",
                     "",
-                    "Success | 109212 points"
+                    "Success | 651 points"
+                ],
+                [
+                    "codacuda",
+                    "CWS-SCSU-HR00:ML0003-LT-XI",
+                    "1.4",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success | 629 points"
                 ]
             ]
         }
     },
     "main_canvas": {
-        "rows": 3,
+        "rows": 4,
         "cols": 1,
         "title": null,
         "font_size": null,
         "font_color": "#000000",
         "line_style": null,
         "line_size": null,
-        "marker": null,
-        "marker_size": null,
+        "marker": "None",
+        "marker_size": 5,
         "step": null,
         "hi_precision_data": false,
         "dec_samples": 1000,
@@ -223,97 +251,13 @@
                         {
                             "label": null,
                             "font_size": null,
-                            "font_color": "#3300FF",
+                            "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1633849702000000000,
-                            "original_end": 1634454502000000000,
-                            "begin": 1633849702000000000,
-                            "end": 1634454502000000000,
-                            "is_date": true,
-                            "window": null,
-                            "follow": false
-                        },
-                        [
-                            {
-                                "label": null,
-                                "font_size": null,
-                                "font_color": "#FF0004",
-                                "_type": "iplotlib.core.axis.LinearAxis",
-                                "original_begin": null,
-                                "original_end": null,
-                                "begin": 7539.930517578125,
-                                "end": 7629.050927734375,
-                                "is_date": false,
-                                "window": null,
-                                "follow": false
-                            }
-                        ]
-                    ],
-                    "signals": {
-                        "1": [
-                            {
-                                "title": "CWS-SCSU-HR00:ML0004-LT-XI",
-                                "color": "#B4240A",
-                                "line_style": "Dotted",
-                                "line_size": null,
-                                "marker": null,
-                                "marker_size": null,
-                                "step": null,
-                                "hi_precision_data": null,
-                                "plot_type": "PlotXY",
-                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
-                                "data_source": "codacuda",
-                                "name": "CWS-SCSU-HR00:ML0004-LT-XI",
-                                "alias": "",
-                                "pulse_nb": null,
-                                "ts_start": 1633849702000000000,
-                                "ts_end": 1634454502000000000,
-                                "ts_relative": false,
-                                "envelope": "",
-                                "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
-                                "children": [],
-                                "status_info": {
-                                    "da_msg": "",
-                                    "num_points": 61216,
-                                    "proc_msg": "",
-                                    "result": "Success"
-                                },
-                                "data_access_enabled": true,
-                                "processing_enabled": true,
-                                "time_out_value": 60
-                            }
-                        ]
-                    },
-                    "_type": "iplotlib.core.plot.PlotXY",
-                    "font_size": null,
-                    "font_color": null,
-                    "legend": null,
-                    "grid": null,
-                    "line_style": null,
-                    "line_size": null,
-                    "marker": null,
-                    "marker_size": null,
-                    "step": null,
-                    "hi_precision_data": null,
-                    "dec_samples": null
-                },
-                {
-                    "row_span": 1,
-                    "col_span": 1,
-                    "title": null,
-                    "axes": [
-                        {
-                            "label": null,
-                            "font_size": null,
-                            "font_color": "#06B5FF",
-                            "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1633849702000000000,
-                            "original_end": 1634454502000000000,
-                            "begin": 1633849702000000000,
-                            "end": 1634454502000000000,
-                            "is_date": true,
+                            "original_begin": null,
+                            "original_end": null,
+                            "begin": 0.0,
+                            "end": 922056.2040806031,
+                            "is_date": false,
                             "window": null,
                             "follow": false
                         },
@@ -325,8 +269,8 @@
                                 "_type": "iplotlib.core.axis.LinearAxis",
                                 "original_begin": null,
                                 "original_end": null,
-                                "begin": 2873.58056640625,
-                                "end": 7865.80810546875,
+                                "begin": -377.19907226562503,
+                                "end": 7921.180517578125,
                                 "is_date": false,
                                 "window": null,
                                 "follow": false
@@ -336,8 +280,8 @@
                     "signals": {
                         "1": [
                             {
-                                "title": "CWS-SCSU-HR00:ML0002-LT-XI",
-                                "color": "#B40101",
+                                "title": "CWS-SCSU-HR00:ML0004-LT-XI",
+                                "color": "#1f77b4",
                                 "line_style": null,
                                 "line_size": null,
                                 "marker": null,
@@ -347,12 +291,12 @@
                                 "plot_type": "PlotXY",
                                 "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
                                 "data_source": "codacuda",
-                                "name": "CWS-SCSU-HR00:ML0002-LT-XI",
+                                "name": "CWS-SCSU-HR00:ML0004-LT-XI",
                                 "alias": "",
-                                "pulse_nb": null,
-                                "ts_start": 1633849702000000000,
-                                "ts_end": 1634454502000000000,
-                                "ts_relative": false,
+                                "pulse_nb": "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123",
+                                "ts_start": "",
+                                "ts_end": "",
+                                "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
                                 "y_expr": "${self}.data",
@@ -360,7 +304,7 @@
                                 "children": [],
                                 "status_info": {
                                     "da_msg": "",
-                                    "num_points": 104737,
+                                    "num_points": 672,
                                     "proc_msg": "",
                                     "result": "Success"
                                 },
@@ -393,11 +337,11 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1633849702000000000,
-                            "original_end": 1634454502000000000,
-                            "begin": 1633849702000000000,
-                            "end": 1634454502000000000,
-                            "is_date": true,
+                            "original_begin": null,
+                            "original_end": null,
+                            "begin": 0.0,
+                            "end": 946728.955080603,
+                            "is_date": false,
                             "window": null,
                             "follow": false
                         },
@@ -409,8 +353,92 @@
                                 "_type": "iplotlib.core.axis.LinearAxis",
                                 "original_begin": null,
                                 "original_end": null,
-                                "begin": 4960.300854492188,
-                                "end": 5018.865649414062,
+                                "begin": -378.3564697265625,
+                                "end": 7945.485864257813,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0002-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0002-LT-XI",
+                                "alias": "",
+                                "pulse_nb": "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123",
+                                "ts_start": "",
+                                "ts_end": "",
+                                "ts_relative": true,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "da_msg": "",
+                                    "num_points": 1166,
+                                    "proc_msg": "",
+                                    "result": "Success"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": null,
+                            "original_end": null,
+                            "begin": 0.0,
+                            "end": 949032.3780806031,
+                            "is_date": false,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": -367.9398193359375,
+                                "end": 7726.7362060546875,
                                 "is_date": false,
                                 "window": null,
                                 "follow": false
@@ -421,7 +449,7 @@
                         "1": [
                             {
                                 "title": "CWS-SCSU-HR00:ML0001-LT-XI",
-                                "color": "#010406",
+                                "color": "#1f77b4",
                                 "line_style": null,
                                 "line_size": null,
                                 "marker": null,
@@ -433,10 +461,10 @@
                                 "data_source": "codacuda",
                                 "name": "CWS-SCSU-HR00:ML0001-LT-XI",
                                 "alias": "",
-                                "pulse_nb": null,
-                                "ts_start": 1633849702000000000,
-                                "ts_end": 1634454502000000000,
-                                "ts_relative": false,
+                                "pulse_nb": "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123",
+                                "ts_start": "",
+                                "ts_end": "",
+                                "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
                                 "y_expr": "${self}.data",
@@ -444,7 +472,91 @@
                                 "children": [],
                                 "status_info": {
                                     "da_msg": "",
-                                    "num_points": 109212,
+                                    "num_points": 651,
+                                    "proc_msg": "",
+                                    "result": "Success"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": null,
+                            "original_end": null,
+                            "begin": 0.0,
+                            "end": 951404.4130806031,
+                            "is_date": false,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": -366.20371093750003,
+                                "end": 7690.2779296875,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                "alias": "",
+                                "pulse_nb": "ITER:CWS-SCSU-BASIN-FILL-TESTS/130123",
+                                "ts_start": "",
+                                "ts_end": "",
+                                "ts_relative": true,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "da_msg": "",
+                                    "num_points": 629,
                                     "proc_msg": "",
                                     "result": "Success"
                                 },
@@ -477,7 +589,7 @@
         "crosshair_per_plot": false,
         "streaming": false,
         "shared_x_axis": false,
-        "autoscale": true,
+        "autoscale": false,
         "auto_refresh": 0,
         "_type": "iplotlib.core.canvas.Canvas"
     }
