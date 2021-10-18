@@ -186,9 +186,11 @@ class MTSignalConfigurator(QWidget):
         file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv')
         if file and file[0]:
             if not file[0].endswith('.csv'):
-                file[0] += '.csv'
-            self.export_csv(file[0])
-            self._csv_dir = os.path.dirname(file[0])
+                file_name = file[0] + '.csv'
+            else:
+                file_name = file[0]
+            self.export_csv(file_name)
+            self._csv_dir = os.path.dirname(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)

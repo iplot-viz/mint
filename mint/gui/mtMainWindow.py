@@ -217,9 +217,11 @@ class MTMainWindow(IplotQtMainWindow):
             self, "Save workspaces as ..", filter='*.json')
         if file and file[0]:
             if not file[0].endswith('.json'):
-                file[0] += '.json'
-            self.export_json(file[0])
-            self._data_dir = os.path.dirname(file[0])
+                file_name = file[0] + '.json'
+            else:
+                file_name = file[0]
+            self.export_json(file_name)
+            self._data_dir = os.path.dirname(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(
@@ -254,10 +256,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def import_dict(self, input_dict: dict):
         self.indicateBusy()
-        if input_dict.get('time_model'): # old style
-            data_range = input_dict.get('time_model')
-        else:
-            data_range = input_dict.get('data_range')
+        data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
 
         delete_keys_from_dict(input_dict, ['dec_samples'])
@@ -338,10 +337,12 @@ class MTMainWindow(IplotQtMainWindow):
             with open(file_path, mode='r') as f:
                 payload = f.read()
                 payload = payload.replace("data_access.dataAccessSignal.DataAccessSignal",
-                                "interface.iplotSignalAdapter.IplotSignalAdapter")
+                                          "interface.iplotSignalAdapter.IplotSignalAdapter")
                 replacements = {'varname': 'name',
                                 'datasource': 'data_source',
-                                'pulsenb': 'pulse_nb'}
+                                'pulsenb': 'pulse_nb',
+                                'time_model': 'data_range'
+                                }
                 for f, r in replacements.items():
                     payload = payload.replace(f, r)
                 self.import_dict(json.loads(payload))
