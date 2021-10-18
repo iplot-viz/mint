@@ -60,11 +60,18 @@ class MTMainWindow(IplotQtMainWindow):
         self.plot_class = PlotXY
         self.signal_class = signal_class
         self.refreshTimer = None
+        try:
+            blueprint['DataSource']['default'] = data_sources[0]
+        except IndexError:
+            pass
+        except KeyError:
+            logger.error('Blueprint does not have a DataSource key!')
+            QCoreApplication.exit(-1)
 
         check_data_range(model)
         self.model = model
         self.sigCfgWidget = MTSignalConfigurator(
-            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'))
+            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'), data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"),)
 
         self._data_dir = data_dir
@@ -116,22 +123,6 @@ class MTMainWindow(IplotQtMainWindow):
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.sigCfgWidget.toolBar().openAction)
         file_menu.addAction(self.sigCfgWidget.toolBar().saveAction)
-
-        ds_menu = file_menu.addMenu("Data Sources")
-        self.ds_action_grp = QActionGroup(self.menuBar())
-        self.ds_action_grp.setExclusive(True)
-        self.ds_actions = []
-        for ds_name in data_sources:
-            ds_action = QAction(ds_name)
-            ds_action.setCheckable(True)
-            self.ds_actions.append(ds_action)
-
-        for act in self.ds_actions:
-            self.ds_action_grp.addAction(act)
-            ds_menu.addAction(act)
-        self.ds_action_grp.triggered.connect(self.setDefaultDSAction)
-        self.ds_actions[0].trigger()
-
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
@@ -177,10 +168,6 @@ class MTMainWindow(IplotQtMainWindow):
         self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
         self.toolBar.exportAction.triggered.connect(self.onExport)
         self.toolBar.importAction.triggered.connect(self.onImport)
-
-    def setDefaultDSAction(self, action: QAction):
-        self.sigCfgWidget.model.blueprint.get(
-            'DataSource')['default'] = action.text()
 
     def onTableAbort(self, message):
         logger.error(message)

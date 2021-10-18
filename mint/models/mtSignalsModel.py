@@ -303,7 +303,10 @@ class MTSignalsModel(QAbstractItemModel):
                 else:
                     value = default_value
             else:
-                value = get_value(inp, column_name, type_func) or default_value
+                if k == 'DataSource': # Do not read default value when parsing an already filled in table.
+                    value = get_value(inp, column_name, type_func)
+                else:
+                    value = get_value(inp, column_name, type_func) or default_value
 
             out.update({column_name: value})
 

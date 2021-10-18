@@ -18,11 +18,11 @@ from PySide2.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter
 from iplotProcessing.tools.parsers import Parser
 
-from mint.gui.views import MTSignalItemView
+from mint.gui.mtSignalToolBar import MTSignalsToolBar
+from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtbp
-from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.tools.table_parser import is_non_empty_string
 
 import iplotLogging.setupLogger as ls
@@ -141,7 +141,7 @@ class MTSignalConfigurator(QWidget):
     buildStarted = Signal()
     buildFinished = Signal()
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [], signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
         self._signal_class = signal_class
@@ -160,6 +160,7 @@ class MTSignalConfigurator(QWidget):
                                          PLAYOUT_VIEW_NAME, parent=self),
                                      MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
+        self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
         
@@ -170,6 +171,7 @@ class MTSignalConfigurator(QWidget):
             wdgt.setModel(self._model)
             wdgt.import_dict(NEAT_VIEW.get(wdgt.windowTitle()))
             self._tabs.addTab(wdgt, wdgt.windowTitle())
+            wdgt.view().setItemDelegateForColumn(0, self._ds_delegate)
 
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
@@ -177,6 +179,7 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self._tabs)
         self.layout().addWidget(self.parseBtn)
         self.model.dataChanged.connect(self.resizeViewsToContents)
+        self.model.insertRows(0, 1, QModelIndex())
 
     def onParseButtonPressed(self, val: bool):
         logger.debug('Build order:')
@@ -200,7 +203,6 @@ class MTSignalConfigurator(QWidget):
             view = wdgt.view()
             if isinstance(view, QTableView):
                 view.resizeColumnsToContents()
-                view.resizeRowsToContents()
 
     def onExport(self):
         file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv')
@@ -431,10 +433,6 @@ def main():
     sigTable.buildStarted.connect(progressBar.show)
     sigTable.buildFinished.connect(progressBar.hide)
     sigTable.buildAborted.connect(show_msg)
-
-    # parseBtn = QPushButton("Parse", sigTable)
-    # sigTable.layout().addWidget(parseBtn)
-    # parseBtn.clicked.connect(sigTable.build())
 
     mainWin.setCentralWidget(sigTable)
 
