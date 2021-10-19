@@ -11,11 +11,11 @@ import pandas as pd
 import sys
 import typing
 
-from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Signal
+from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide2.QtGui import QContextMenuEvent
 from PySide2.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
 
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter
+from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
@@ -330,40 +330,68 @@ class MTSignalConfigurator(QWidget):
         except KeyError:
             pass
 
-        if len(duplicates):
-            invalid_rows = [aliases.index(dup) for dup in duplicates]
-            self._abort_build(
-                f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-            return
+        # if len(duplicates):
+        #     invalid_rows = [aliases.index(dup) for dup in duplicates]
+        #     self._abort_build(
+        #         f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
+        #     return
 
+        error_msgs = []
         graph = defaultdict(list)
-
+        statusColIdx = self.model.columnCount(QModelIndex()) - 1
         for idx, row in df.iterrows():
             logger.debug(f"Row: {idx}")
+            modelIdx = self.model.createIndex(idx, statusColIdx)
             row_type, name = _row_predicate(
                 row, aliases, self._model.blueprint)
 
-            if row_type != RowAliasType.Mixed:
-                graph[idx].clear()
-                continue
-
-            logger.debug(f"Is a mixed alias")
             p = Parser().set_expression(name)
-            for k in p.var_map.keys():
-                try:
-                    other_idx = aliases.index(k)
-                    if other_idx == idx:
-                        self._abort_build(
-                            f"Found short circuit in row: {idx}. {aliases[idx]} in {name}")
-                        return
-                    elif idx not in graph[other_idx]:
-                        graph[idx].append(aliases.index(k))
-                    else:
-                        self._abort_build(
-                            f"Found circular dependency in rows : {idx}, {other_idx} for alias: {k}")
-                        return
-                except ValueError:
+
+            for var_name in p.var_map.keys():
+                if var_name in duplicates:
+                    sinfo = StatusInfo()
+                    sinfo.result = Result.INVALID
+                    conflict_row_ids = []
+                    for alias_idx, alias in enumerate(aliases):
+                        if var_name == alias:
+                            conflict_row_ids.append(alias_idx)
+                    sinfo.msg = f"Conflicted row: {idx + 1} , '{var_name}' is defined in row (s): {conflict_row_ids}"
+                    error_msgs.append(sinfo.msg)
+                    self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                    if idx in graph:
+                        graph.pop(idx)
+            else:
+                if row_type != RowAliasType.Mixed:
+                    graph[idx].clear()
                     continue
+
+                logger.debug(f"Is a mixed alias")
+                for k in p.var_map.keys():
+                    try:
+                        alias_idx = aliases.index(k)
+                        if alias_idx == idx:
+                            sinfo = StatusInfo()
+                            sinfo.result = Result.INVALID
+                            sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
+                            error_msgs.append(sinfo.msg)
+                            self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                            break
+                        elif idx not in graph[alias_idx]:
+                            graph[idx].append(aliases.index(k))
+                        else:
+                            sinfo = StatusInfo()
+                            sinfo.result = Result.INVALID
+                            sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
+                            error_msgs.append(sinfo.msg)
+                            self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                            break
+                    except ValueError:
+                        continue
+        
+        if error_msgs:
+            error_msg = '\n----\n'.join(error_msgs)
+            self._abort_build(error_msg)
+            return
 
         # Traverse the graph's edges.
         with self._model.init_create_signals():

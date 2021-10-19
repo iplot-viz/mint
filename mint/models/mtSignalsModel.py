@@ -78,9 +78,9 @@ class MTSignalsModel(QAbstractItemModel):
 
     def data(self, index: QModelIndex, role: int = ...):
         if index.isValid():
+            value = self._table.iloc[index.row()][index.column()]
             if role == Qt.DisplayRole or role == Qt.EditRole:
-                return self._table.iloc[index.row()][index.column()]
-
+                return value
         return None
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int):
