@@ -247,7 +247,7 @@ class MTSignalsModel(QAbstractItemModel):
             signal_params.update(
                 mtbp.construct_params_from_series(self.blueprint, parsed_row))
 
-            if i == 0:  # grab these from the first row we counter.
+            if i == 0:  # grab these from the first row we encounter.
                 stack_val = signal_params.get('stack_val').split('.')
                 col_num = int(stack_val[0]) if len(
                     stack_val) > 0 and stack_val[0] else 0
