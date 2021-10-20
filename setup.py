@@ -35,7 +35,8 @@ setuptools.setup(
     install_requires=[
         "iplotlib >= 0.3.0",
         "iplotDataAccess >= 0.2.0",
-        "iplotProcessing >= 0.2.0"
+        "iplotProcessing >= 0.2.0",
+        "psutil >= 5.8.0"
     ],
     entry_points={
         'console_scripts': ['mint = mint.__main__:main', 'mint-signal-cfg = mint.gui.mtSignalConfigurator:main']

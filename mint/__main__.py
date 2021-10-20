@@ -166,10 +166,9 @@ def main():
 
         if args.image_file:
             export_to_file(canvasImpl, mainWin.canvas, args.image_file, dpi=args.export_dpi,
-                        width=args.export_width, height=args.export_height)
+                           width=args.export_width, height=args.export_height)
             exit(0)
 
-    mainWin.setWindowTitle("MINT: {}".format(os.getpid()))
     mainWin.show()
     app.setWindowIcon(mainWin.style().standardIcon(
         getattr(QStyle, "SP_BrowserReload")))

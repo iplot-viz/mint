@@ -15,7 +15,7 @@ import typing
 
 from PySide2.QtCore import QCoreApplication, QMargins, Qt
 from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
-from PySide2.QtWidgets import QAction, QActionGroup, QApplication, QFileDialog, QHBoxLayout, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
+from PySide2.QtWidgets import QAction, QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
@@ -29,6 +29,7 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotDataAccess.dataAccess import DataAccess
 
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
+from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
@@ -55,6 +56,7 @@ class MTMainWindow(IplotQtMainWindow):
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
+        self._pid = os.getpid()
         self.canvas = canvas
         self.da = da
         self.plot_class = PlotXY
@@ -80,6 +82,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         super().__init__(parent=parent, flags=flags)
 
+        self._memoryMonitor = MTMemoryMonitor(parent=self)
         self.sigCfgWidget.setParent(self)
         self.dataRangeSelector.setParent(self)
         self._statusBar.setParent(self)
@@ -88,6 +91,9 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
         self._statusBar.addPermanentWidget(self._progressBar)
+        self._statusBar.addPermanentWidget(QLabel('|'))
+        self._statusBar.addPermanentWidget(self._memoryMonitor)
+        self._statusBar.addPermanentWidget(QLabel('|'))
 
         self.graphicsArea = QWidget(self)
         self.graphicsArea.setLayout(QVBoxLayout())
@@ -158,6 +164,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget.streamStarted.connect(self.doStream)
         self.dataRangeSelector.cancelRefresh.connect(self.stopAutoRefresh)
         self.resize(1920, 1080)
+        self.setWindowTitle(f"MINT: {self._pid}")
 
     def wireConnections(self):
         super().wireConnections()
@@ -506,10 +513,10 @@ class MTMainWindow(IplotQtMainWindow):
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
-                            except IndexError:
+                                precision_loss = max(x_data) > (1 << 53)
+                                signal_x_is_date |= precision_loss
+                            except (IndexError, ValueError) as _:
                                 continue
-                            precision_loss = max(x_data) > (1 << 53)
-                            signal_x_is_date |= precision_loss
 
                     y_axes = [LinearAxis()
                               for _ in range(len(rows[row + 1][2].items()))]
