@@ -163,8 +163,10 @@ class MTMainWindow(IplotQtMainWindow):
         super().wireConnections()
         self.sigCfgWidget.statusChanged.connect(self._statusBar.showMessage)
         self.sigCfgWidget.buildAborted.connect(self.onTableAbort)
-        self.sigCfgWidget.buildStarted.connect(self._progressBar.show)
-        self.sigCfgWidget.buildFinished.connect(self._progressBar.hide)
+        self.sigCfgWidget.showProgress.connect(self._progressBar.show)
+        self.sigCfgWidget.hideProgress.connect(self._progressBar.hide)
+        self.sigCfgWidget.busy.connect(self.indicateBusy)
+        self.sigCfgWidget.ready.connect(self.indicateReady)
         self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
         self.toolBar.exportAction.triggered.connect(self.onExport)
         self.toolBar.importAction.triggered.connect(self.onImport)
@@ -499,13 +501,23 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
+                    signal_x_is_date = False
+                    for stack, signals in rows[row + 1][2].items():
+                        for signal in signals:
+                            try:
+                                x_data = signal.get_data()[0]
+                            except IndexError:
+                                continue
+                            precision_loss = max(x_data) > (1 << 53)
+                            signal_x_is_date |= precision_loss
+
                     y_axes = [LinearAxis()
                               for _ in range(len(rows[row + 1][2].items()))]
 
                     x_axis = LinearAxis(
-                        is_date=x_axis_date, follow=x_axis_follow, window=x_axis_window)
+                        is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow, window=x_axis_window)
 
-                    if x_axis_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
+                    if x_axis_date and signal_x_is_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
                         x_axis.begin = rows[row+1][3][0]
                         x_axis.end = rows[row+1][3][1]
                         x_axis.original_begin = x_axis.begin

@@ -100,8 +100,8 @@ class MTSignalsModel(QAbstractItemModel):
 
                 self._table.iloc[index.row()][index.column()] = value
 
-                self.dataChanged.emit(self.createIndex(0, 0), self.createIndex(
-                    self._table.index.size, self._table.columns.size))
+                self.dataChanged.emit(self.createIndex(index.row(), index.column()), self.createIndex(
+                    index.row(), index.column()))
 
                 return True
             else:

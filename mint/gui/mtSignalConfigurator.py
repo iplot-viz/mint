@@ -138,8 +138,10 @@ class MTSignalConfigurator(QWidget):
     progressChanged = Signal(float)
     statusChanged = Signal(str)
     buildAborted = Signal(str)
-    buildStarted = Signal()
-    buildFinished = Signal()
+    showProgress = Signal()
+    hideProgress = Signal()
+    busy = Signal()
+    ready = Signal()
 
     def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [], signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
@@ -178,7 +180,7 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self._toolbar)
         self.layout().addWidget(self._tabs)
         self.layout().addWidget(self.parseBtn)
-        self.model.dataChanged.connect(self.resizeViewsToContents)
+        self.model.dataChanged.connect(self.resizeViewToColumns)
         self.model.insertRows(0, 1, QModelIndex())
 
     def onParseButtonPressed(self, val: bool):
@@ -197,6 +199,14 @@ class MTSignalConfigurator(QWidget):
     @property
     def itemWidgets(self) -> typing.List[MTSignalItemView]:
         return self._signal_item_widgets
+
+    def resizeViewToColumns(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles):
+        columns = range(topLeft.column(), bottomRight.column() + 1)
+        for wdgt in self.itemWidgets:
+            view = wdgt.view()
+            if isinstance(view, QTableView):
+                for col in columns:
+                    view.resizeColumnToContents(col)
 
     def resizeViewsToContents(self):
         for wdgt in self.itemWidgets:
@@ -239,10 +249,22 @@ class MTSignalConfigurator(QWidget):
         for row in reversed(sorted(selected_rows)):
             self._model.removeRow(row)
 
+    def deleteContents(self):
+        currentTabId = self._tabs.currentIndex()
+        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
+        self.busy.emit()
+        
+        for idx in selectedIds:
+            self._model.setData(idx, '', Qt.EditRole)
+
+        self.ready.emit()
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_DialogDiscardButton")), "Delete", self.deleteContents)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.popup(event.globalPos())
@@ -306,7 +328,7 @@ class MTSignalConfigurator(QWidget):
     def _abort_build(self, message):
         self.setStatusMessage("Failed")
         self.buildAborted.emit(message)
-        self.buildFinished.emit()
+        self.hideProgress.emit()
 
     def build(self, **kwargs) -> typing.Iterator[Waypoint]:
         self.beginBuild()
@@ -402,7 +424,7 @@ class MTSignalConfigurator(QWidget):
                 yield from self._traverse(graph, k)
 
         self.setProgress(100)
-        self.setStatusMessage("Ready.")
+        self.ready.emit()
         self.endBuild()
 
     def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> typing.Iterator[Waypoint]:
@@ -416,11 +438,11 @@ class MTSignalConfigurator(QWidget):
             yield from self._model.create_signals(row_idx)
 
     def beginBuild(self):
-        self.buildStarted.emit()
+        self.showProgress.emit()
         QCoreApplication.instance().processEvents()
 
     def endBuild(self):
-        self.buildFinished.emit()
+        self.hideProgress.emit()
         QCoreApplication.instance().processEvents()
 
     def setStatusMessage(self, msg):
@@ -458,8 +480,8 @@ def main():
     sigTable = MTSignalConfigurator(blueprint=blueprint, parent=mainWin)
     sigTable.statusChanged.connect(mainWin.statusBar().showMessage)
     sigTable.progressChanged.connect(progressBar.setValue)
-    sigTable.buildStarted.connect(progressBar.show)
-    sigTable.buildFinished.connect(progressBar.hide)
+    sigTable.showProgress.connect(progressBar.show)
+    sigTable.hideProgress.connect(progressBar.hide)
     sigTable.buildAborted.connect(show_msg)
 
     mainWin.setCentralWidget(sigTable)
