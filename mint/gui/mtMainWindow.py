@@ -56,7 +56,6 @@ class MTMainWindow(IplotQtMainWindow):
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
-        self._pid = os.getpid()
         self.canvas = canvas
         self.da = da
         self.plot_class = PlotXY
@@ -76,13 +75,14 @@ class MTMainWindow(IplotQtMainWindow):
             blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'), data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"),)
 
-        self._data_dir = data_dir
+        self._data_dir = os.path.join(data_dir, 'workspaces')
         self._progressBar = QProgressBar()
         self._statusBar = MTStatusBar()
 
         super().__init__(parent=parent, flags=flags)
 
-        self._memoryMonitor = MTMemoryMonitor(parent=self)
+        self._memoryMonitor = MTMemoryMonitor(
+            parent=self, pid=QCoreApplication.instance().applicationPid())
         self.sigCfgWidget.setParent(self)
         self.dataRangeSelector.setParent(self)
         self._statusBar.setParent(self)
@@ -164,7 +164,6 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget.streamStarted.connect(self.doStream)
         self.dataRangeSelector.cancelRefresh.connect(self.stopAutoRefresh)
         self.resize(1920, 1080)
-        self.setWindowTitle(f"MINT: {self._pid}")
 
     def wireConnections(self):
         super().wireConnections()
@@ -196,6 +195,9 @@ class MTMainWindow(IplotQtMainWindow):
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
             # we detach now.
+            self._floatingWindow.addToolBar(Qt.TopToolBarArea, self.toolBar)
+            self.graphicsArea.setLayout(QVBoxLayout())
+            self.graphicsArea.layout().addWidget(self.canvasStack)
             self._floatingWindow.setCentralWidget(self.graphicsArea)
             self._floatingWindow.setWindowTitle(self.windowTitle())
             self._floatingWindow.show()
@@ -204,13 +206,26 @@ class MTMainWindow(IplotQtMainWindow):
         elif self.toolBar.detachAction.text() == 'Reattach':
             # we attach now.
             self.toolBar.detachAction.setText('Detach')
+            self.graphicsArea.setLayout(QVBoxLayout())
+            self.graphicsArea.layout().addWidget(self.toolBar)
+            self.graphicsArea.layout().addWidget(self.canvasStack)
             self._centralWidget.addWidget(self.graphicsArea)
             self.setCentralWidget(self._centralWidget)
             self._floatingWindow.hide()
 
+    def applyPreferences(self):
+        self.indicateBusy()
+        super().applyPreferences()
+        self.indicateReady()
+
+    def reDraw(self, discard_axis_range: bool = True):
+        self.indicateBusy()
+        super().reDraw()
+        self.indicateReady()
+
     def onExport(self):
         file = QFileDialog.getSaveFileName(
-            self, "Save workspaces as ..", filter='*.json')
+            self, "Save workspaces as ..", dir=self._data_dir, filter='*.json')
         if file and file[0]:
             if not file[0].endswith('.json'):
                 file_name = file[0] + '.json'
@@ -274,58 +289,64 @@ class MTMainWindow(IplotQtMainWindow):
             path.append(waypt)
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 continue
-            plot = self.canvas.plots[waypt.col_num -
-                                     1][waypt.row_num - 1]  # type: Plot
+            try:
+                plot = self.canvas.plots[waypt.col_num -
+                                         1][waypt.row_num - 1]  # type: Plot
+            except IndexError:
+                # Workspace does not have any plots. It just had variables table and data range selector.
+                ParserHelper.env.clear()  # Removes added aliased signals.
+                self.indicateReady()
+                break
             old_signal = plot.signals[str(
                 waypt.stack_num)][waypt.signal_stack_id]
             self.sigCfgWidget.model.update_signal_data(waypt.idx, old_signal)
+        else:
+            ParserHelper.env.clear()  # Removes added aliased signals.
+            self.indicateReady()
+            self.sigCfgWidget.setStatusMessage("Update signals ..")
+            self.sigCfgWidget.beginBuild()
+            self.sigCfgWidget.setProgress(0)
+            path_len = len(path)
+            # Travel the path and update each signal parameters from workspace and get the data.
+            for i, waypt in enumerate(path):
 
-        ParserHelper.env.clear()  # Removes added aliased signals.
-        self.indicateReady()
-        self.sigCfgWidget.setStatusMessage("Update signals ..")
-        self.sigCfgWidget.beginBuild()
-        self.sigCfgWidget.setProgress(0)
-        path_len = len(path)
-        # Travel the path and update each signal parameters from workspace and get the data.
-        for i, waypt in enumerate(path):
+                if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
+                    signal = waypt.func(*waypt.args, **waypt.kwargs)
+                    self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
+                    self.sigCfgWidget.setProgress(i * 100 / path_len)
+                    self.sigCfgWidget.model.update_signal_data(
+                        waypt.idx, signal, True)
+                    continue
 
-            if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
-                signal = waypt.func(*waypt.args, **waypt.kwargs)
+                plot = self.canvas.plots[waypt.col_num -
+                                         1][waypt.row_num - 1]  # type: Plot
+                old_signal = plot.signals[str(
+                    waypt.stack_num)][waypt.signal_stack_id]
+
+                params = dict()
+                for f in fields(old_signal):
+                    if f.name == 'children':  # Don't copy children.
+                        continue
+                    else:
+                        params.update({f.name: getattr(old_signal, f.name)})
+                new_signal = waypt.func(
+                    *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+
                 self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
                 self.sigCfgWidget.setProgress(i * 100 / path_len)
                 self.sigCfgWidget.model.update_signal_data(
-                    waypt.idx, signal, True)
-                continue
+                    waypt.idx, new_signal, True)
 
-            plot = self.canvas.plots[waypt.col_num -
-                                     1][waypt.row_num - 1]  # type: Plot
-            old_signal = plot.signals[str(
-                waypt.stack_num)][waypt.signal_stack_id]
+                # Replace signal.
+                plot.signals[str(waypt.stack_num)
+                             ][waypt.signal_stack_id] = new_signal
 
-            params = dict()
-            for f in fields(old_signal):
-                if f.name == 'children':  # Don't copy children.
-                    continue
-                else:
-                    params.update({f.name: getattr(old_signal, f.name)})
-            new_signal = waypt.func(
-                *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            self.sigCfgWidget.setProgress(100)
 
-            self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
-            self.sigCfgWidget.setProgress(i * 100 / path_len)
-            self.sigCfgWidget.model.update_signal_data(
-                waypt.idx, new_signal, True)
-
-            # Replace signal.
-            plot.signals[str(waypt.stack_num)
-                         ][waypt.signal_stack_id] = new_signal
-
-        self.sigCfgWidget.setProgress(100)
-
-        self.indicateBusy()
-        self.canvasStack.currentWidget().set_canvas(self.canvas)
-        self.canvasStack.refreshLinks()
-        self.indicateReady()
+            self.indicateBusy()
+            self.canvasStack.currentWidget().set_canvas(self.canvas)
+            self.canvasStack.refreshLinks()
+            self.indicateReady()
 
     def import_json(self, file_path: os.PathLike):
         self.statusBar().showMessage(f"Importing {file_path} ..")
@@ -392,6 +413,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.sigCfgWidget.export_csv(os.path.join(
                 dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
 
+        self.indicateBusy()
         self.stopAutoRefresh()
 
         self.canvasStack.currentWidget().unfocus_plot()
@@ -399,6 +421,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
 
         self.startAutoRefresh()
+        self.indicateReady()
 
     def streamClicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
@@ -416,6 +439,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget.hide()
         self.build(stream=True)
 
+        self.indicateBusy()
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
 
@@ -423,6 +447,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget.streamer.start(
             self.canvas, self.streamCallback)
         self.streamBtn.setText("Stop")
+        self.indicateReady()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()
@@ -490,10 +515,12 @@ class MTMainWindow(IplotQtMainWindow):
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
                 signal)
 
+        self.indicateBusy()
         self.build_canvas(self.canvas, plan, x_axis_date,
                           x_axis_follow, x_axis_window)
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
+        self.indicateReady()
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
