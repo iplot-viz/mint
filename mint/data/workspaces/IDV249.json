@@ -1,0 +1,1058 @@
+{
+    "data_range": {
+        "mode": "TIME_RANGE",
+        "ts_start": "2021-10-14T13:12:39",
+        "ts_end": "2021-10-21T13:12:39"
+    },
+    "signal_cfg": {
+        "view_options": {
+            "All": {
+                "DS": true,
+                "Variable": true,
+                "Stack": true,
+                "Row span": true,
+                "Col span": true,
+                "Envelope": true,
+                "Alias": true,
+                "PulseNumber": true,
+                "StartTime": true,
+                "EndTime": true,
+                "x": true,
+                "y": true,
+                "z": true,
+                "Plot type": true,
+                "Status": true
+            },
+            "Data-Access": {
+                "DS": true,
+                "Variable": true,
+                "Stack": false,
+                "Row span": false,
+                "Col span": false,
+                "Envelope": true,
+                "Alias": true,
+                "PulseNumber": true,
+                "StartTime": true,
+                "EndTime": true,
+                "x": false,
+                "y": false,
+                "z": false,
+                "Plot type": false,
+                "Status": true
+            },
+            "Plot-Layout": {
+                "DS": true,
+                "Variable": true,
+                "Stack": true,
+                "Row span": true,
+                "Col span": true,
+                "Envelope": false,
+                "Alias": true,
+                "PulseNumber": false,
+                "StartTime": false,
+                "EndTime": false,
+                "x": false,
+                "y": false,
+                "z": false,
+                "Plot type": true,
+                "Status": true
+            },
+            "Data-Processing": {
+                "DS": true,
+                "Variable": true,
+                "Stack": false,
+                "Row span": false,
+                "Col span": false,
+                "Envelope": false,
+                "Alias": true,
+                "PulseNumber": true,
+                "StartTime": true,
+                "EndTime": true,
+                "x": true,
+                "y": true,
+                "z": true,
+                "Plot type": false,
+                "Status": true
+            }
+        },
+        "model": {
+            "blueprint": {
+                "$schema": "https://git.iter.org/projects/VIS/repos/mint/browse/mint/data/mint.schema.json",
+                "DataSource": {
+                    "code_name": "data_source",
+                    "default": "codacuda",
+                    "label": "DS",
+                    "type_name": "str"
+                },
+                "Variable": {
+                    "code_name": "name",
+                    "default": "",
+                    "type_name": "str"
+                },
+                "Stack": {
+                    "code_name": "stack_val",
+                    "default": "",
+                    "no_construct": true,
+                    "type_name": "str"
+                },
+                "RowSpan": {
+                    "label": "Row span",
+                    "code_name": "row_span",
+                    "type_name": "int",
+                    "default": 1,
+                    "no_construct": true
+                },
+                "ColSpan": {
+                    "label": "Col span",
+                    "code_name": "col_span",
+                    "type_name": "int",
+                    "default": 1,
+                    "no_construct": true
+                },
+                "Envelope": {
+                    "code_name": "envelope",
+                    "type_name": "bool",
+                    "default": ""
+                },
+                "Alias": {
+                    "code_name": "alias",
+                    "type_name": "str",
+                    "default": ""
+                },
+                "PulseNumber": {
+                    "code_name": "pulse_nb",
+                    "type_name": "mint.tools.table_parser.str_to_arr",
+                    "default": null,
+                    "override": true
+                },
+                "StartTime": {
+                    "code_name": "ts_start",
+                    "type_name": "mint.tools.table_parser.parse_timestamp",
+                    "default": 1634217159000000000,
+                    "override": true
+                },
+                "EndTime": {
+                    "code_name": "ts_end",
+                    "type_name": "mint.tools.table_parser.parse_timestamp",
+                    "default": 1634821959000000000,
+                    "override": true
+                },
+                "x": {
+                    "code_name": "x_expr",
+                    "type_name": "str",
+                    "default": "${self}.time"
+                },
+                "y": {
+                    "code_name": "y_expr",
+                    "type_name": "str",
+                    "default": "${self}.data"
+                },
+                "z": {
+                    "code_name": "z_expr",
+                    "type_name": "str",
+                    "default": "${self}.data_secondary"
+                },
+                "PlotType": {
+                    "label": "Plot type",
+                    "code_name": "plot_type",
+                    "type_name": "str",
+                    "default": "PlotXY"
+                },
+                "Status": {
+                    "code_name": "status_info",
+                    "no_construct": true,
+                    "type_name": "iplotlib.interface.iplotSignalAdapter.StatusInfo"
+                }
+            },
+            "table": [
+                [
+                    "codacuda",
+                    "CWS-SCSU-HR00:ML0004-LT-XI",
+                    "1.1",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|81304 points"
+                ],
+                [
+                    "codacuda",
+                    "CWS-SCSU-HR00:ML0002-LT-XI",
+                    "1.2",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|93667 points"
+                ],
+                [
+                    "codacuda",
+                    "CWS-SCSU-HR00:ML0001-LT-XI",
+                    "1.3",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|103725 points"
+                ],
+                [
+                    "codacuda",
+                    "CWS-SCSU-HR00:ML0003-LT-XI",
+                    "1.4",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|153479 points"
+                ],
+                [
+                    "codacuda",
+                    "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI})))",
+                    "1.1",
+                    "",
+                    "",
+                    "",
+                    "max_level",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|81304 points"
+                ],
+                [
+                    "codacuda",
+                    "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))",
+                    "1.4",
+                    "",
+                    "",
+                    "",
+                    "max_level",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|153479 points"
+                ],
+                [
+                    "codacuda",
+                    "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI}))) - ${CWS-SCSU-HR00:ML0004-LT-XI}",
+                    "1.5",
+                    "",
+                    "",
+                    "",
+                    "diff_level",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|81305 points"
+                ],
+                [
+                    "codacuda",
+                    "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))-${CWS-SCSU-HR00:ML0003-LT-XI}",
+                    "1.6",
+                    "",
+                    "",
+                    "",
+                    "diff_level",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Success|153480 points"
+                ]
+            ]
+        }
+    },
+    "main_canvas": {
+        "rows": 6,
+        "cols": 1,
+        "title": null,
+        "font_size": null,
+        "font_color": "#000000",
+        "line_style": null,
+        "line_size": null,
+        "marker": null,
+        "marker_size": null,
+        "step": null,
+        "hi_precision_data": false,
+        "dec_samples": 1000,
+        "legend": true,
+        "grid": true,
+        "mouse_mode": "MM_SELECT",
+        "plots": [
+            [
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": 7530.555639648437,
+                                "end": 7673.147973632813,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0004-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0004-LT-XI",
+                                "alias": "",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 81304,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            },
+                            {
+                                "title": "max_level",
+                                "color": "#ff7f0e",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI})))",
+                                "alias": "max_level",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [
+                                    {
+                                        "title": "max_level",
+                                        "color": null,
+                                        "line_style": null,
+                                        "line_size": null,
+                                        "marker": null,
+                                        "marker_size": null,
+                                        "step": null,
+                                        "hi_precision_data": null,
+                                        "plot_type": "PlotXY",
+                                        "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                        "data_source": "codacuda",
+                                        "name": "CWS-SCSU-HR00:ML0004-LT-XI",
+                                        "alias": "max_level",
+                                        "pulse_nb": null,
+                                        "ts_start": 1634217159000000000,
+                                        "ts_end": 1634821959000000000,
+                                        "ts_relative": false,
+                                        "envelope": "",
+                                        "x_expr": "${self}.time",
+                                        "y_expr": "${self}.data",
+                                        "z_expr": "${self}.data_secondary",
+                                        "children": [],
+                                        "status_info": {
+                                            "msg": "",
+                                            "num_points": 81304,
+                                            "result": "Success",
+                                            "sep": "|",
+                                            "stage": "Initialization"
+                                        },
+                                        "data_access_enabled": true,
+                                        "processing_enabled": true,
+                                        "time_out_value": 60
+                                    }
+                                ],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 81304,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": 7541.78212890625,
+                                "end": 7692.01376953125,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0002-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0002-LT-XI",
+                                "alias": "",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 93667,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": 4821.759301757813,
+                                "end": 5025.462866210937,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0001-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0001-LT-XI",
+                                "alias": "",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 103725,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": 4803.587963867188,
+                                "end": 4999.652758789062,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                "alias": "",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 153479,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            },
+                            {
+                                "title": "max_level",
+                                "color": "#ff7f0e",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))",
+                                "alias": "max_level",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [
+                                    {
+                                        "title": "max_level",
+                                        "color": null,
+                                        "line_style": null,
+                                        "line_size": null,
+                                        "marker": null,
+                                        "marker_size": null,
+                                        "step": null,
+                                        "hi_precision_data": null,
+                                        "plot_type": "PlotXY",
+                                        "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                        "data_source": "codacuda",
+                                        "name": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                        "alias": "max_level",
+                                        "pulse_nb": null,
+                                        "ts_start": 1634217159000000000,
+                                        "ts_end": 1634821959000000000,
+                                        "ts_relative": false,
+                                        "envelope": "",
+                                        "x_expr": "${self}.time",
+                                        "y_expr": "${self}.data",
+                                        "z_expr": "${self}.data_secondary",
+                                        "children": [],
+                                        "status_info": {
+                                            "msg": "",
+                                            "num_points": 153479,
+                                            "result": "Success",
+                                            "sep": "|",
+                                            "stage": "Initialization"
+                                        },
+                                        "data_access_enabled": true,
+                                        "processing_enabled": true,
+                                        "time_out_value": 60
+                                    }
+                                ],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 153479,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": -5.865371252616706,
+                                "end": 135.9719852399668,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "diff_level",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI}))) - ${CWS-SCSU-HR00:ML0004-LT-XI}",
+                                "alias": "diff_level",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [
+                                    {
+                                        "title": "diff_level",
+                                        "color": null,
+                                        "line_style": null,
+                                        "line_size": null,
+                                        "marker": null,
+                                        "marker_size": null,
+                                        "step": null,
+                                        "hi_precision_data": null,
+                                        "plot_type": "PlotXY",
+                                        "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                        "data_source": "codacuda",
+                                        "name": "CWS-SCSU-HR00:ML0004-LT-XI",
+                                        "alias": "diff_level",
+                                        "pulse_nb": null,
+                                        "ts_start": 1634217159000000000,
+                                        "ts_end": 1634821959000000000,
+                                        "ts_relative": false,
+                                        "envelope": "",
+                                        "x_expr": "${self}.time",
+                                        "y_expr": "${self}.data",
+                                        "z_expr": "${self}.data_secondary",
+                                        "children": [],
+                                        "status_info": {
+                                            "msg": "",
+                                            "num_points": 81304,
+                                            "result": "Success",
+                                            "sep": "|",
+                                            "stage": "Initialization"
+                                        },
+                                        "data_access_enabled": true,
+                                        "processing_enabled": true,
+                                        "time_out_value": 60
+                                    }
+                                ],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 81305,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                },
+                {
+                    "row_span": 1,
+                    "col_span": 1,
+                    "title": null,
+                    "axes": [
+                        {
+                            "label": null,
+                            "font_size": null,
+                            "font_color": null,
+                            "_type": "iplotlib.core.axis.LinearAxis",
+                            "original_begin": 1634217159000000000,
+                            "original_end": 1634821959000000000,
+                            "begin": 1634217159000000000,
+                            "end": 1634821959000000000,
+                            "is_date": true,
+                            "window": null,
+                            "follow": false
+                        },
+                        [
+                            {
+                                "label": null,
+                                "font_size": null,
+                                "font_color": null,
+                                "_type": "iplotlib.core.axis.LinearAxis",
+                                "original_begin": null,
+                                "original_end": null,
+                                "begin": -8.907685914214472,
+                                "end": 187.06307278719515,
+                                "is_date": false,
+                                "window": null,
+                                "follow": false
+                            }
+                        ]
+                    ],
+                    "signals": {
+                        "1": [
+                            {
+                                "title": "diff_level",
+                                "color": "#1f77b4",
+                                "line_style": null,
+                                "line_size": null,
+                                "marker": null,
+                                "marker_size": null,
+                                "step": null,
+                                "hi_precision_data": null,
+                                "plot_type": "PlotXY",
+                                "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                "data_source": "codacuda",
+                                "name": "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))-${CWS-SCSU-HR00:ML0003-LT-XI}",
+                                "alias": "diff_level",
+                                "pulse_nb": null,
+                                "ts_start": 1634217159000000000,
+                                "ts_end": 1634821959000000000,
+                                "ts_relative": false,
+                                "envelope": "",
+                                "x_expr": "${self}.time",
+                                "y_expr": "${self}.data",
+                                "z_expr": "${self}.data_secondary",
+                                "children": [
+                                    {
+                                        "title": "diff_level",
+                                        "color": null,
+                                        "line_style": null,
+                                        "line_size": null,
+                                        "marker": null,
+                                        "marker_size": null,
+                                        "step": null,
+                                        "hi_precision_data": null,
+                                        "plot_type": "PlotXY",
+                                        "_type": "iplotlib.interface.iplotSignalAdapter.IplotSignalAdapter",
+                                        "data_source": "codacuda",
+                                        "name": "CWS-SCSU-HR00:ML0003-LT-XI",
+                                        "alias": "diff_level",
+                                        "pulse_nb": null,
+                                        "ts_start": 1634217159000000000,
+                                        "ts_end": 1634821959000000000,
+                                        "ts_relative": false,
+                                        "envelope": "",
+                                        "x_expr": "${self}.time",
+                                        "y_expr": "${self}.data",
+                                        "z_expr": "${self}.data_secondary",
+                                        "children": [],
+                                        "status_info": {
+                                            "msg": "",
+                                            "num_points": 153479,
+                                            "result": "Success",
+                                            "sep": "|",
+                                            "stage": "Initialization"
+                                        },
+                                        "data_access_enabled": true,
+                                        "processing_enabled": true,
+                                        "time_out_value": 60
+                                    }
+                                ],
+                                "status_info": {
+                                    "msg": "",
+                                    "num_points": 153480,
+                                    "result": "Success",
+                                    "sep": "|",
+                                    "stage": "Initialization"
+                                },
+                                "data_access_enabled": true,
+                                "processing_enabled": true,
+                                "time_out_value": 60
+                            }
+                        ]
+                    },
+                    "_type": "iplotlib.core.plot.PlotXY",
+                    "font_size": null,
+                    "font_color": null,
+                    "legend": null,
+                    "grid": null,
+                    "line_style": null,
+                    "line_size": null,
+                    "marker": null,
+                    "marker_size": null,
+                    "step": null,
+                    "hi_precision_data": null,
+                    "dec_samples": null
+                }
+            ]
+        ],
+        "crosshair_enabled": false,
+        "crosshair_color": "red",
+        "crosshair_line_width": 1,
+        "crosshair_horizontal": true,
+        "crosshair_vertical": true,
+        "crosshair_per_plot": false,
+        "streaming": false,
+        "shared_x_axis": false,
+        "autoscale": true,
+        "full_mode_all_stack": true,
+        "auto_refresh": 0,
+        "_type": "iplotlib.core.canvas.Canvas"
+    }
+}
