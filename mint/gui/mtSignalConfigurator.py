@@ -288,6 +288,7 @@ class MTSignalConfigurator(QWidget):
             df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
+            self.resizeViewsToContents()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
