@@ -540,8 +540,7 @@ class MTMainWindow(IplotQtMainWindow):
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
-                                precision_loss = max(x_data) > (1 << 53)
-                                signal_x_is_date |= precision_loss
+                                signal_x_is_date |= bool(max(x_data) > (1 << 53))
                             except (IndexError, ValueError) as _:
                                 continue
 
