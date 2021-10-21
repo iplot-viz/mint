@@ -159,8 +159,8 @@ class MTSignalConfigurator(QWidget):
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
                                      MTSignalItemView(
-                                         PLAYOUT_VIEW_NAME, parent=self),
-                                     MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
+                                         PLAYOUT_VIEW_NAME, parent=self)]#,
+                                    #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
         self._tabs = QTabWidget(parent=self)
