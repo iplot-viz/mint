@@ -1,8 +1,8 @@
 {
     "data_range": {
         "mode": "TIME_RANGE",
-        "ts_start": "2021-10-14T13:12:39",
-        "ts_end": "2021-10-21T13:12:39"
+        "ts_start": "2021-10-14T14:19:50",
+        "ts_end": "2021-10-21T14:19:50"
     },
     "signal_cfg": {
         "view_options": {
@@ -128,13 +128,13 @@
                 "StartTime": {
                     "code_name": "ts_start",
                     "type_name": "mint.tools.table_parser.parse_timestamp",
-                    "default": 1634217159000000000,
+                    "default": 1634221190000000000,
                     "override": true
                 },
                 "EndTime": {
                     "code_name": "ts_end",
                     "type_name": "mint.tools.table_parser.parse_timestamp",
-                    "default": 1634821959000000000,
+                    "default": 1634825990000000000,
                     "override": true
                 },
                 "x": {
@@ -180,7 +180,7 @@
                     "",
                     "",
                     "",
-                    "Success|81304 points"
+                    "Success|81673 points"
                 ],
                 [
                     "codacuda",
@@ -197,7 +197,7 @@
                     "",
                     "",
                     "",
-                    "Success|93667 points"
+                    "Success|95855 points"
                 ],
                 [
                     "codacuda",
@@ -214,7 +214,7 @@
                     "",
                     "",
                     "",
-                    "Success|103725 points"
+                    "Success|103924 points"
                 ],
                 [
                     "codacuda",
@@ -231,7 +231,7 @@
                     "",
                     "",
                     "",
-                    "Success|153479 points"
+                    "Success|153957 points"
                 ],
                 [
                     "codacuda",
@@ -248,7 +248,7 @@
                     "",
                     "",
                     "",
-                    "Success|81304 points"
+                    "Success|81673 points"
                 ],
                 [
                     "codacuda",
@@ -265,7 +265,7 @@
                     "",
                     "",
                     "",
-                    "Success|153479 points"
+                    "Success|153957 points"
                 ],
                 [
                     "codacuda",
@@ -282,7 +282,7 @@
                     "",
                     "",
                     "",
-                    "Success|81305 points"
+                    "Success|81674 points"
                 ],
                 [
                     "codacuda",
@@ -299,7 +299,7 @@
                     "",
                     "",
                     "",
-                    "Success|153480 points"
+                    "Success|153958 points"
                 ]
             ]
         }
@@ -332,10 +332,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -373,8 +373,8 @@
                                 "name": "CWS-SCSU-HR00:ML0004-LT-XI",
                                 "alias": "",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -383,9 +383,8 @@
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 81304,
+                                    "num_points": 81673,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -407,8 +406,8 @@
                                 "name": "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI})))",
                                 "alias": "max_level",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -430,8 +429,8 @@
                                         "name": "CWS-SCSU-HR00:ML0004-LT-XI",
                                         "alias": "max_level",
                                         "pulse_nb": null,
-                                        "ts_start": 1634217159000000000,
-                                        "ts_end": 1634821959000000000,
+                                        "ts_start": 1634221190000000000,
+                                        "ts_end": 1634825990000000000,
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
@@ -440,9 +439,8 @@
                                         "children": [],
                                         "status_info": {
                                             "msg": "",
-                                            "num_points": 81304,
+                                            "num_points": 81673,
                                             "result": "Success",
-                                            "sep": "|",
                                             "stage": "Initialization"
                                         },
                                         "data_access_enabled": true,
@@ -452,9 +450,8 @@
                                 ],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 81304,
+                                    "num_points": 81673,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -486,10 +483,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -527,8 +524,8 @@
                                 "name": "CWS-SCSU-HR00:ML0002-LT-XI",
                                 "alias": "",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -537,9 +534,8 @@
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 93667,
+                                    "num_points": 95855,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -571,10 +567,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -612,8 +608,8 @@
                                 "name": "CWS-SCSU-HR00:ML0001-LT-XI",
                                 "alias": "",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -622,9 +618,8 @@
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 103725,
+                                    "num_points": 103924,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -656,10 +651,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -697,8 +692,8 @@
                                 "name": "CWS-SCSU-HR00:ML0003-LT-XI",
                                 "alias": "",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -707,9 +702,8 @@
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 153479,
+                                    "num_points": 153957,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -731,8 +725,8 @@
                                 "name": "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))",
                                 "alias": "max_level",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -754,8 +748,8 @@
                                         "name": "CWS-SCSU-HR00:ML0003-LT-XI",
                                         "alias": "max_level",
                                         "pulse_nb": null,
-                                        "ts_start": 1634217159000000000,
-                                        "ts_end": 1634821959000000000,
+                                        "ts_start": 1634221190000000000,
+                                        "ts_end": 1634825990000000000,
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
@@ -764,9 +758,8 @@
                                         "children": [],
                                         "status_info": {
                                             "msg": "",
-                                            "num_points": 153479,
+                                            "num_points": 153957,
                                             "result": "Success",
-                                            "sep": "|",
                                             "stage": "Initialization"
                                         },
                                         "data_access_enabled": true,
@@ -776,9 +769,8 @@
                                 ],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 153479,
+                                    "num_points": 153957,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -810,10 +802,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -826,8 +818,8 @@
                                 "_type": "iplotlib.core.axis.LinearAxis",
                                 "original_begin": null,
                                 "original_end": null,
-                                "begin": -5.865371252616706,
-                                "end": 135.9719852399668,
+                                "begin": -5.9334759751778625,
+                                "end": 135.9095843367064,
                                 "is_date": false,
                                 "window": null,
                                 "follow": false
@@ -851,8 +843,8 @@
                                 "name": "np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI}))) - ${CWS-SCSU-HR00:ML0004-LT-XI}",
                                 "alias": "diff_level",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -874,8 +866,8 @@
                                         "name": "CWS-SCSU-HR00:ML0004-LT-XI",
                                         "alias": "diff_level",
                                         "pulse_nb": null,
-                                        "ts_start": 1634217159000000000,
-                                        "ts_end": 1634821959000000000,
+                                        "ts_start": 1634221190000000000,
+                                        "ts_end": 1634825990000000000,
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
@@ -884,9 +876,8 @@
                                         "children": [],
                                         "status_info": {
                                             "msg": "",
-                                            "num_points": 81304,
+                                            "num_points": 81673,
                                             "result": "Success",
-                                            "sep": "|",
                                             "stage": "Initialization"
                                         },
                                         "data_access_enabled": true,
@@ -896,9 +887,8 @@
                                 ],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 81305,
+                                    "num_points": 81674,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -930,10 +920,10 @@
                             "font_size": null,
                             "font_color": null,
                             "_type": "iplotlib.core.axis.LinearAxis",
-                            "original_begin": 1634217159000000000,
-                            "original_end": 1634821959000000000,
-                            "begin": 1634217159000000000,
-                            "end": 1634821959000000000,
+                            "original_begin": 1634221190000000000,
+                            "original_end": 1634825990000000000,
+                            "begin": 1634221190000000000,
+                            "end": 1634825990000000000,
                             "is_date": true,
                             "window": null,
                             "follow": false
@@ -946,8 +936,8 @@
                                 "_type": "iplotlib.core.axis.LinearAxis",
                                 "original_begin": null,
                                 "original_end": null,
-                                "begin": -8.907685914214472,
-                                "end": 187.06307278719515,
+                                "begin": -8.909438131412434,
+                                "end": 187.09972281631585,
                                 "is_date": false,
                                 "window": null,
                                 "follow": false
@@ -971,8 +961,8 @@
                                 "name": "np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))-${CWS-SCSU-HR00:ML0003-LT-XI}",
                                 "alias": "diff_level",
                                 "pulse_nb": null,
-                                "ts_start": 1634217159000000000,
-                                "ts_end": 1634821959000000000,
+                                "ts_start": 1634221190000000000,
+                                "ts_end": 1634825990000000000,
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
@@ -994,8 +984,8 @@
                                         "name": "CWS-SCSU-HR00:ML0003-LT-XI",
                                         "alias": "diff_level",
                                         "pulse_nb": null,
-                                        "ts_start": 1634217159000000000,
-                                        "ts_end": 1634821959000000000,
+                                        "ts_start": 1634221190000000000,
+                                        "ts_end": 1634825990000000000,
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
@@ -1004,9 +994,8 @@
                                         "children": [],
                                         "status_info": {
                                             "msg": "",
-                                            "num_points": 153479,
+                                            "num_points": 153957,
                                             "result": "Success",
-                                            "sep": "|",
                                             "stage": "Initialization"
                                         },
                                         "data_access_enabled": true,
@@ -1016,9 +1005,8 @@
                                 ],
                                 "status_info": {
                                     "msg": "",
-                                    "num_points": 153480,
+                                    "num_points": 153958,
                                     "result": "Success",
-                                    "sep": "|",
                                     "stage": "Initialization"
                                 },
                                 "data_access_enabled": true,
@@ -1051,7 +1039,6 @@
         "streaming": false,
         "shared_x_axis": false,
         "autoscale": true,
-        "full_mode_all_stack": true,
         "auto_refresh": 0,
         "_type": "iplotlib.core.canvas.Canvas"
     }
