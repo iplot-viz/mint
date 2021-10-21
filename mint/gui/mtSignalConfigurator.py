@@ -273,6 +273,7 @@ class MTSignalConfigurator(QWidget):
         export_columns = [mtbp.get_column_name(
             self._model.blueprint, k) for k in mtbp.get_keys_with_export(self._model.blueprint)]
         try:
+            self.busy.emit()
             df = self._model.get_dataframe().drop(labels=export_columns, axis=1)
             return df.to_csv(file_path, index=False)
         except Exception as e:
@@ -282,9 +283,12 @@ class MTSignalConfigurator(QWidget):
                 f"Error when dumping variables to file: {file_path} {e}")
             logger.exception(e)
             box.exec_()
+        finally:
+            self.ready.emit()
 
     def import_csv(self, file_path):
         try:
+            self.busy.emit()
             df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
@@ -295,6 +299,9 @@ class MTSignalConfigurator(QWidget):
             box.setText(f"Error parsing file. {e}")
             logger.exception(e)
             box.exec_()
+        finally:
+            self.ready.emit()
+
 
     def export_dict(self) -> dict:
         output = dict()
