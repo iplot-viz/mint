@@ -109,7 +109,7 @@ def runApp(qApp: QApplication, args=None):
         max_width = max(screen.geometry().width(), max_width)
     logger.debug(f"Detected max screen width: {max_width}")
     AccessHelper.num_samples = max_width
-    # AccessHelper.num_samples_override = False
+    AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
     data_sources = [AccessHelper.da.getDefaultDSName()]
