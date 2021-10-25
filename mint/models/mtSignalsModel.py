@@ -126,7 +126,7 @@ class MTSignalsModel(QAbstractItemModel):
             empty_row.loc[0, mtbp.get_column_name(
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
             self._table = self._table.append(empty_row).reset_index(drop=True)
-            self.layoutChanged.emit()
+        self.layoutChanged.emit()
 
         self.endInsertRows()
 
@@ -163,21 +163,20 @@ class MTSignalsModel(QAbstractItemModel):
                     df.rename({df_column_name: mtbp.get_column_name(
                         self._blueprint, df_column_name)}, axis=1, inplace=True)
 
-        for r, row in df.iterrows():
-            for c, col_name in enumerate(columns):
-                val = ''
-                if col_name in df.columns:
-                    val = row[col_name]
-                elif col_name.lower() in df.columns:
-                    val = row[col_name.lower()]
-                elif col_name.upper() in df.columns:
-                    val = row[col_name.upper()]
-                elif col_name.capitalize() in df.columns:
-                    val = row[col_name.capitalize()]
-                else:
-                    logger.debug(
-                        f"{col_name} is not present in given dataframe.")
-                self._table.iloc[r, c] = val
+        for c, col_name in enumerate(columns):
+            if col_name in df.columns:
+                row = df.loc[:, col_name]
+            elif col_name.lower() in df.columns:
+                row = df.loc[:, col_name.lower()]
+            elif col_name.upper() in df.columns:
+                row = df.loc[:, col_name.upper()]
+            elif col_name.capitalize() in df.columns:
+                row = df.loc[:, col_name.capitalize()]
+            else:
+                logger.debug(
+                    f"{col_name} is not present in given dataframe.")
+                continue
+            self._table.iloc[:-1, c] = row
 
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
@@ -216,19 +215,22 @@ class MTSignalsModel(QAbstractItemModel):
 
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         signal.status_info.reset()
-        self.setData(self.createIndex(
-            row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
-        QCoreApplication.processEvents()
+        # self.setData(self.createIndex(
+        #     row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
+        self._table.iloc[row_idx][self._table.columns.size - 1] = str(signal.status_info)
+        # QCoreApplication.processEvents()
 
         if fetch_data:
-            self.setData(self.createIndex(
-                row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
-            QCoreApplication.processEvents()
+            # self.setData(self.createIndex(
+            #     row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
+            # QCoreApplication.processEvents()
+            self._table.iloc[row_idx][self._table.columns.size - 1] = str(Result.BUSY)
             signal.get_data()
 
-        self.setData(self.createIndex(
-            row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
-        QCoreApplication.processEvents()
+        # self.setData(self.createIndex(
+        #     row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
+        # QCoreApplication.processEvents()
+        self._table.iloc[row_idx][self._table.columns.size - 1] = str(signal.status_info)
 
     @contextmanager
     def init_create_signals(self):

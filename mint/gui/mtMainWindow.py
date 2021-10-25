@@ -282,6 +282,7 @@ class MTMainWindow(IplotQtMainWindow):
         if signal_cfg:
             self.sigCfgWidget.import_dict(signal_cfg)
 
+        self.indicateReady()
         ParserHelper.env.clear()  # Removes existing aliased signals.
         path = []
         # Reset every waypoint to status 'Ready'
@@ -347,6 +348,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.canvasStack.currentWidget().set_canvas(self.canvas)
             self.canvasStack.refreshLinks()
             self.indicateReady()
+            self.sigCfgWidget.resizeViewsToContents()
 
     def import_json(self, file_path: os.PathLike):
         self.statusBar().showMessage(f"Importing {file_path} ..")
