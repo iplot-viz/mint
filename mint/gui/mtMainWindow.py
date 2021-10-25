@@ -220,7 +220,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def reDraw(self, discard_axis_range: bool = True):
         self.indicateBusy()
-        super().reDraw()
+        super().reDraw(discard_axis_range)
         self.indicateReady()
 
     def onExport(self):
