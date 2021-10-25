@@ -1,0 +1,2 @@
+DS,Variable,Stack,Row span,Col span,Envelope,Alias,PulseNumber,StartTime,EndTime,x,y,z,Plot type,Status
+codacuda,CTRL-SYSM-COM-4501-DS:SRV3601-NSBPS,1.1,,,,,,,,(${self}.time-${self}.time[0])/1000000000,,,,Success|58983 points
