@@ -99,7 +99,8 @@ class MTSignalsModel(QAbstractItemModel):
                     value.replace('"', "'")
 
                 self._table.iloc[index.row()][index.column()] = value
-
+                if (index.row() == self._table.index.size - 1):
+                    self.insertRows(index.row() + 1, 1, QModelIndex())
                 self.dataChanged.emit(self.createIndex(index.row(), index.column()), self.createIndex(
                     index.row(), index.column()))
 
@@ -147,11 +148,11 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        return self._table
+        return self._table.drop(self._table.index.size - 1, axis=0)
 
     def set_dataframe(self, df: pd.DataFrame):
         self.removeRows(0, self.rowCount(None))
-        self.insertRows(0, df.index.size)
+        self.insertRows(0, df.index.size + 1)
 
         # Accomodate for missing columns in df.
         columns = list(mtbp.get_column_names(self._blueprint))
