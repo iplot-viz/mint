@@ -289,13 +289,13 @@ class MTSignalsModel(QAbstractItemModel):
             if k.startswith('$'):
                 continue
 
-            type_func = v.get('type')
+            column_name = mtbp.get_column_name(self._blueprint, k)
+            default_value = v.get('default') or ''
+            out.update({column_name: default_value})
 
+            type_func = v.get('type')
             if not callable(type_func):
                 continue
-
-            column_name = mtbp.get_column_name(self._blueprint, k)
-            default_value = v.get('default')
 
             # Override global values with locals for fields with 'override' attribute
             if v.get('override'):
