@@ -218,9 +218,9 @@ class MTMainWindow(IplotQtMainWindow):
         super().applyPreferences()
         self.indicateReady()
 
-    def reDraw(self, discard_axis_range: bool = True):
+    def reDraw(self, discard_axis_range: bool = True, discard_focused_plot: bool = True):
         self.indicateBusy()
-        super().reDraw(discard_axis_range)
+        super().reDraw(discard_axis_range, discard_focused_plot)
         self.indicateReady()
 
     def onExport(self):
