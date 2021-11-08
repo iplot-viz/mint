@@ -175,6 +175,10 @@ class MTSignalConfigurator(QWidget):
             self._tabs.addTab(wdgt, wdgt.windowTitle())
             wdgt.view().setItemDelegateForColumn(0, self._ds_delegate)
 
+        self._tabs.currentChanged.connect(self.onCurrentViewChanged)
+        # Set menu for configure columns button.
+        self._toolbar.configureColsBtn.setMenu(self._signal_item_widgets[0].configureColsMenu())
+
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
         self.layout().addWidget(self._toolbar)
@@ -182,6 +186,10 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self.parseBtn)
         self.model.dataChanged.connect(self.resizeViewToColumns)
         self.model.insertRows(0, 1, QModelIndex())
+
+    def onCurrentViewChanged(self, index: int):
+        currentView = self.itemWidgets[index]
+        self._toolbar.configureColsBtn.setMenu(currentView.configureColsMenu())
 
     def onParseButtonPressed(self, val: bool):
         logger.debug('Build order:')

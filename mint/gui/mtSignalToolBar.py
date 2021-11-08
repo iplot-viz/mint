@@ -5,9 +5,9 @@
 
 import pkgutil
 
-from PySide2.QtCore import QMargins, Signal
+from PySide2.QtCore import QMargins
 from PySide2.QtGui import QIcon, QPixmap
-from PySide2.QtWidgets import QAction, QHBoxLayout, QToolBar, QWidget
+from PySide2.QtWidgets import QAction, QHBoxLayout, QPushButton, QToolBar, QWidget
 
 
 class MTSignalsToolBar(QWidget):
@@ -27,9 +27,12 @@ class MTSignalsToolBar(QWidget):
 
         self.openAction = QAction(QIcon(open_pxmap), "&Open CSV")
         self.saveAction = QAction(QIcon(save_pxmap), "&Save CSV")
+        self.configureColsBtn = QPushButton("Hide/Show &Columns")
         
         tb = QToolBar()
         tb.addAction(self.openAction)
         tb.addAction(self.saveAction)
+        tb.addSeparator()
+        tb.addWidget(self.configureColsBtn)
 
         self.layout().addWidget(tb)
