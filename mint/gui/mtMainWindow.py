@@ -161,7 +161,8 @@ class MTMainWindow(IplotQtMainWindow):
         # Setup connections
         self.drawBtn.clicked.connect(self.drawClicked)
         self.streamBtn.clicked.connect(self.streamClicked)
-        self.streamerCfgWidget.streamStarted.connect(self.doStream)
+        self.streamerCfgWidget.streamStarted.connect(self.onStreamStarted)
+        self.streamerCfgWidget.streamStopped.connect(self.onStreamStopped)
         self.dataRangeSelector.cancelRefresh.connect(self.stopAutoRefresh)
         self.resize(1920, 1080)
 
@@ -427,29 +428,32 @@ class MTMainWindow(IplotQtMainWindow):
 
     def streamClicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
-        if not self.streamerCfgWidget.isActivated():
-            self.streamerCfgWidget.activate()
-            self.streamBtn.setText("Stop")
+        if self.streamerCfgWidget.isActivated():
+            self.streamBtn.setText("Stopping")
+            self.streamerCfgWidget.stop()
         else:
-            self.streamerCfgWidget.deActivate()
-            self.streamBtn.setText("Stream")
+            self.streamerCfgWidget.show()
 
     def streamCallback(self, signal):
         self.canvasStack.currentWidget().matplotlib_canvas.refresh_signal(signal)
 
-    def doStream(self):
+    def onStreamStarted(self):
         self.streamerCfgWidget.hide()
+        self.streamBtn.setText("Stop")
         self.build(stream=True)
 
         self.indicateBusy()
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
+        self.canvasStack.refreshLinks()
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
         self.streamerCfgWidget.streamer.start(
             self.canvas, self.streamCallback)
-        self.streamBtn.setText("Stop")
         self.indicateReady()
+    
+    def onStreamStopped(self):
+        self.streamBtn.setText("Stream")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()
@@ -513,7 +517,8 @@ class MTMainWindow(IplotQtMainWindow):
                         existing[3][1] = waypt.ts_end
 
             signal = waypt.func(*waypt.args, **waypt.kwargs)
-            self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            if not stream:
+                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
                 signal)
 
@@ -537,14 +542,17 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
-                    signal_x_is_date = False
-                    for stack, signals in rows[row + 1][2].items():
-                        for signal in signals:
-                            try:
-                                x_data = signal.get_data()[0]
-                                signal_x_is_date |= bool(max(x_data) > (1 << 53))
-                            except (IndexError, ValueError) as _:
-                                continue
+                    if not canvas.streaming:
+                        signal_x_is_date = False
+                        for stack, signals in rows[row + 1][2].items():
+                            for signal in signals:
+                                try:
+                                    x_data = signal.get_data()[0]
+                                    signal_x_is_date |= bool(max(x_data) > (1 << 53))
+                                except (IndexError, ValueError) as _:
+                                    continue
+                    else:
+                        signal_x_is_date = True
 
                     y_axes = [LinearAxis()
                               for _ in range(len(rows[row + 1][2].items()))]
