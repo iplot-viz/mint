@@ -8,18 +8,21 @@ from PySide2.QtWidgets import QDialog
 
 from mint.gui.compiled.ui_streamerconfig import Ui_StreamerConfig
 
+from iplotlib.data_access.streamer import CanvasStreamer
 from iplotLogging import setupLogger as sl
 
 logger = sl.get_logger(__name__, "INFO")
 
 class MTStreamConfigurator(QDialog):
     streamStarted = Signal()
+    streamStopped = Signal()
 
     def __init__(self, parent=None, **kwargs):
 
         super().__init__(parent, **kwargs)
 
-        self.streamer = None
+        self.streamer = CanvasStreamer(kwargs.get('da'))
+        self._active = False
         self.streamTimeWindow = 3600
         self.ui = Ui_StreamerConfig()
         self.ui.setupUi(self)
@@ -35,18 +38,21 @@ class MTStreamConfigurator(QDialog):
             self.ui.windowComboBox.addItem(v, k)
         
         # To indicate start of stream or cancellation
-        self.ui.startButton.clicked.connect(self.streamStarted.emit)
+        self.ui.startButton.clicked.connect(self.start)
         self.ui.cancelButton.clicked.connect(self.hide)
 
     def timeWindow(self) -> int:
         return int(self.ui.windowSpinBox.value())
 
     def isActivated(self) -> bool:
-        return self.streamer is not None
+        return self._active
 
-    def activate(self):
-        self.show()
+    def start(self):
+        self._active = True
+        self.streamStarted.emit()
 
-    def deActivate(self):
+    def stop(self):
         self.streamer.stop()
-        self.streamer = None
+        self._active = False
+        self.streamStopped.emit()
+    
