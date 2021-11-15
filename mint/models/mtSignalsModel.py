@@ -191,6 +191,8 @@ class MTSignalsModel(QAbstractItemModel):
         # 1. blueprint defines columns..
         try:
             self._blueprint = mtbp.parse_raw_blueprint(input_dict['blueprint'])
+            if not self._blueprint.get("PulseNumber").get("label"):
+                self._blueprint.get("PulseNumber").update({"label": "PulseId"})
         except KeyError:
             pass
         # 2. table

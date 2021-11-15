@@ -42,6 +42,7 @@
         "default": ""
     },
     "PulseNumber": {
+        "label": "PulseId",
         "code_name": "pulse_nb",
         "type_name": "mint.tools.table_parser.str_to_arr",
         "default": "",

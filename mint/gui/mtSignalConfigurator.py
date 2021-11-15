@@ -45,7 +45,7 @@ NEAT_VIEW = {
         "Col span": True,
         "Envelope": True,
         "Alias": True,
-        "PulseNumber": True,
+        "PulseId": True,
         "StartTime": True,
         "EndTime": True,
         "x": True,
@@ -62,7 +62,7 @@ NEAT_VIEW = {
         "Col span": False,
         "Envelope": True,
         "Alias": True,
-        "PulseNumber": True,
+        "PulseId": True,
         "StartTime": True,
         "EndTime": True,
         "x": False,
@@ -79,7 +79,7 @@ NEAT_VIEW = {
         "Col span": True,
         "Envelope": False,
         "Alias": True,
-        "PulseNumber": False,
+        "PulseId": False,
         "StartTime": False,
         "EndTime": False,
         "x": False,
@@ -96,7 +96,7 @@ NEAT_VIEW = {
         "Col span": False,
         "Envelope": False,
         "Alias": True,
-        "PulseNumber": True,
+        "PulseId": True,
         "StartTime": True,
         "EndTime": True,
         "x": True,
@@ -346,7 +346,14 @@ class MTSignalConfigurator(QWidget):
         view_options = input_dict.get('view_options') or NEAT_VIEW
         for view in self._signal_item_widgets:
             key = view.windowTitle()
-            view.import_dict(view_options.get(key) or NEAT_VIEW.get(key))
+            options = view_options.get(key) or NEAT_VIEW.get(key)
+            for k, v in options.copy().items():
+                if k not in mtbp.get_column_names(self._model.blueprint):
+                    options.pop(k)
+                    col_name = mtbp.get_column_name(self._model.blueprint, k)
+                    if col_name:
+                        options.update({col_name: v})
+            view.import_dict(options)
         self._tabs.currentWidget().show()
         QCoreApplication.processEvents()
 
