@@ -185,7 +185,7 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self._tabs)
         self.layout().addWidget(self.parseBtn)
         self.model.dataChanged.connect(self.resizeViewToColumns)
-        self.model.insertRows(0, 1, QModelIndex())
+        self.model.insertRows(0, 50, QModelIndex())
 
     def onCurrentViewChanged(self, index: int):
         currentView = self.itemWidgets[index]
@@ -259,8 +259,9 @@ class MTSignalConfigurator(QWidget):
 
     def setBulkContents(self, text: str, indices: typing.List[QModelIndex]):
         self.busy.emit()
-        for idx in indices:
-            self._model.setData(idx, text, Qt.EditRole)
+        with self._model.activate_fast_mode():
+            for idx in indices:
+                self._model.setData(idx, text, Qt.EditRole)
         self.ready.emit()
 
     def deleteContents(self):
@@ -272,9 +273,83 @@ class MTSignalConfigurator(QWidget):
         currentTabId = self._tabs.currentIndex()
         selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
         
-        text = QCoreApplication.instance().clipboard().text()
-        self.setBulkContents(text, selectedIds)
-    
+        if (not len(selectedIds)):
+            if not self._model.rowCount(None):
+                self.insertRow()
+                selectedIds = [self._model.createIndex(0, 0)]
+            else:
+                return
+
+        text = QCoreApplication.instance().clipboard().text() # type: str
+        text = text.strip() # sometimes, user might have copied unnecessary line breaks at the start / end.
+        # must have one header line and atleast another line with data values
+        lines = text.splitlines()
+        if len(lines) < 2:
+            self.setBulkContents(text, selectedIds)
+            return
+
+        # check for presence of magic headers.
+        headers = lines[0]
+        column_names = headers.split(',')
+        valid_column_names = list(mtbp.get_column_names(self._model.blueprint))
+        if not all([name in valid_column_names for name in column_names]):
+            self.setBulkContents(text, selectedIds)
+            return
+
+        # text has the 'magic' headers. So paste it row by row.
+        data = lines[1:]
+        row = selectedIds[0].row()
+        self.busy.emit()
+
+        for line in data:
+            values = line.split(',')
+        
+            if(len(values) != len(column_names)):
+                continue
+            
+            for i in range(len(values)):
+                column_idx = valid_column_names.index(column_names[i])
+                idx = self._model.createIndex(row, column_idx)
+                with self._model.activate_fast_mode():
+                    self._model.setData(idx, values[i], Qt.EditRole)
+            row += 1
+        
+        self.resizeViewsToContents()
+        self.ready.emit()
+
+    def copyContentsToClipboard(self):
+        currentTabId = self._tabs.currentIndex()
+        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
+        
+        contents = defaultdict(lambda: defaultdict(str))
+        rows = set()
+        columns = set()
+        for idx in selectedIds:
+            value = self._model.data(idx, Qt.DisplayRole)
+            column = idx.column()
+            row = idx.row()
+            contents[column][row] = value
+            columns.add(column)
+            rows.add(row)
+
+        text = ""
+        for column in columns:
+            column_name = self._model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
+            text += column_name + ','
+        if len(text): # remove the last comma character
+            text = text[:-1]
+        text += '\n'
+        
+        for row in rows:
+            row_text = ''
+            for column in columns:
+                row_text += contents[column][row] + ','
+            if len(row_text):  # remove the last comma character
+                row_text = row_text[:-1]
+            text += row_text + '\n'
+        
+        QCoreApplication.instance().clipboard().setText(text)
+
     def duplicateContents(self):
         currentTabId = self._tabs.currentIndex()
         selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
@@ -290,8 +365,9 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogDiscardButton")), "Delete", self.deleteContents)
-        context_menu.addAction("Paste", self.pasteContentsFromClipboard)
         context_menu.addAction("Duplicate", self.duplicateContents)
+        context_menu.addAction("Copy", self.copyContentsToClipboard)
+        context_menu.addAction("Paste", self.pasteContentsFromClipboard)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.popup(event.globalPos())
@@ -403,54 +479,55 @@ class MTSignalConfigurator(QWidget):
         error_msgs = []
         graph = defaultdict(list)
         statusColIdx = self.model.columnCount(QModelIndex()) - 1
-        for idx, row in df.iterrows():
-            logger.debug(f"Row: {idx}")
-            modelIdx = self.model.createIndex(idx, statusColIdx)
-            row_type, name = _row_predicate(
-                row, aliases, self._model.blueprint)
+        with self._model.activate_fast_mode():
+            for idx, row in df.iterrows():
+                logger.debug(f"Row: {idx}")
+                modelIdx = self.model.createIndex(idx, statusColIdx)
+                row_type, name = _row_predicate(
+                    row, aliases, self._model.blueprint)
 
-            p = Parser().set_expression(name)
+                p = Parser().set_expression(name)
 
-            for var_name in p.var_map.keys():
-                if var_name in duplicates:
-                    sinfo = StatusInfo()
-                    sinfo.result = Result.INVALID
-                    conflict_row_ids = []
-                    for alias_idx, alias in enumerate(aliases):
-                        if var_name == alias:
-                            conflict_row_ids.append(alias_idx)
-                    sinfo.msg = f"Conflicted row: {idx + 1} , '{var_name}' is defined in row (s): {conflict_row_ids}"
-                    error_msgs.append(sinfo.msg)
-                    self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
-                    if idx in graph:
-                        graph.pop(idx)
-            else:
-                if row_type != RowAliasType.Mixed:
-                    graph[idx].clear()
-                    continue
-
-                logger.debug(f"Is a mixed alias")
-                for k in p.var_map.keys():
-                    try:
-                        alias_idx = aliases.index(k)
-                        if alias_idx == idx:
-                            sinfo = StatusInfo()
-                            sinfo.result = Result.INVALID
-                            sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
-                            error_msgs.append(sinfo.msg)
-                            self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
-                            break
-                        elif idx not in graph[alias_idx]:
-                            graph[idx].append(aliases.index(k))
-                        else:
-                            sinfo = StatusInfo()
-                            sinfo.result = Result.INVALID
-                            sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
-                            error_msgs.append(sinfo.msg)
-                            self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
-                            break
-                    except ValueError:
+                for var_name in p.var_map.keys():
+                    if var_name in duplicates:
+                        sinfo = StatusInfo()
+                        sinfo.result = Result.INVALID
+                        conflict_row_ids = []
+                        for alias_idx, alias in enumerate(aliases):
+                            if var_name == alias:
+                                conflict_row_ids.append(alias_idx)
+                        sinfo.msg = f"Conflicted row: {idx + 1} , '{var_name}' is defined in row (s): {conflict_row_ids}"
+                        error_msgs.append(sinfo.msg)
+                        self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                        if idx in graph:
+                            graph.pop(idx)
+                else:
+                    if row_type != RowAliasType.Mixed:
+                        graph[idx].clear()
                         continue
+
+                    logger.debug(f"Is a mixed alias")
+                    for k in p.var_map.keys():
+                        try:
+                            alias_idx = aliases.index(k)
+                            if alias_idx == idx:
+                                sinfo = StatusInfo()
+                                sinfo.result = Result.INVALID
+                                sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
+                                error_msgs.append(sinfo.msg)
+                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                break
+                            elif idx not in graph[alias_idx]:
+                                graph[idx].append(aliases.index(k))
+                            else:
+                                sinfo = StatusInfo()
+                                sinfo.result = Result.INVALID
+                                sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
+                                error_msgs.append(sinfo.msg)
+                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                break
+                        except ValueError:
+                            continue
         
         if error_msgs:
             error_msg = '\n----\n'.join(error_msgs)
