@@ -25,8 +25,8 @@ class MTSignalsToolBar(QWidget):
         save_pxmap.loadFromData(pkgutil.get_data(
             'mint.gui', 'icons/save_as.png'))
 
-        self.openAction = QAction(QIcon(open_pxmap), "&Open CSV")
-        self.saveAction = QAction(QIcon(save_pxmap), "&Save CSV")
+        self.openAction = QAction(QIcon(open_pxmap), "&Open Signal Sets")
+        self.saveAction = QAction(QIcon(save_pxmap), "&Save Signal Sets")
         self.configureColsBtn = QPushButton("Hide/Show &Columns")
         
         tb = QToolBar()

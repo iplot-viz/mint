@@ -31,10 +31,7 @@ def runApp(qApp: QApplication, args=None):
 
     from importlib import metadata
 
-    iplotdataaccess_version = metadata.version('iplotDataAccess')
     iplotlib_version = metadata.version('iplotlib')
-    iplotlogging_version = metadata.version('iplotLogging')
-    iplotprocessing_version = metadata.version('iplotProcessing')
 
     logger = ls.get_logger(__name__)
 
@@ -129,7 +126,7 @@ def runApp(qApp: QApplication, args=None):
     mainWin.setWindowTitle(
         f"{qApp.applicationName()}: {qApp.applicationPid()}")
     mainWin.statusBar().addPermanentWidget(
-        QLabel("Tool version {} iplotlib {} |".format(qApp.applicationVersion(), iplotlib_version)))
+        QLabel("MINT version {} iplotlib {} |".format(qApp.applicationVersion(), iplotlib_version)))
 
     # Preload the table from a CSV file, if provided
     if args.csv_file:

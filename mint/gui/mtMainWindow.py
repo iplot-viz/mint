@@ -27,6 +27,7 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 
 from iplotDataAccess.dataAccess import DataAccess
+from mint.gui.mtAbout import MTAbout
 
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
@@ -100,6 +101,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.graphicsArea.layout().addWidget(self.toolBar)
         self.graphicsArea.layout().addWidget(self.canvasStack)
         self.streamerCfgWidget = MTStreamConfigurator(self)
+        self.aboutMINT = MTAbout(self)
 
         if impl.lower() == "matplotlib":
             from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
@@ -117,18 +119,21 @@ class MTMainWindow(IplotQtMainWindow):
         exit_action.setShortcuts(QKeySequence.Quit)
         exit_action.triggered.connect(QApplication.closeAllWindows)
 
-        about_action = QAction("About Qt", self.menuBar())
-        about_action.setShortcuts(QKeySequence.New)
-        about_action.setStatusTip("About Qt")
-        about_action.triggered.connect(QApplication.aboutQt)
+        about_qt_action = QAction("About Qt", self.menuBar())
+        about_qt_action.setStatusTip("About Qt")
+        about_qt_action.triggered.connect(QApplication.aboutQt)
 
-        help_menu.addSection("Testsection")
+        about_action = QAction("About MINT", self.menuBar())
+        about_action.setStatusTip("About MINT")
+        about_action.triggered.connect(self.aboutMINT.exec_)
+
         help_menu.addAction(about_action)
+        help_menu.addAction(about_qt_action)
 
-        file_menu.addAction(self.toolBar.exportAction)
-        file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.sigCfgWidget.toolBar().openAction)
         file_menu.addAction(self.sigCfgWidget.toolBar().saveAction)
+        file_menu.addAction(self.toolBar.importAction)
+        file_menu.addAction(self.toolBar.exportAction)
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
