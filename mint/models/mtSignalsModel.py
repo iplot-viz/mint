@@ -6,11 +6,12 @@
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
+import math
 import json
 import pandas as pd
 import typing
 
-from PySide2.QtCore import QAbstractItemModel, QCoreApplication, QModelIndex, Qt
+from PySide2.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result
 
@@ -18,8 +19,6 @@ from mint.models.utils import mtBlueprintParser as mtbp
 from mint.tools.table_parser import get_value
 
 import iplotLogging.setupLogger as ls
-
-from numpy.core.shape_base import stack
 
 logger = ls.get_logger(__name__)
 
@@ -53,6 +52,9 @@ class MTSignalsModel(QAbstractItemModel):
         column_names = list(mtbp.get_column_names(blueprint))
 
         self._blueprint = blueprint
+        self._max_id = -1
+        self._resize_coeff = 0.25
+        self._fast_mode = False # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
         mtbp.parse_raw_blueprint(self._blueprint)
 
         self._table = pd.DataFrame(columns=column_names)
@@ -90,19 +92,39 @@ class MTSignalsModel(QAbstractItemModel):
             except IndexError:
                 return "N/A"
 
+    @contextmanager
+    def activate_fast_mode(self):
+        try:
+            self._fast_mode = True
+            yield None
+        finally:
+            self._fast_mode = False
+
+    def _check_resize(self, row: int):
+        if (row >= self._table.index.size - 1):
+            extra_num_rows = math.ceil(self._table.index.size * self._resize_coeff)
+            self.insertRows(row + 1, extra_num_rows, QModelIndex())
+
+    def _update_max_id(self, row: int):
+        if (row > self._max_id):
+            self._max_id = row
+
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if index.isValid():
+            row = index.row()
+            column = index.column()
             if role == Qt.EditRole or role == Qt.DisplayRole:
 
                 if ',' in value:
                     # replaces " with ' if value has , in it.
                     value.replace('"', "'")
 
-                self._table.iloc[index.row()][index.column()] = value
-                if (index.row() == self._table.index.size - 1):
-                    self.insertRows(index.row() + 1, 1, QModelIndex())
-                self.dataChanged.emit(self.createIndex(index.row(), index.column()), self.createIndex(
-                    index.row(), index.column()))
+                self._check_resize(row)
+                self._update_max_id(row)
+                self._table.iloc[row][column] = value
+
+                if not self._fast_mode:
+                    self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
 
                 return True
             else:
@@ -148,7 +170,8 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        return self._table.drop(self._table.index.size - 1, axis=0)
+        to_drop = list(range(self._max_id + 1, self._table.index.size))
+        return self._table.drop(to_drop, axis=0)
 
     def set_dataframe(self, df: pd.DataFrame):
         self.removeRows(0, self.rowCount(None))
@@ -165,18 +188,19 @@ class MTSignalsModel(QAbstractItemModel):
 
         for c, col_name in enumerate(columns):
             if col_name in df.columns:
-                row = df.loc[:, col_name]
+                column_contents = df.loc[:, col_name]
             elif col_name.lower() in df.columns:
-                row = df.loc[:, col_name.lower()]
+                column_contents = df.loc[:, col_name.lower()]
             elif col_name.upper() in df.columns:
-                row = df.loc[:, col_name.upper()]
+                column_contents = df.loc[:, col_name.upper()]
             elif col_name.capitalize() in df.columns:
-                row = df.loc[:, col_name.capitalize()]
+                column_contents = df.loc[:, col_name.capitalize()]
             else:
                 logger.debug(
                     f"{col_name} is not present in given dataframe.")
                 continue
-            self._table.iloc[:-1, c] = row
+            self._table.iloc[:-1, c] = column_contents
+        self._max_id = df.index.size + 1
 
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
@@ -216,23 +240,21 @@ class MTSignalsModel(QAbstractItemModel):
         self.import_dict(json.loads(input_file))
 
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
-        signal.status_info.reset()
-        # self.setData(self.createIndex(
-        #     row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
-        self._table.iloc[row_idx][self._table.columns.size - 1] = str(signal.status_info)
-        # QCoreApplication.processEvents()
+        if (row_idx >= self._max_id):
+            return
 
-        if fetch_data:
-            # self.setData(self.createIndex(
-            #     row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
-            # QCoreApplication.processEvents()
-            self._table.iloc[row_idx][self._table.columns.size - 1] = str(Result.BUSY)
-            signal.get_data()
+        with self.activate_fast_mode():
+            signal.status_info.reset()
+            self.setData(self.createIndex(
+                row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
 
-        # self.setData(self.createIndex(
-        #     row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
-        # QCoreApplication.processEvents()
-        self._table.iloc[row_idx][self._table.columns.size - 1] = str(signal.status_info)
+            if fetch_data:
+                self.setData(self.createIndex(
+                    row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
+                signal.get_data()
+
+            self.setData(self.createIndex(
+                row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
 
     @contextmanager
     def init_create_signals(self):
