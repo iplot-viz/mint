@@ -35,26 +35,6 @@
     <!--  project properties  -->
     <properties>
         <unit.type>module</unit.type>
-        <cached_prop.version>1.5.2</cached_prop.version>
-        <py.version>3.8</py.version>
-        <py1.version>38</py1.version>
-        <kiwi.version>1.3.1</kiwi.version>
-        <cycler.version>0.10.0</cycler.version>
-        <pyparsing.version>2.4.7</pyparsing.version>
-        <dateutil.version>2.8.1</dateutil.version>
-        <six.version>1.15.0</six.version>
-    	<cppy.version>1.1.0</cppy.version>
-        <matplot.version>3.3.3</matplot.version>
-        <cached.version>4.2.0</cached.version>
-        <numpy.version>1.19.5</numpy.version>
-        <pandas.version>1.2.0</pandas.version>
-        <pillow.version>8.1.0</pillow.version>
-        <cachetools.version>4.2.0</cachetools.version>
-        <pyqt5.version>5.15.2</pyqt5.version>
-        <pyqt5sip.version>12.8.1</pyqt5sip.version>
-        <pytz.version>2020.5</pytz.version>
-        <sip.version>4.19.24</sip.version>
-        <toml.version>0.10.2</toml.version>
         <sonar.sources.python>util,widgets</sonar.sources.python>
     </properties>
 
