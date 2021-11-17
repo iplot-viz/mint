@@ -4,13 +4,11 @@
 
 from collections import defaultdict
 from importlib import metadata
-from io import StringIO
 import json
 import pkgutil
-import pprint
 import typing
 
-from PySide2.QtCore import QCoreApplication, QModelIndex, Qt
+from PySide2.QtCore import QCoreApplication, Qt
 from PySide2.QtGui import QShowEvent, QStandardItem, QStandardItemModel
 from PySide2.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog
 
@@ -103,4 +101,4 @@ class MTAbout(QDialog):
                     col_name: self._model.data(self._model.index(row, col, root_idx))
                 })
         
-        return json.dumps(output, indent=4, sort_keys=True)
+        return json.dumps(output, indent=4)
