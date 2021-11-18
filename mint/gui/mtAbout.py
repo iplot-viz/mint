@@ -77,7 +77,7 @@ class MTAbout(QDialog):
         description.setText("A Python Qt application for ITER Data Visualtization using the iplotlib framework.")
         jira = QLabel()
         jira.setOpenExternalLinks(True)
-        jira.setText(f"Report a <a href=\"{bug_link}\"> bug</a> or a <a href=\"{feature_req_link}\"> feature</a> request")
+        jira.setText(f"Report a <a href=\"{bug_link}\"> bug</a> or request a <a href=\"{feature_req_link}\"> feature</a>")
         jira.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         authors = QLabel()
         authors.setText("Authors: Jaswant Panchumarti, Lana Abadie, Piotr Mazur")
