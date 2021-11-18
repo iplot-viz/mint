@@ -10,7 +10,9 @@ import typing
 
 from PySide2.QtCore import QCoreApplication, Qt
 from PySide2.QtGui import QShowEvent, QStandardItem, QStandardItemModel
-from PySide2.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog
+from PySide2.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, QWidget
+
+from mint.tools.icon_loader import create_pxmap
 
 packages = [
     'cachetools',
@@ -30,35 +32,68 @@ packages = [
     'vtk'
 ]
 aliases = {'sseclient-py': 'sseclient'}
+bug_link = "https://jira.iter.org/secure/CreateIssueDetails!init.jspa?pid=17100&issuetype=1&assignee=panchuj&summary=<Type your bug summary>"
+feature_req_link = "https://jira.iter.org/secure/CreateIssueDetails!init.jspa?pid=17100&issuetype=2&assignee=panchuj&summary=<Type your feature request summary>"
 
 class MTAbout(QDialog):
     def __init__(self, parent: typing.Optional[QDialog] = None):
         super().__init__(parent=parent)
-        self._environmentWidget = QTableView(self)
+        self._model = QStandardItemModel()
         self._layout = QGridLayout()
+
+        self._prepareIcon()
+        self._layout.addWidget(self.iconLabel, 0, 0)
+        self._prepareDescription()
+        self._layout.addWidget(self._descriptionWidget, 0, 1)
+        self._prepareEnvironmentWidget()
+        self._layout.addWidget(self._environmentWidget, 1, 1)
+        self._prepareButtons()
+        self._layout.addWidget(self._copyBtn, 2, 1)
+
+        self.setLayout(self._layout)
+        self.setWindowTitle("About MINT")
+        self.resize(1100, 420)
+    
+    def _prepareButtons(self):
         self._copyBtn = QPushButton("Copy to clipboard", self)
         self._copyBtn.clicked.connect(
             lambda: QCoreApplication.instance().clipboard().setText(self.getContentsAsString())
         )
-        heading = QLabel("About MINT")
-        heading.setStyleSheet("font-weight: bold; color: black")
-        self._layout.addWidget(heading, 0, 0)
-        self._layout.addWidget(QLabel("""
-        A Python Qt application for ITER Data Visualtization using the iplotlib framework."""), 1, 0)
-        self._layout.addWidget(self._environmentWidget, 2, 0)
-        self._layout.addWidget(self._copyBtn, 3, 0)
 
-        self._model = QStandardItemModel()
+    def _prepareEnvironmentWidget(self):
+        self._environmentWidget = QTableView(self)
         self._environmentWidget.setModel(self._model)
-
-        self.setLayout(self._layout)
-        self.setWindowTitle("About MINT")
-        self.resize(500, 400)
         self._environmentWidget.verticalHeader().hide()
         self._environmentWidget.setShowGrid(False)
         self._environmentWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._environmentWidget.setAlternatingRowColors(True)
-    
+
+    def _prepareDescription(self):
+        self._descriptionWidget = QWidget(self)
+        self._descriptionWidget.setLayout(QVBoxLayout())
+        heading = QLabel("About MINT")
+        heading.setStyleSheet("font-weight: bold; color: black")
+        description = QLabel()
+        description.setText("A Python Qt application for ITER Data Visualtization using the iplotlib framework.")
+        jira = QLabel()
+        jira.setOpenExternalLinks(True)
+        jira.setText(f"Report a <a href=\"{bug_link}\"> bug</a> or a <a href=\"{feature_req_link}\"> feature</a> request")
+        jira.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        authors = QLabel()
+        authors.setText("Authors: Jaswant Panchumarti, Lana Abadie, Piotr Mazur")
+        self._descriptionWidget.layout().addWidget(heading)
+        self._descriptionWidget.layout().addWidget(description)
+        self._descriptionWidget.layout().addWidget(jira)
+        self._descriptionWidget.layout().addWidget(authors)
+
+    def _prepareIcon(self):
+        self.iconLabel = QLabel("")
+        self.iconLabel.setPixmap(create_pxmap('mint64x64'))
+
+    def resizeEvent(self, arg__1):
+        print(arg__1.size())
+        return super().resizeEvent(arg__1)
+
     def showEvent(self, ev: QShowEvent):
         self.catalogEnvironment()
         self._environmentWidget.resizeColumnsToContents()
