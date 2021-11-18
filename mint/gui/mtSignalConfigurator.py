@@ -369,26 +369,16 @@ class MTSignalConfigurator(QWidget):
         
         QCoreApplication.instance().clipboard().setText(text)
 
-    def duplicateContents(self):
-        currentTabId = self._tabs.currentIndex()
-        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
-        if not len(selectedIds):
-            return
-
-        text = self._model.data(selectedIds[0], Qt.DisplayRole)
-        self.setBulkContents(text, selectedIds)
-
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogDiscardButton")), "Delete", self.deleteContents)
-        context_menu.addAction("Duplicate", self.duplicateContents)
+            getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.addAction("Copy", self.copyContentsToClipboard)
         context_menu.addAction("Paste", self.pasteContentsFromClipboard)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
+            getattr(QStyle, "SP_DialogDiscardButton")), "Delete", self.deleteContents)
         context_menu.popup(event.globalPos())
 
     def export_csv(self, file_path=None):
