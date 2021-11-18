@@ -310,6 +310,11 @@ class MTSignalConfigurator(QWidget):
         row = selectedIds[0].row()
         self.busy.emit()
 
+        left = 1 << 32
+        right = 0
+        top = 1 << 32
+        bottom = 0
+
         for line in data:
             values = line.split(',')
         
@@ -319,11 +324,16 @@ class MTSignalConfigurator(QWidget):
             for i in range(len(values)):
                 column_idx = valid_column_names.index(column_names[i])
                 idx = self._model.createIndex(row, column_idx)
+                left = min(left, idx.column())
+                right = max(right, idx.column())
+                top = min(top, idx.row())
+                bottom = max(bottom, idx.row())
                 with self._model.activate_fast_mode():
                     self._model.setData(idx, values[i], Qt.EditRole)
+
             row += 1
-        
-        self.resizeViewsToContents()
+
+        self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
     def copyContentsToClipboard(self):
