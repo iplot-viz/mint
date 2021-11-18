@@ -174,8 +174,10 @@ class MTSignalsModel(QAbstractItemModel):
         return self._table.drop(to_drop, axis=0)
 
     def set_dataframe(self, df: pd.DataFrame):
-        self.removeRows(0, self.rowCount(None))
-        self.insertRows(0, df.index.size + 1)
+        oldSz = self.rowCount(None)
+        self.removeRows(0, oldSz)
+        newSz = oldSz if df.index.size < oldSz else oldSz + df.index.size
+        self.insertRows(0, newSz)
 
         # Accomodate for missing columns in df.
         columns = list(mtbp.get_column_names(self._blueprint))
@@ -199,7 +201,7 @@ class MTSignalsModel(QAbstractItemModel):
                 logger.debug(
                     f"{col_name} is not present in given dataframe.")
                 continue
-            self._table.iloc[:-1, c] = column_contents
+            self._table.iloc[:column_contents.index.size, c] = column_contents
         self._max_id = df.index.size + 1
 
     def export_dict(self) -> dict:
