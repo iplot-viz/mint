@@ -259,9 +259,18 @@ class MTSignalConfigurator(QWidget):
 
     def setBulkContents(self, text: str, indices: typing.List[QModelIndex]):
         self.busy.emit()
+        left = 1 << 32
+        right = 0
+        top = 1 << 32
+        bottom = 0
         with self._model.activate_fast_mode():
             for idx in indices:
+                left = min(left, idx.column())
+                right = max(right, idx.column())
+                top = min(top, idx.row())
+                bottom = max(bottom, idx.row())
                 self._model.setData(idx, text, Qt.EditRole)
+            self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
     def deleteContents(self):
