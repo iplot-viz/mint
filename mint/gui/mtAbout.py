@@ -90,10 +90,6 @@ class MTAbout(QDialog):
         self.iconLabel = QLabel("")
         self.iconLabel.setPixmap(create_pxmap('mint64x64'))
 
-    def resizeEvent(self, arg__1):
-        print(arg__1.size())
-        return super().resizeEvent(arg__1)
-
     def showEvent(self, ev: QShowEvent):
         self.catalogEnvironment()
         self._environmentWidget.resizeColumnsToContents()
