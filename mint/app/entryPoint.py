@@ -16,8 +16,8 @@ def runApp(qApp: QApplication, args=None):
     if args is None:
         return
 
-    from PySide2.QtGui import QGuiApplication
-    from PySide2.QtWidgets import QLabel, QStyle
+    from PySide2.QtGui import QGuiApplication, QIcon
+    from PySide2.QtWidgets import QLabel
 
     from iplotlib.core import Canvas
     from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
@@ -28,6 +28,7 @@ def runApp(qApp: QApplication, args=None):
     from mint.models import MTGenericAccessMode
     from mint.models.utils import mtBlueprintParser as mtbp
     from mint.gui.mtMainWindow import MTMainWindow
+    from mint.tools.icon_loader import create_pxmap
 
     from importlib import metadata
 
@@ -141,7 +142,10 @@ def runApp(qApp: QApplication, args=None):
             exit(0)
 
     mainWin.show()
-    qApp.setWindowIcon(mainWin.style().standardIcon(
-        getattr(QStyle, "SP_BrowserReload")))
+    appIcon = QIcon()
+    for i in range(4, 9):
+        sz = 1 << i
+        appIcon.addPixmap(create_pxmap(f"mint{sz}x{sz}"))
+    qApp.setWindowIcon(appIcon)
 
     return qApp.exec_()
