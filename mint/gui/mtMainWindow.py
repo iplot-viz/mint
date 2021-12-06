@@ -13,7 +13,7 @@ import pkgutil
 from threading import Timer
 import typing
 
-from PySide2.QtCore import QCoreApplication, QMargins, Qt
+from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Qt
 from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
 from PySide2.QtWidgets import QAction, QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
@@ -326,7 +326,7 @@ class MTMainWindow(IplotQtMainWindow):
                     continue
 
                 plot = self.canvas.plots[waypt.col_num -
-                                         1][waypt.row_num - 1]  # type: Plot
+                                        1][waypt.row_num - 1]  # type: Plot
                 old_signal = plot.signals[str(
                     waypt.stack_num)][waypt.signal_stack_id]
 
@@ -346,13 +346,15 @@ class MTMainWindow(IplotQtMainWindow):
 
                 # Replace signal.
                 plot.signals[str(waypt.stack_num)
-                             ][waypt.signal_stack_id] = new_signal
+                            ][waypt.signal_stack_id] = new_signal
 
             self.sigCfgWidget.setProgress(100)
 
             self.indicateBusy()
             self.canvasStack.currentWidget().set_canvas(self.canvas)
             self.canvasStack.refreshLinks()
+            self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
+                self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
             self.indicateReady()
             self.sigCfgWidget.resizeViewsToContents()
 
@@ -506,9 +508,9 @@ class MTMainWindow(IplotQtMainWindow):
 
             if waypt.row_num not in plan[waypt.col_num]:
                 plan[waypt.col_num][waypt.row_num] = [waypt.row_span,
-                                                      waypt.col_span,
-                                                      defaultdict(list),
-                                                      [waypt.ts_start, waypt.ts_end]]
+                                                    waypt.col_span,
+                                                    defaultdict(list),
+                                                    [waypt.ts_start, waypt.ts_end]]
 
             else:
                 existing = plan[waypt.col_num][waypt.row_num]
@@ -532,6 +534,8 @@ class MTMainWindow(IplotQtMainWindow):
                           x_axis_follow, x_axis_window)
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
+        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
+            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
         self.indicateReady()
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):

@@ -190,19 +190,18 @@ class MTSignalsModel(QAbstractItemModel):
 
         for c, col_name in enumerate(columns):
             if col_name in df.columns:
-                column_contents = df.loc[:, col_name]
+                self._table.iloc[:df.index.size, c] = df.loc[:, col_name]
             elif col_name.lower() in df.columns:
-                column_contents = df.loc[:, col_name.lower()]
+                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.lower()]
             elif col_name.upper() in df.columns:
-                column_contents = df.loc[:, col_name.upper()]
+                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.upper()]
             elif col_name.capitalize() in df.columns:
-                column_contents = df.loc[:, col_name.capitalize()]
+                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.capitalize()]
             else:
                 logger.debug(
                     f"{col_name} is not present in given dataframe.")
                 continue
-            self._table.iloc[:column_contents.index.size, c] = column_contents
-        self._max_id = df.index.size + 1
+        self._max_id = df.index.size - 1
 
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
@@ -242,21 +241,19 @@ class MTSignalsModel(QAbstractItemModel):
         self.import_dict(json.loads(input_file))
 
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
-        if (row_idx >= self._max_id):
+        if (row_idx > self._max_id):
             return
 
         with self.activate_fast_mode():
+            model_idx = self.createIndex(row_idx, self._table.columns.size - 1)
             signal.status_info.reset()
-            self.setData(self.createIndex(
-                row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
 
             if fetch_data:
-                self.setData(self.createIndex(
-                    row_idx, self._table.columns.size - 1), Result.BUSY, Qt.DisplayRole)
+                self.setData(model_idx, Result.BUSY, Qt.DisplayRole)
                 signal.get_data()
 
-            self.setData(self.createIndex(
-                row_idx, self._table.columns.size - 1), str(signal.status_info), Qt.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
 
     @contextmanager
     def init_create_signals(self):
