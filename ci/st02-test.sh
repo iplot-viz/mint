@@ -9,5 +9,5 @@
 try tar -xvzf ${PREFIX_DIR}.tar.gz ./${PREFIX_DIR}
 
 # run tests
-export PYTHONPATH=${PYTHONPATH}:$(get_abs_filename "./${PREFIX_DIR}")
+export PYTHONPATH=${PYTHONPATH}:$(get_abs_filename "./${PREFIX_DIR}/lib/python3.8/site-packages")
 try python3 -m pytest --junit-xml=${PREFIX_DIR}/test_report.xml mint
