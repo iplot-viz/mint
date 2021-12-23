@@ -1,3 +1,4 @@
+import copy
 import importlib
 import json
 import pandas as pd
@@ -32,7 +33,7 @@ def parse_raw_blueprint(blueprint: dict) -> dict:
     return blueprint_out
 
 def remove_type_info(blueprint: dict) -> dict:
-    blueprint_out = dict(blueprint)
+    blueprint_out = copy.deepcopy(blueprint)
     for k, v in blueprint_out.items():
         if k.startswith('$'):
             continue
