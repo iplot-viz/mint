@@ -288,75 +288,55 @@ class MTMainWindow(IplotQtMainWindow):
         if signal_cfg:
             self.sigCfgWidget.import_dict(signal_cfg)
 
+        path = list(self.sigCfgWidget.build(**da_params))
+        path_len = len(path)
+        ParserHelper.env.clear()  # Removes any previously aliased signals.
         self.indicateReady()
-        ParserHelper.env.clear()  # Removes existing aliased signals.
-        path = []
-        # Reset every waypoint to status 'Ready'
-        for waypt in self.sigCfgWidget.build(**da_params):
-            path.append(waypt)
+        self.sigCfgWidget.setStatusMessage("Update signals ..")
+        self.sigCfgWidget.beginBuild()
+        self.sigCfgWidget.setProgress(0)
+        
+        # Travel the path and update each signal parameters from workspace and trigger a data access request.
+        for i, waypt in enumerate(path):
+            self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
+            self.sigCfgWidget.setProgress(i * 100 / path_len)
+
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
+                signal = waypt.func(*waypt.args, **waypt.kwargs)
+                self.sigCfgWidget.model.update_signal_data(
+                    waypt.idx, signal, True)
                 continue
-            try:
-                plot = self.canvas.plots[waypt.col_num -
-                                         1][waypt.row_num - 1]  # type: Plot
-            except IndexError:
-                # Workspace does not have any plots. It just had variables table and data range selector.
-                ParserHelper.env.clear()  # Removes added aliased signals.
-                self.indicateReady()
-                break
+
+            plot = self.canvas.plots[waypt.col_num -
+                                    1][waypt.row_num - 1]  # type: Plot
             old_signal = plot.signals[str(
                 waypt.stack_num)][waypt.signal_stack_id]
-            self.sigCfgWidget.model.update_signal_data(waypt.idx, old_signal)
-        else:
-            ParserHelper.env.clear()  # Removes added aliased signals.
-            self.indicateReady()
-            self.sigCfgWidget.setStatusMessage("Update signals ..")
-            self.sigCfgWidget.beginBuild()
-            self.sigCfgWidget.setProgress(0)
-            path_len = len(path)
-            # Travel the path and update each signal parameters from workspace and get the data.
-            for i, waypt in enumerate(path):
 
-                if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
-                    signal = waypt.func(*waypt.args, **waypt.kwargs)
-                    self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
-                    self.sigCfgWidget.setProgress(i * 100 / path_len)
-                    self.sigCfgWidget.model.update_signal_data(
-                        waypt.idx, signal, True)
+            params = dict()
+            for f in fields(old_signal):
+                if f.name == 'children':  # Don't copy children.
                     continue
+                else:
+                    params.update({f.name: getattr(old_signal, f.name)})
+            new_signal = waypt.func(
+                *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
 
-                plot = self.canvas.plots[waypt.col_num -
-                                        1][waypt.row_num - 1]  # type: Plot
-                old_signal = plot.signals[str(
-                    waypt.stack_num)][waypt.signal_stack_id]
+            self.sigCfgWidget.model.update_signal_data(
+                waypt.idx, new_signal, True)
 
-                params = dict()
-                for f in fields(old_signal):
-                    if f.name == 'children':  # Don't copy children.
-                        continue
-                    else:
-                        params.update({f.name: getattr(old_signal, f.name)})
-                new_signal = waypt.func(
-                    *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            # Replace signal.
+            plot.signals[str(waypt.stack_num)
+                        ][waypt.signal_stack_id] = new_signal
 
-                self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
-                self.sigCfgWidget.setProgress(i * 100 / path_len)
-                self.sigCfgWidget.model.update_signal_data(
-                    waypt.idx, new_signal, True)
+        self.sigCfgWidget.setProgress(100)
 
-                # Replace signal.
-                plot.signals[str(waypt.stack_num)
-                            ][waypt.signal_stack_id] = new_signal
-
-            self.sigCfgWidget.setProgress(100)
-
-            self.indicateBusy()
-            self.canvasStack.currentWidget().set_canvas(self.canvas)
-            self.canvasStack.refreshLinks()
-            self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
-                self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
-            self.indicateReady()
-            self.sigCfgWidget.resizeViewsToContents()
+        self.indicateBusy()
+        self.canvasStack.currentWidget().set_canvas(self.canvas)
+        self.canvasStack.refreshLinks()
+        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
+            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
+        self.indicateReady()
+        self.sigCfgWidget.resizeViewsToContents()
 
     def import_json(self, file_path: os.PathLike):
         self.statusBar().showMessage(f"Importing {file_path} ..")
@@ -373,6 +353,7 @@ class MTMainWindow(IplotQtMainWindow):
                 for f, r in replacements.items():
                     payload = payload.replace(f, r)
                 self.import_dict(json.loads(payload))
+                logger.info(f"Finished loading workspace {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
