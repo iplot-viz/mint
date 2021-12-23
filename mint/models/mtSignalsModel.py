@@ -114,10 +114,12 @@ class MTSignalsModel(QAbstractItemModel):
             row = index.row()
             column = index.column()
             if role == Qt.EditRole or role == Qt.DisplayRole:
-
-                if ',' in value:
-                    # replaces " with ' if value has , in it.
-                    value.replace('"', "'")
+                
+                if isinstance(value, str):
+                    value = value.strip()
+                    if ',' in value:
+                        # replaces " with ' if value has , in it.
+                        value = value.replace('"', "'")
 
                 self._check_resize(row)
                 self._update_max_id(row)
