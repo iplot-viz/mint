@@ -5,13 +5,39 @@ from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 
 
-test_table = {
+test_table_1 = {
     "table": [
-        ["codacuda", "Signal:A", "1.1", "", "", "", "", "", "", "", "", "", "", "", "Success|1920 points"],
-        ["codacuda", "Signal:B", "1.2", "", "", "", "", "", "", "", "", "", "", "", "Success|1920 points"],
-        ["codacuda", "Signal:C", "2.1", "", "", "", "", "", "", "", "", "", "", "", "Success|1920 points"],
-        ["codacuda", "Signal:D", "2.2", "", "", "", "", "", "", "", "", "", "", "", "Success|1920 points"]
-    ]
+        ["ds", "Signal:A", "1.1", "", "", "",
+            "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:B", "2.1", "", "", "",
+            "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:C", "1.2", "", "", "",
+            "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:D", "2.2", "", "", "",
+            "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:E", "1.3", "", "", "",
+            "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:F", "2.3", "", "", "", "", "", "", "", "", "", "", "", ""]]
+}
+
+
+test_table_2 = {
+    "table": [
+        ["ds", "Signal:A", "1.1.1", "", "",
+            "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:B", "1.1.2", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:C", "1.2.1", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:D", "1.2.2", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:E", "1.3.1", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:F", "1.3.2", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:G", "1.4", "", "",
+         "", "", "", "", "", "", "", "", "", ""],
+        ["ds", "Signal:H", "1.4", "", "", "", "", "", "", "", "", "", "", "", ""]]
 }
 
 
@@ -21,6 +47,93 @@ class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
         self.sigCfgWidget = MTSignalConfigurator()
 
     def test_create_simple(self) -> None:
-        self.sigCfgWidget.import_dict(test_table)
+        self.sigCfgWidget.import_dict(test_table_1)
         path = list(self.sigCfgWidget.build())
-        self.assertEqual(len(path), 4)
+
+        self.assertEqual(len(path), 6)
+
+        self.assertEqual(path[0].col_num, 1)
+        self.assertEqual(path[1].col_num, 2)
+        self.assertEqual(path[2].col_num, 1)
+        self.assertEqual(path[3].col_num, 2)
+        self.assertEqual(path[4].col_num, 1)
+        self.assertEqual(path[5].col_num, 2)
+
+        self.assertEqual(path[0].row_num, 1)
+        self.assertEqual(path[1].row_num, 1)
+        self.assertEqual(path[2].row_num, 2)
+        self.assertEqual(path[3].row_num, 2)
+        self.assertEqual(path[4].row_num, 3)
+        self.assertEqual(path[5].row_num, 3)
+
+        self.assertEqual(path[0].col_span, 1)
+        self.assertEqual(path[1].col_span, 1)
+        self.assertEqual(path[2].col_span, 1)
+        self.assertEqual(path[3].col_span, 1)
+        self.assertEqual(path[4].col_span, 1)
+        self.assertEqual(path[5].col_span, 1)
+
+        self.assertEqual(path[0].row_span, 1)
+        self.assertEqual(path[1].row_span, 1)
+        self.assertEqual(path[2].row_span, 1)
+        self.assertEqual(path[3].row_span, 1)
+        self.assertEqual(path[4].row_span, 1)
+        self.assertEqual(path[5].row_span, 1)
+
+        self.assertEqual(path[0].stack_num, 1)
+        self.assertEqual(path[1].stack_num, 1)
+        self.assertEqual(path[2].stack_num, 1)
+        self.assertEqual(path[3].stack_num, 1)
+        self.assertEqual(path[4].stack_num, 1)
+        self.assertEqual(path[5].stack_num, 1)
+
+        # Test re-build with different canvas layout.
+        self.sigCfgWidget.import_dict(test_table_2)
+        path = list(self.sigCfgWidget.build())
+
+        self.assertEqual(len(path), 8)
+
+        self.assertEqual(path[0].col_num, 1)
+        self.assertEqual(path[1].col_num, 1)
+        self.assertEqual(path[2].col_num, 1)
+        self.assertEqual(path[3].col_num, 1)
+        self.assertEqual(path[4].col_num, 1)
+        self.assertEqual(path[5].col_num, 1)
+        self.assertEqual(path[6].col_num, 1)
+        self.assertEqual(path[7].col_num, 1)
+
+        self.assertEqual(path[0].row_num, 1)
+        self.assertEqual(path[1].row_num, 1)
+        self.assertEqual(path[2].row_num, 2)
+        self.assertEqual(path[3].row_num, 2)
+        self.assertEqual(path[4].row_num, 3)
+        self.assertEqual(path[5].row_num, 3)
+        self.assertEqual(path[6].row_num, 4)
+        self.assertEqual(path[7].row_num, 4)
+
+        self.assertEqual(path[0].col_span, 1)
+        self.assertEqual(path[1].col_span, 1)
+        self.assertEqual(path[2].col_span, 1)
+        self.assertEqual(path[3].col_span, 1)
+        self.assertEqual(path[4].col_span, 1)
+        self.assertEqual(path[5].col_span, 1)
+        self.assertEqual(path[6].col_span, 1)
+        self.assertEqual(path[7].col_span, 1)
+
+        self.assertEqual(path[0].row_span, 1)
+        self.assertEqual(path[1].row_span, 1)
+        self.assertEqual(path[2].row_span, 1)
+        self.assertEqual(path[3].row_span, 1)
+        self.assertEqual(path[4].row_span, 1)
+        self.assertEqual(path[5].row_span, 1)
+        self.assertEqual(path[6].row_span, 1)
+        self.assertEqual(path[7].row_span, 1)
+
+        self.assertEqual(path[0].stack_num, 1)
+        self.assertEqual(path[1].stack_num, 2)
+        self.assertEqual(path[2].stack_num, 1)
+        self.assertEqual(path[3].stack_num, 2)
+        self.assertEqual(path[4].stack_num, 1)
+        self.assertEqual(path[5].stack_num, 2)
+        self.assertEqual(path[6].stack_num, 1)
+        self.assertEqual(path[7].stack_num, 1)
