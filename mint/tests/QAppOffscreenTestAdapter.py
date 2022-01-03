@@ -8,7 +8,7 @@ from iplotlib.qt.testing import QAppTestAdapter
 
 _instance = None
 
-class QAppOffscreenTestAdapter(unittest.TestCase):
+class QAppOffscreenTestAdapter(QAppTestAdapter):
     """Helper class to provide QApplication instances"""
 
     qapplication = True
