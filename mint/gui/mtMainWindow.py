@@ -13,7 +13,7 @@ import pkgutil
 from threading import Timer
 import typing
 
-from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Qt
+from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
 from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
 from PySide2.QtWidgets import QAction, QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
@@ -61,7 +61,6 @@ class MTMainWindow(IplotQtMainWindow):
         self.da = da
         self.plot_class = PlotXY
         self.signal_class = signal_class
-        self.refreshTimer = None
         try:
             blueprint['DataSource']['default'] = data_sources[0]
         except IndexError:
@@ -82,6 +81,10 @@ class MTMainWindow(IplotQtMainWindow):
 
         super().__init__(parent=parent, flags=flags)
 
+        self.refreshTimer = QTimer(self)
+        self.refreshTimer.setTimerType(Qt.CoarseTimer)
+        self.refreshTimer.setSingleShot(False)
+        self.refreshTimer.timeout.connect(lambda: self.canvasStack.currentWidget().refresh())
         self._memoryMonitor = MTMemoryMonitor(
             parent=self, pid=QCoreApplication.instance().applicationPid())
         self.sigCfgWidget.setParent(self)
@@ -219,14 +222,14 @@ class MTMainWindow(IplotQtMainWindow):
             self.setCentralWidget(self._centralWidget)
             self._floatingWindow.hide()
 
-    def applyPreferences(self):
+    def updateCanvasPreferences(self):
         self.indicateBusy()
-        super().applyPreferences()
+        super().updateCanvasPreferences()
         self.indicateReady()
 
-    def reDraw(self, discard_axis_range: bool = True, discard_focused_plot: bool = True):
+    def reDraw(self):
         self.indicateBusy()
-        super().reDraw(discard_axis_range, discard_focused_plot)
+        super().reDraw()
         self.indicateReady()
 
     def onExport(self):
@@ -383,16 +386,13 @@ class MTMainWindow(IplotQtMainWindow):
         if self.canvas.auto_refresh:
             logger.info(
                 F"Scheduling canvas refresh in {self.canvas.auto_refresh} seconds")
-            self.refreshTimer = Timer(
-                self.canvas.auto_refresh, self.drawClicked)
-            self.refreshTimer.daemon = True
-            self.refreshTimer.start()
+            self.refreshTimer.start(self.canvas.auto_refresh * 1000)
             self.dataRangeSelector.refreshActivate.emit()
 
     def stopAutoRefresh(self):
         self.dataRangeSelector.refreshDeactivate.emit()
         if self.refreshTimer is not None:
-            self.refreshTimer.cancel()
+            self.refreshTimer.stop()
 
     def drawClicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
@@ -410,11 +410,13 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
+        self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
+        self.prefWindow.update()
 
         self.startAutoRefresh()
         self.indicateReady()
 
-    def streamClicked(self):
+    def streamClicked(self, no_build: bool = False):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         if self.streamerCfgWidget.isActivated():
             self.streamBtn.setText("Stopping")
@@ -423,7 +425,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.streamerCfgWidget.show()
 
     def streamCallback(self, signal):
-        self.canvasStack.currentWidget().matplotlib_canvas.refresh_signal(signal)
+        self.canvasStack.currentWidget()._parser.process_ipl_signal(signal)
 
     def onStreamStarted(self):
         self.streamerCfgWidget.hide()
@@ -452,7 +454,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.timeWindow()
 
-        x_axis_date = self.dataRangeSelector.isXAxisDate() and not stream
+        x_axis_date = (self.dataRangeSelector.isXAxisDate() and not stream) or stream
         x_axis_follow = stream
         x_axis_window = stream_window if stream else None
         refresh_interval = 0 if stream else self.dataRangeSelector.getAutoRefresh()
@@ -460,7 +462,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         if stream and stream_window > 0:
             now = self.dataRangeSelector.getTimeNow()
-            ts, te = now, now - stream_window
+            ts, te = now - stream_window, now
         else:
             ts, te = self.dataRangeSelector.getTimeRange()
 
@@ -479,8 +481,9 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
-                self.sigCfgWidget.model.update_signal_data(
-                    waypt.idx, signal, True)
+                if not stream:
+                    self.sigCfgWidget.model.update_signal_data(
+                        waypt.idx, signal, True)
                 continue
 
             if waypt.col_num not in plan:
@@ -504,6 +507,8 @@ class MTMainWindow(IplotQtMainWindow):
                         existing[3][1] = waypt.ts_end
 
             signal = waypt.func(*waypt.args, **waypt.kwargs)
+            signal.data_access_enabled = False if self.canvas.streaming else True
+            signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
@@ -539,7 +544,7 @@ class MTMainWindow(IplotQtMainWindow):
                                     x_data = signal.get_data()[0]
                                     signal_x_is_date |= bool(max(x_data) > (1 << 53))
                                 except (IndexError, ValueError) as _:
-                                    continue
+                                    signal_x_is_date = True
                     else:
                         signal_x_is_date = True
 
