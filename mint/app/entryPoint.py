@@ -41,9 +41,9 @@ def runApp(qApp: QApplication, args=None):
             if impl.lower() == "matplotlib":
                 import matplotlib
                 matplotlib.rcParams["figure.dpi"] = kwargs.get('dpi')
-                from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibCanvas
+                from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibParser
 
-                mpl_canvas = MatplotlibCanvas()
+                mpl_canvas = MatplotlibParser()
                 mpl_canvas.export_image(
                     canvas_filename, canvas=canvas, **kwargs)
         except FileNotFoundError:
