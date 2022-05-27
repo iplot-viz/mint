@@ -11,9 +11,9 @@ import pandas as pd
 import sys
 import typing
 
-from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide2.QtGui import QContextMenuEvent
-from PySide2.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
+from PySide6.QtGui import QContextMenuEvent
+from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
@@ -584,7 +584,7 @@ class MTSignalConfigurator(QWidget):
 
 def main():
     import argparse
-    from PySide2.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication
 
     parser = argparse.ArgumentParser('Quick demonstration of Signal Table')
     parser.add_argument(

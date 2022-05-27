@@ -3,7 +3,7 @@
 
 import pkgutil
 
-from PySide2.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QPixmap, QIcon
 
 
 def create_pxmap(name, ext: str = 'png') -> QIcon:

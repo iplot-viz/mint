@@ -3,8 +3,8 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
-from PySide2.QtCore import Signal
-from PySide2.QtWidgets import QDialog
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QDialog
 
 from mint.gui.compiled.ui_streamerconfig import Ui_StreamerConfig
 

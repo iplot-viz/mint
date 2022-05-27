@@ -10,8 +10,8 @@ import numpy as np
 import json
 import typing
 
-from PySide2.QtCore import QMargins, Signal
-from PySide2.QtWidgets import QGroupBox, QHBoxLayout, QRadioButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QMargins, Signal
+from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QRadioButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 from mint.tools.converters import to_unix_time_stamp
 from mint.models import MTGenericAccessMode, MTAbsoluteTime, MTPulseId, MTRelativeTime

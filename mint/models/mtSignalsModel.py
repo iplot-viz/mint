@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import typing
 
-from PySide2.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result
 

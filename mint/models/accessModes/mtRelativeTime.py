@@ -1,8 +1,8 @@
 # Description: Implements a relative time model.
 # Author: Jaswant Sai Panchumarti
 
-from PySide2.QtWidgets import QComboBox, QLabel, QHBoxLayout, QPushButton, QSpinBox, QWidget
-from PySide2.QtCore import QMargins, QStringListModel, Qt, Signal
+from PySide6.QtWidgets import QComboBox, QLabel, QHBoxLayout, QPushButton, QSpinBox, QWidget
+from PySide6.QtCore import QMargins, QStringListModel, Qt, Signal
 
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 

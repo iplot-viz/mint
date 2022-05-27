@@ -5,9 +5,9 @@
 
 import pkgutil
 
-from PySide2.QtCore import QMargins
-from PySide2.QtGui import QIcon, QPixmap
-from PySide2.QtWidgets import QAction, QHBoxLayout, QPushButton, QToolBar, QWidget
+from PySide6.QtCore import QMargins
+from PySide6.QtGui import QIcon, QPixmap, QAction
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QToolBar, QWidget
 
 
 class MTSignalsToolBar(QWidget):

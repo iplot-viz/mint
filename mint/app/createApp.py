@@ -1,7 +1,7 @@
 # Description: The MINT application attributes and arguments can be configured here.
 # Author: Jaswant Sai Panchumarti
 
-from PySide2.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 import argparse
 from mint._version import __version__

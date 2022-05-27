@@ -3,7 +3,7 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
-from PySide2.QtWidgets import QStatusBar
+from PySide6.QtWidgets import QStatusBar
 
 class MTStatusBar(QStatusBar):
 

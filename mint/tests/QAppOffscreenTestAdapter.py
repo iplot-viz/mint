@@ -3,7 +3,7 @@
 
 import unittest
 
-from PySide2.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 from iplotlib.qt.testing import QAppTestAdapter
 
 _instance = None

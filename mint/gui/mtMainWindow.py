@@ -13,9 +13,9 @@ import pkgutil
 from threading import Timer
 import typing
 
-from PySide2.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
-from PySide2.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap
-from PySide2.QtWidgets import QAction, QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
+from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
+from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas

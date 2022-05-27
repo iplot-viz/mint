@@ -9,15 +9,15 @@ import json
 import os
 import sys
 
-from PySide2.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 
 def runApp(qApp: QApplication, args=None):
     if args is None:
         return
 
-    from PySide2.QtGui import QGuiApplication, QIcon
-    from PySide2.QtWidgets import QLabel
+    from PySide6.QtGui import QGuiApplication, QIcon
+    from PySide6.QtWidgets import QLabel
 
     from iplotlib.core import Canvas
     from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter

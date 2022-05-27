@@ -1,7 +1,7 @@
 import psutil
 
-from PySide2.QtCore import QTimer, Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import QLabel
 
 
 class MTMemoryMonitor(QLabel):

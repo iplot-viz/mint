@@ -1,8 +1,8 @@
 # Description: An abstract model to describe data access modes.
 # Author: Jaswant Sai Panchumarti
 
-from PySide2.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
-from PySide2.QtCore import QObject, QStringListModel
+from PySide6.QtWidgets import QDataWidgetMapper, QFormLayout, QWidget
+from PySide6.QtCore import QObject, QStringListModel
 
 
 class MTGenericAccessMode(QObject):

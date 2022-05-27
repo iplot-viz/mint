@@ -5,8 +5,9 @@ import json
 import typing
 from functools import partial
 
-from PySide2.QtCore import QAbstractItemModel, QModelIndex, Qt
-from PySide2.QtWidgets import QAbstractItemView, QAction, QCheckBox, QMenu, QVBoxLayout, QTableView, QTreeView, QVBoxLayout, QWidget, QWidgetAction
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QVBoxLayout, QTableView, QTreeView, QVBoxLayout, QWidget, QWidgetAction
+from PySide6.QtGui import QAction
     
 class MTSignalItemView(QWidget):
     def __init__(self, title='SignalView', view_type: typing.Union[QTableView, QTreeView]=QTableView, parent: typing.Optional[QWidget] = None, f: Qt.WindowFlags = Qt.Widget):

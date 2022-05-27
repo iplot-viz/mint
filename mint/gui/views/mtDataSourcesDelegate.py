@@ -3,8 +3,8 @@
 
 import typing
 
-from PySide2.QtCore import QAbstractItemModel, QCoreApplication, QLocale, QModelIndex, QObject, QSize, Qt
-from PySide2.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
+from PySide6.QtCore import QAbstractItemModel, QCoreApplication, QLocale, QModelIndex, QObject, QSize, Qt
+from PySide6.QtWidgets import QComboBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 
 class MTDataSourcesDelegate(QStyledItemDelegate):

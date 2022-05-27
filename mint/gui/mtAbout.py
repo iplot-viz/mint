@@ -8,9 +8,9 @@ import json
 import pkgutil
 import typing
 
-from PySide2.QtCore import QCoreApplication, Qt
-from PySide2.QtGui import QShowEvent, QStandardItem, QStandardItemModel
-from PySide2.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, QWidget
+from PySide6.QtCore import QCoreApplication, Qt
+from PySide6.QtGui import QShowEvent, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, QWidget
 
 from mint.tools.icon_loader import create_pxmap
 
