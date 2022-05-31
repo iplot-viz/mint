@@ -25,7 +25,7 @@ packages = [
     'mint',
     'pandas',
     'psutil',
-    'PySide2',
+    'PySide6',
     'requests',
     'scipy',
     'sseclient-py',
