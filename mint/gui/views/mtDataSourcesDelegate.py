@@ -39,7 +39,7 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         maxWidth = 0
         for value in self._data_sources:
-            itemWidth = option.fontMetrics.width(self.displayText(value, QLocale()))
+            itemWidth = option.fontMetrics.horizontalAdvance(self.displayText(value, QLocale()))
             maxWidth = max(itemWidth, maxWidth)
 
         return QCoreApplication.instance().style().sizeFromContents(
