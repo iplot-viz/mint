@@ -128,12 +128,12 @@
                 "y": {
                     "code_name": "y_expr",
                     "type_name": "str",
-                    "default": "${self}.data"
+                    "default": "${self}.data_store[1]"
                 },
                 "z": {
                     "code_name": "z_expr",
                     "type_name": "str",
-                    "default": "${self}.data_secondary"
+                    "default": "${self}.data_store[2]"
                 },
                 "PlotType": {
                     "label": "Plot type",
@@ -310,8 +310,8 @@
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [
                                     {
                                         "title": "ml0004",
@@ -333,8 +333,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [],
                                         "status_info": {
                                             "da_msg": "",
@@ -366,8 +366,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [],
                                         "status_info": {
                                             "da_msg": "",
@@ -461,8 +461,8 @@
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [
                                     {
                                         "title": "mysum",
@@ -484,8 +484,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [],
                                         "status_info": {
                                             "da_msg": "",
@@ -517,8 +517,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [],
                                         "status_info": {
                                             "da_msg": "",
@@ -612,8 +612,8 @@
                                 "ts_relative": false,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [
                                     {
                                         "title": "mysum",
@@ -635,8 +635,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [
                                             {
                                                 "title": "mysum",
@@ -658,8 +658,8 @@
                                                 "ts_relative": false,
                                                 "envelope": "",
                                                 "x_expr": "${self}.time",
-                                                "y_expr": "${self}.data",
-                                                "z_expr": "${self}.data_secondary",
+                                                "y_expr": "${self}.data_store[1]",
+                                                "z_expr": "${self}.data_store[2]",
                                                 "children": [],
                                                 "status_info": {
                                                     "da_msg": "",
@@ -691,8 +691,8 @@
                                                 "ts_relative": false,
                                                 "envelope": "",
                                                 "x_expr": "${self}.time",
-                                                "y_expr": "${self}.data",
-                                                "z_expr": "${self}.data_secondary",
+                                                "y_expr": "${self}.data_store[1]",
+                                                "z_expr": "${self}.data_store[2]",
                                                 "children": [],
                                                 "status_info": {
                                                     "da_msg": "",
@@ -735,8 +735,8 @@
                                         "ts_relative": false,
                                         "envelope": "",
                                         "x_expr": "${self}.time",
-                                        "y_expr": "${self}.data",
-                                        "z_expr": "${self}.data_secondary",
+                                        "y_expr": "${self}.data_store[1]",
+                                        "z_expr": "${self}.data_store[2]",
                                         "children": [
                                             {
                                                 "title": "ml0004",
@@ -758,8 +758,8 @@
                                                 "ts_relative": false,
                                                 "envelope": "",
                                                 "x_expr": "${self}.time",
-                                                "y_expr": "${self}.data",
-                                                "z_expr": "${self}.data_secondary",
+                                                "y_expr": "${self}.data_store[1]",
+                                                "z_expr": "${self}.data_store[2]",
                                                 "children": [],
                                                 "status_info": {
                                                     "da_msg": "",
@@ -791,8 +791,8 @@
                                                 "ts_relative": false,
                                                 "envelope": "",
                                                 "x_expr": "${self}.time",
-                                                "y_expr": "${self}.data",
-                                                "z_expr": "${self}.data_secondary",
+                                                "y_expr": "${self}.data_store[1]",
+                                                "z_expr": "${self}.data_store[2]",
                                                 "children": [],
                                                 "status_info": {
                                                     "da_msg": "",

@@ -151,12 +151,12 @@
                 "y": {
                     "code_name": "y_expr",
                     "type_name": "str",
-                    "default": "${self}.data"
+                    "default": "${self}.data_store[1]"
                 },
                 "z": {
                     "code_name": "z_expr",
                     "type_name": "str",
-                    "default": "${self}.data_secondary"
+                    "default": "${self}.data_store[2]"
                 },
                 "PlotType": {
                     "label": "Plot type",
@@ -316,8 +316,8 @@
                                 "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
@@ -400,8 +400,8 @@
                                 "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
@@ -484,8 +484,8 @@
                                 "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
@@ -568,8 +568,8 @@
                                 "ts_relative": true,
                                 "envelope": "",
                                 "x_expr": "${self}.time",
-                                "y_expr": "${self}.data",
-                                "z_expr": "${self}.data_secondary",
+                                "y_expr": "${self}.data_store[1]",
+                                "z_expr": "${self}.data_store[2]",
                                 "children": [],
                                 "status_info": {
                                     "msg": "",
