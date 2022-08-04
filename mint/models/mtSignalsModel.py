@@ -10,6 +10,7 @@ import math
 import json
 import pandas as pd
 import typing
+import re
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
@@ -40,6 +41,12 @@ class Waypoint:
 
     def __str__(self):
         return f"c:{self.col_num}|r:{self.row_num}|sn:{self.stack_num}|si:{self.signal_stack_id}"
+
+
+exp_stack = re.compile(r'(\d+)'
+                       r'(?:[.](\d+))?'
+                       r'(?:[.](\d+))?'
+                       r'$')
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -267,22 +274,34 @@ class MTSignalsModel(QAbstractItemModel):
 
     def create_signals(self, row_idx: int) -> typing.Iterator[Waypoint]:
         signal_params = dict()
-        col_span = row_span = stack_num = 1
-        col_num = row_num = 0
-        ts_start = ts_end = -1
 
         for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx])):
             signal_params.update(
                 mtbp.construct_params_from_series(self.blueprint, parsed_row))
 
             if i == 0:  # grab these from the first row we encounter.
-                stack_val = signal_params.get('stack_val').split('.')
-                col_num = int(stack_val[0]) if len(
-                    stack_val) > 0 and stack_val[0] else 0
-                row_num = int(stack_val[1]) if len(
-                    stack_val) > 1 and stack_val[1] else 0
-                stack_num = int(stack_val[2]) if len(
-                    stack_val) > 2 and stack_val[2] else 1
+                stack_val = signal_params.get('stack_val')
+                stack_m = exp_stack.match(stack_val)
+
+                if stack_m:
+                    stack_groups = stack_m.groups()
+                    col_num = int(stack_groups[0])
+                    row_num = int(stack_groups[1] or '1')
+                    if stack_groups[1] is None:
+                        col_num, row_num = row_num, col_num
+                    stack_num = int(stack_groups[2] or '1')
+
+                    bad_stack = col_num == 0 or row_num == 0 or stack_num == 0
+                else:
+                    bad_stack = True
+
+                if bad_stack:
+                    stack_num = 1
+                    col_num = row_num = 0
+                    if stack_val:
+                        # This message for status?
+                        logger.warning(f'Ignored wrong stack value: {stack_val}')
+
                 col_span = signal_params.get('col_span') or 1
                 row_span = signal_params.get('row_span') or 1
                 ts_start = signal_params.get('ts_start')
