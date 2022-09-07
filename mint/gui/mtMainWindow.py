@@ -195,12 +195,6 @@ class MTMainWindow(IplotQtMainWindow):
         box.setText(message)
         box.exec_()
 
-    def undo(self):
-        return super().undo()
-
-    def redo(self):
-        return super().redo()
-
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
             # we detach now.
@@ -413,6 +407,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
 
+        self.drop_history()
         self.startAutoRefresh()
         self.indicateReady()
 
