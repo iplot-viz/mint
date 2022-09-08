@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 import os
 import pkgutil
-from threading import Timer
 import typing
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
@@ -407,7 +406,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
 
-        self.drop_history()
+        self.drop_history()      # clean zoom history; is this best place?
         self.startAutoRefresh()
         self.indicateReady()
 
