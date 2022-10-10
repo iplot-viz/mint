@@ -2,21 +2,23 @@
 # Author: Jaswant Sai Panchumarti
 
 import setuptools
-from mint._version import __version__
+import versioneer
+
+# from mint._version import __version__
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="mint",
-    setup_requires=[
-        "setuptools-git-versioning"
-    ],
-    version_config={
-        "version_callback": __version__,
-        "template": "{tag}",
-        "dirty_template": "{tag}.dev{ccount}.{sha}",
-    },
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
+    setup_requires=["setuptools-git-versioning"],
+    # version_config={
+    #     "version_callback": __version__,
+    #     "template": "{tag}",
+    #     "dirty_template": "{tag}.dev{ccount}.{sha}",
+    # },
     author="Panchumarti Jaswant EXT",
     author_email="jaswant.panchumarti@iter.org",
     description="A Python Qt application for ITER Data Visualtization using the iplotlib framework",
@@ -30,20 +32,23 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     package_dir={"": "."},
-    packages=setuptools.find_packages(where='.'),
+    packages=setuptools.find_packages(where="."),
     python_requires=">=3.8",
     install_requires=[
         "iplotlib >= 0.5.0",
         "iplotDataAccess >= 0.4.0",
         "iplotProcessing >= 0.4.0",
-        "psutil >= 5.8.0"
+        "psutil >= 5.8.0",
     ],
     entry_points={
-        'console_scripts': ['mint = mint.__main__:main', 'mint-signal-cfg = mint.gui.mtSignalConfigurator:main']
+        "console_scripts": [
+            "mint = mint.__main__:main",
+            "mint-signal-cfg = mint.gui.mtSignalConfigurator:main",
+        ]
     },
-    package_data = {
-        "mint.data": ["csv/*", "workspaces/*", 'blueprint.json'],
+    package_data={
+        "mint.data": ["csv/*", "workspaces/*", "blueprint.json"],
         "mint.gui": ["icons/*.png", "res/*.ui"],
-        "mint": ["mydatasources.cfg"]
-    }
+        "mint": ["mydatasources.cfg"],
+    },
 )
