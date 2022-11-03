@@ -4,7 +4,7 @@
 from PySide6.QtWidgets import QApplication
 
 import argparse
-from mint._version import __version__
+from mint._version import get_versions
 
 def createApp(argv: list = []) -> QApplication:
 
@@ -27,12 +27,12 @@ def createApp(argv: list = []) -> QApplication:
     parser.add_argument('-ed', dest='export_dpi', metavar='export_dpi',
                         type=int, default=100, help='Exported image DPI')
     parser.add_argument('--version', action='version',
-                        version=f"{parser.prog} - {__version__}")
+                        version=f"{parser.prog} - {get_versions()['version']}")
     args = parser.parse_args()
 
     qApp = QApplication(argv)
     qApp.setApplicationName("MINT")
-    qApp.setApplicationVersion(__version__)
+    qApp.setApplicationVersion(get_versions()['version'])
     qApp.setOrganizationDomain("www.iter.org")
     qApp.setOrganizationName("ITER")
 
