@@ -39,7 +39,7 @@ from mint.tools.sanity_checks import check_data_range
 
 
 from iplotLogging import setupLogger as sl
-logger = sl.get_logger(__name__, "INFO")
+logger = sl.get_logger(__name__)
 
 
 class MTMainWindow(IplotQtMainWindow):
