@@ -390,6 +390,9 @@ class MTMainWindow(IplotQtMainWindow):
     def drawClicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
+        if self.streamerCfgWidget.isActivated():
+            return
+
         if not no_build:
             self.build()
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
