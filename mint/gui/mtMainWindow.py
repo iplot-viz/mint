@@ -39,7 +39,7 @@ from mint.tools.sanity_checks import check_data_range
 
 
 from iplotLogging import setupLogger as sl
-logger = sl.get_logger(__name__, "INFO")
+logger = sl.get_logger(__name__)
 
 
 class MTMainWindow(IplotQtMainWindow):
@@ -446,7 +446,7 @@ class MTMainWindow(IplotQtMainWindow):
     def build(self, stream=False):
 
         self.canvas.streaming = stream
-        stream_window = self.streamerCfgWidget.timeWindow()
+        stream_window = self.streamerCfgWidget.timeWindow() * 1000000000
 
         x_axis_date = (self.dataRangeSelector.isXAxisDate() and not stream) or stream
         x_axis_follow = stream
