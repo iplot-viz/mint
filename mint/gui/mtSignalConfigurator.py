@@ -184,8 +184,9 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self._toolbar)
         self.layout().addWidget(self._tabs)
         self.layout().addWidget(self.parseBtn)
+
         self.model.dataChanged.connect(self.resizeViewToColumns)
-        self.model.insertRows(0, 50, QModelIndex())
+        self.model.insertRows(0, 1, QModelIndex())
 
     def onCurrentViewChanged(self, index: int):
         currentView = self.itemWidgets[index]

@@ -60,7 +60,6 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._blueprint = blueprint
         self._max_id = -1
-        self._resize_coeff = 0.25
         self._fast_mode = False # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
         mtbp.parse_raw_blueprint(self._blueprint)
 
@@ -109,8 +108,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def _check_resize(self, row: int):
         if (row >= self._table.index.size - 1):
-            extra_num_rows = math.ceil(self._table.index.size * self._resize_coeff)
-            self.insertRows(row + 1, extra_num_rows, QModelIndex())
+            self.insertRows(row + 1, 1, QModelIndex())
 
     def _update_max_id(self, row: int):
         if (row > self._max_id):
@@ -185,7 +183,7 @@ class MTSignalsModel(QAbstractItemModel):
     def set_dataframe(self, df: pd.DataFrame):
         oldSz = self.rowCount(None)
         self.removeRows(0, oldSz)
-        newSz = oldSz if df.index.size < oldSz else oldSz + df.index.size
+        newSz = df.index.size
         self.insertRows(0, newSz)
 
         # Accomodate for missing columns in df.
