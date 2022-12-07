@@ -516,8 +516,6 @@ class MTMainWindow(IplotQtMainWindow):
                           x_axis_follow, x_axis_window)
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
-        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
-            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
         self.indicateReady()
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
