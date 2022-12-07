@@ -324,13 +324,16 @@ class MTMainWindow(IplotQtMainWindow):
             plot.signals[str(waypt.stack_num)
                         ][waypt.signal_stack_id] = new_signal
 
+        self.sigCfgWidget.setProgress(99)
+
+        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
+            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
+
         self.sigCfgWidget.setProgress(100)
 
         self.indicateBusy()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
-            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
         self.indicateReady()
         self.sigCfgWidget.resizeViewsToContents()
 
