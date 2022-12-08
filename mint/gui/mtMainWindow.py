@@ -9,6 +9,7 @@ from dataclasses import fields
 import json
 from pathlib import Path
 import os
+import copy
 import pkgutil
 import typing
 
@@ -291,7 +292,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.sigCfgWidget.setStatusMessage("Update signals ..")
         self.sigCfgWidget.beginBuild()
         self.sigCfgWidget.setProgress(0)
-        
+
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         for i, waypt in enumerate(path):
             self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
@@ -304,7 +305,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num -
-                                    1][waypt.row_num - 1]  # type: Plot
+                                     1][waypt.row_num - 1]  # type: Plot
             old_signal = plot.signals[str(
                 waypt.stack_num)][waypt.signal_stack_id]
 
@@ -322,7 +323,7 @@ class MTMainWindow(IplotQtMainWindow):
 
             # Replace signal.
             plot.signals[str(waypt.stack_num)
-                        ][waypt.signal_stack_id] = new_signal
+                         ][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.setProgress(100)
 
@@ -438,7 +439,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget.streamer.start(
             self.canvas, self.streamCallback)
         self.indicateReady()
-    
+
     def onStreamStopped(self):
         self.streamBtn.setText("Stream")
 
@@ -488,9 +489,9 @@ class MTMainWindow(IplotQtMainWindow):
 
             if waypt.row_num not in plan[waypt.col_num]:
                 plan[waypt.col_num][waypt.row_num] = [waypt.row_span,
-                                                    waypt.col_span,
-                                                    defaultdict(list),
-                                                    [waypt.ts_start, waypt.ts_end]]
+                                                      waypt.col_span,
+                                                      defaultdict(list),
+                                                      [waypt.ts_start, waypt.ts_end]]
 
             else:
                 existing = plan[waypt.col_num][waypt.row_num]
@@ -512,8 +513,17 @@ class MTMainWindow(IplotQtMainWindow):
                 signal)
 
         self.indicateBusy()
+
+        # Keep copy of previous canvas to be able to restore preferences
+        old_canvas = copy.deepcopy(self.canvas)
+        
         self.build_canvas(self.canvas, plan, x_axis_date,
                           x_axis_follow, x_axis_window)
+
+        self.indicateBusy('Applying preferences...')
+        # Merge with previous preferences
+        self.canvas.merge(old_canvas)
+        
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
         self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
