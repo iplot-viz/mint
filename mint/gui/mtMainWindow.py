@@ -216,12 +216,12 @@ class MTMainWindow(IplotQtMainWindow):
             self._floatingWindow.hide()
 
     def updateCanvasPreferences(self):
-        self.indicateBusy()
+        self.indicateBusy('Applying preferences...')
         super().updateCanvasPreferences()
         self.indicateReady()
 
     def reDraw(self):
-        self.indicateBusy()
+        self.indicateBusy('Redrawing...')
         super().reDraw()
         self.indicateReady()
 
@@ -243,11 +243,11 @@ class MTMainWindow(IplotQtMainWindow):
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
-    def indicateBusy(self):
+    def indicateBusy(self, msg='Hang on ..'):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
         self._progressBar.show()
-        self.statusBar().showMessage('Hang on ..')
+        self.statusBar().showMessage(msg)
         QCoreApplication.processEvents()
 
     def indicateReady(self):
@@ -258,7 +258,7 @@ class MTMainWindow(IplotQtMainWindow):
         QCoreApplication.processEvents()
 
     def export_dict(self) -> dict:
-        self.indicateBusy()
+        self.indicateBusy('Exporting workspace...')
         workspace = {}
         workspace.update({'data_range': self.dataRangeSelector.export_dict()})
         workspace.update({'signal_cfg': self.sigCfgWidget.export_dict()})
@@ -268,7 +268,7 @@ class MTMainWindow(IplotQtMainWindow):
         return workspace
 
     def import_dict(self, input_dict: dict):
-        self.indicateBusy()
+        self.indicateBusy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
 
@@ -331,7 +331,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.sigCfgWidget.setProgress(100)
 
-        self.indicateBusy()
+        self.indicateBusy('Drawing...')
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.indicateReady()
@@ -403,7 +403,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.sigCfgWidget.export_csv(os.path.join(
                 dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
 
-        self.indicateBusy()
+        self.indicateBusy("Drawing...")
         self.stopAutoRefresh()
 
         self.canvasStack.currentWidget().unfocus_plot()
@@ -432,7 +432,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamBtn.setText("Stop")
         self.build(stream=True)
 
-        self.indicateBusy()
+        self.indicateBusy('Connecting to stream and drawing...')
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
@@ -514,7 +514,7 @@ class MTMainWindow(IplotQtMainWindow):
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
                 signal)
 
-        self.indicateBusy()
+        self.indicateBusy('Retrieving data...')
         self.build_canvas(self.canvas, plan, x_axis_date,
                           x_axis_follow, x_axis_window)
         logger.info("Built canvas")
