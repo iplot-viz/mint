@@ -85,5 +85,11 @@
         "code_name": "status_info",
         "no_construct": true,
         "type_name": "iplotlib.interface.iplotSignalAdapter.StatusInfo"
+    },
+    "uid": {
+        "code_name": "uid",
+        "default": "",
+        "label": "uid",
+        "type_name": "str"
     }
 }

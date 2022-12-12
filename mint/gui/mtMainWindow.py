@@ -315,6 +315,11 @@ class MTMainWindow(IplotQtMainWindow):
                     continue
                 else:
                     params.update({f.name: getattr(old_signal, f.name)})
+
+            # Propagate uid from row to signal for workspace without it
+            if 'uid' not in params or params['uid'] is None:
+                params['uid'] = waypt.kwargs['uid']
+
             new_signal = waypt.func(
                 *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
 
