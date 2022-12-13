@@ -167,6 +167,7 @@ class MTSignalsModel(QAbstractItemModel):
         try:
             self._table = self._table.drop(
                 list(range(row, row + count)), axis=0).reset_index(drop=True)
+            self._max_id = self._max_id - 1
             self.layoutChanged.emit()
             success = True
         except KeyError:
