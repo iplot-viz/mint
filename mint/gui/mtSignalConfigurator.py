@@ -382,11 +382,9 @@ class MTSignalConfigurator(QWidget):
         context_menu.popup(event.globalPos())
 
     def export_csv(self, file_path=None):
-        export_columns = [mtbp.get_column_name(
-            self._model.blueprint, k) for k in mtbp.get_keys_with_export(self._model.blueprint)]
         try:
             self.busy.emit()
-            df = self._model.get_dataframe().drop(labels=export_columns, axis=1)
+            df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
             return df.to_csv(file_path, index=False)
         except Exception as e:
             box = QMessageBox()
