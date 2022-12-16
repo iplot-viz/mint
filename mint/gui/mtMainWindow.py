@@ -6,10 +6,13 @@
 
 from collections import defaultdict
 from dataclasses import fields
+from datetime import datetime
 import json
 from pathlib import Path
 import os
 import pkgutil
+import socket
+from threading import Timer
 import typing
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
@@ -48,6 +51,7 @@ class MTMainWindow(IplotQtMainWindow):
                  canvas: Canvas,
                  da: DataAccess,
                  model: dict,
+                 appVersion: str,
                  data_dir: os.PathLike = '.',
                  data_sources: list = [],
                  blueprint: dict = mtbp.DEFAULT_BLUEPRINT,
@@ -60,6 +64,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.da = da
         self.plot_class = PlotXY
         self.signal_class = signal_class
+        self.appVersion = appVersion
         try:
             blueprint['DataSource']['default'] = data_sources[0]
         except IndexError:
@@ -260,6 +265,14 @@ class MTMainWindow(IplotQtMainWindow):
     def export_dict(self) -> dict:
         self.indicateBusy()
         workspace = {}
+        workspace.update({
+            '_metadata': {
+                'createdAt': datetime.now().isoformat(),
+                'createdBy': os.getlogin(),
+                'createdOnHost': socket.gethostname(),
+                'appVersion': self.appVersion
+            }
+        })
         workspace.update({'data_range': self.dataRangeSelector.export_dict()})
         workspace.update({'signal_cfg': self.sigCfgWidget.export_dict()})
         workspace.update(

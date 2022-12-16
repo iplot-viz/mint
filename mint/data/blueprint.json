@@ -1,5 +1,5 @@
 {   
-    "$schema": "https://git.iter.org/projects/VIS/repos/mint/browse/mint/data/mint.schema.json",
+    "$schema": "https://git.iter.org/projects/VIS/repos/mint/raw/mint/data/mint.schema.json?at=refs%2Ftags%2F0.8.1",
     "DataSource": {
         "code_name": "data_source",
         "default": "",
