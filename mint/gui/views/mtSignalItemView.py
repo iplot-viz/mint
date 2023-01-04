@@ -8,6 +8,8 @@ from functools import partial
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QVBoxLayout, QTableView, QTreeView, QVBoxLayout, QWidget, QWidgetAction
 from PySide6.QtGui import QAction
+
+from mint.models.mtSignalsModel import MTSignalsModel
     
 class MTSignalItemView(QWidget):
     def __init__(self, title='SignalView', view_type: typing.Union[QTableView, QTreeView]=QTableView, parent: typing.Optional[QWidget] = None, f: Qt.WindowFlags = Qt.Widget):
@@ -38,12 +40,15 @@ class MTSignalItemView(QWidget):
         # add new actions and keep a reference on python side.
         for column in range(model.columnCount(QModelIndex())):
             column_name = model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
-            cbox = QCheckBox(column_name, self._menu)
-            cbox.setChecked(True)
-            act = QWidgetAction(self._menu)
-            act.setDefaultWidget(cbox)
-            cbox.toggled.connect(partial(self.toggleColumn, column))
-            self._actions.append(act)
+            if column_name == MTSignalsModel.ROWUID_COLNAME:
+                self.toggleColumn(column, False)
+            else:
+                cbox = QCheckBox(column_name, self._menu)
+                cbox.setChecked(True)
+                act = QWidgetAction(self._menu)
+                act.setDefaultWidget(cbox)
+                cbox.toggled.connect(partial(self.toggleColumn, column))
+                self._actions.append(act)
 
         # fill menu with actions.
         self._menu.addActions(self._actions)
@@ -62,17 +67,19 @@ class MTSignalItemView(QWidget):
         options = dict()
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Horizontal, Qt.DisplayRole)
-            act = self._actions[column]
-            if isinstance(act, QWidgetAction):
-                options.update({column_name: act.defaultWidget().isChecked()})
+            if column_name != MTSignalsModel.ROWUID_COLNAME:
+                act = self._actions[column]
+                if isinstance(act, QWidgetAction):
+                    options.update({column_name: act.defaultWidget().isChecked()})
         return options
 
     def import_dict(self, options: dict):
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Horizontal, Qt.DisplayRole)
-            act = self._actions[column]
-            if isinstance(act, QWidgetAction):
-                act.defaultWidget().setChecked(options.get(column_name))
+            if column_name != MTSignalsModel.ROWUID_COLNAME:
+                act = self._actions[column]
+                if isinstance(act, QWidgetAction):
+                    act.defaultWidget().setChecked(options.get(column_name))
 
     def export_json(self):
         return json.dumps(self.export_dict())

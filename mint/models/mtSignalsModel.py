@@ -11,6 +11,7 @@ import json
 import pandas as pd
 import typing
 import re
+import uuid
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
@@ -51,6 +52,8 @@ exp_stack = re.compile(r'(\d+)'
 
 class MTSignalsModel(QAbstractItemModel):
     SignalRole = Qt.UserRole + 10
+
+    ROWUID_COLNAME = 'uid'
 
     def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, signal_class: type = IplotSignalAdapter, parent=None):
 
@@ -150,10 +153,14 @@ class MTSignalsModel(QAbstractItemModel):
         self.beginInsertRows(parent, row, row + count)
 
         for _ in range(count):
-            data = [["" for _ in range(len(self._table.columns))]]
+            # Create empty row
+            data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
+            # Set default Datasource
             empty_row.loc[0, mtbp.get_column_name(
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
+            # Generate uid
+            empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
             self._table = self._table.append(empty_row).reset_index(drop=True)
         self.layoutChanged.emit()
 
@@ -191,10 +198,26 @@ class MTSignalsModel(QAbstractItemModel):
         columns = list(mtbp.get_column_names(self._blueprint))
         for df_column_name in df.columns:
             if df_column_name not in columns:
-                logger.warning(f"{df_column_name} is not a valid column name.")
-                if df_column_name in self._blueprint.keys():
-                    df.rename({df_column_name: mtbp.get_column_name(
-                        self._blueprint, df_column_name)}, axis=1, inplace=True)
+                if df_column_name == self.ROWUID_COLNAME:
+                    # Generate missing UID
+                    df.insert(df.columns.size, self.ROWUID_COLNAME,
+                        [str(uuid.uuid4()) for _ in range(df.index.size)])
+                else:
+                    logger.warning(f"{df_column_name} is not a valid column name.")
+                    if df_column_name in self._blueprint.keys():
+                        df.rename({df_column_name: mtbp.get_column_name(
+                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+        
+        # Force blueprint to have uid column
+        if not self._blueprint.get(self.ROWUID_COLNAME):
+            self._blueprint[self.ROWUID_COLNAME] = {
+                "code_name": "uid",
+                "default": "",
+                "label": "uid",
+                "type_name": "str",
+                "type": str
+            }
+        columns = list(mtbp.get_column_names(self._blueprint))
 
         for c, col_name in enumerate(columns):
             if col_name in df.columns:
@@ -210,7 +233,7 @@ class MTSignalsModel(QAbstractItemModel):
                     f"{col_name} is not present in given dataframe.")
                 continue
         self._max_id = df.index.size - 1
-
+            
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
         output = dict()
@@ -251,9 +274,9 @@ class MTSignalsModel(QAbstractItemModel):
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         if (row_idx > self._max_id):
             return
-
+            
         with self.activate_fast_mode():
-            model_idx = self.createIndex(row_idx, self._table.columns.size - 1)
+            model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
             signal.status_info.reset()
             self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
 
@@ -333,7 +356,7 @@ class MTSignalsModel(QAbstractItemModel):
                 continue
 
             column_name = mtbp.get_column_name(self._blueprint, k)
-            default_value = v.get('default') or ''
+            default_value = v.get('default') or (str(uuid.uuid4()) if column_name == 'uid' else '')
             out.update({column_name: default_value})
 
             type_func = v.get('type')
@@ -359,8 +382,12 @@ class MTSignalsModel(QAbstractItemModel):
         for k, v in out.items():
             if isinstance(v, list) and len(v) > 0:
                 for member in v:
-                    out.update({k: member})
-                    yield pd.Series(out)
+                    serie = out.copy()
+                    serie.update({k: member})
+                    if "uid" in out:
+                        # append pulse nb to uid to make it unique
+                        serie['uid'] = str(uuid.uuid5(uuid.UUID(serie['uid']), member))
+                    yield pd.Series(serie)
                 break
         else:
             yield pd.Series(out)
