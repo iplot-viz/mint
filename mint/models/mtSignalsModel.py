@@ -233,6 +233,50 @@ class MTSignalsModel(QAbstractItemModel):
                     f"{col_name} is not present in given dataframe.")
                 continue
         self._max_id = df.index.size - 1
+
+    def append_dataframe(self, df: pd.DataFrame):
+        newSz = df.index.size
+        self.insertRows(0, newSz)
+
+        # Accomodate for missing columns in df.
+        columns = list(mtbp.get_column_names(self._blueprint))
+        for df_column_name in df.columns:
+            if df_column_name not in columns:
+                if df_column_name == self.ROWUID_COLNAME:
+                    # Generate missing UID
+                    df.insert(df.columns.size, self.ROWUID_COLNAME,
+                        [str(uuid.uuid4()) for _ in range(df.index.size)])
+                else:
+                    logger.warning(f"{df_column_name} is not a valid column name.")
+                    if df_column_name in self._blueprint.keys():
+                        df.rename({df_column_name: mtbp.get_column_name(
+                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+
+        # Force blueprint to have uid column
+        if not self._blueprint.get(self.ROWUID_COLNAME):
+            self._blueprint[self.ROWUID_COLNAME] = {
+                "code_name": "uid",
+                "default": "",
+                "label": "uid",
+                "type_name": "str",
+                "type": str
+            }
+        columns = list(mtbp.get_column_names(self._blueprint))
+
+        for c, col_name in enumerate(columns):
+            if col_name in df.columns:
+                self._table.iloc[-newSz:, c] = df.loc[:, col_name]
+            elif col_name.lower() in df.columns:
+                self._table.iloc[-newSz:, c] = df.loc[:, col_name.lower()]
+            elif col_name.upper() in df.columns:
+                self._table.iloc[-newSz:, c] = df.loc[:, col_name.upper()]
+            elif col_name.capitalize() in df.columns:
+                self._table.iloc[-newSz:, c] = df.loc[:, col_name.capitalize()]
+            else:
+                logger.debug(
+                    f"{col_name} is not present in given dataframe.")
+                continue
+        self._max_id = df.index.size - 1
             
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
