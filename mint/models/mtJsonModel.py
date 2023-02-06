@@ -172,7 +172,6 @@ class TreeItem:
         self._parent = parent
         self._key = ""
         self._value = ""
-        self._path = ""
         self._consulted = False
         self._unit = None
         self._value_type = "folder"
@@ -215,16 +214,6 @@ class TreeItem:
     def key(self, key: str):
         """Set key name of the current item"""
         self._key = key
-
-    @property
-    def path(self) -> str:
-        """Return the path"""
-        return self._path
-
-    @path.setter
-    def path(self, path: str):
-        """Set path of the current item"""
-        self._path = path
 
     @property
     def children(self) -> list:
@@ -272,10 +261,7 @@ class TreeItem:
         self._consulted = consulted
 
     @classmethod
-    def load(cls, value: Union[List, Dict], parent: "TreeItem" = None, path=None, sort=True,
-             consulted=False) -> "TreeItem":
-        if path is None:
-            path = []
+    def load(cls, value: Union[List, Dict], parent: "TreeItem" = None, sort=True, consulted=False) -> "TreeItem":
         if consulted:
             root_item = parent
             root_item._consulted = consulted
@@ -286,16 +272,14 @@ class TreeItem:
             items = sorted(value.items()) if sort else value.items()
 
             for key, value in items:
-                path.append(key)
-                child = cls.load(value, root_item, path)
-                child.key = key
+                child = cls.load(value, root_item)
                 if value == '':
+                    child.key = key[:-2]
                     child.value_type = "variable"
                 else:
+                    child.key = key
                     child.value_type = "folder"
-                child.path = '-'.join(path)
                 root_item.append_child(child)
-                path.pop()
 
         elif isinstance(value, list):
             for index, value in enumerate(value):
