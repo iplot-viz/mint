@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from mint.gui.mtVarTree import MTVarTree
 from mint.gui.mtVarTable import MTVarTable
-from mint.tools.converters import parse_groups_to_dict
+from mint.tools.converters import parse_groups_to_dict, parse
 
 
 class MTVarSelector(QWidget):
@@ -29,14 +29,14 @@ class MTVarSelector(QWidget):
         self.searchbar.textChanged.connect(self.update_display)
 
         self.path_input = QLineEdit()
-        self.add_to_list_btn = QPushButton("Add to list")
+        self.add_to_list_btn = QPushButton('Add to list')
         self.add_to_list_btn.clicked.connect(self.add_to_table)
-        self.clear_btn = QPushButton("Clear")
+        self.clear_btn = QPushButton('Clear')
         self.clear_btn.clicked.connect(self.tableView.clear_table)
-        self.finish_btn = QPushButton("Add to table")
+        self.finish_btn = QPushButton('Add to table')
 
-        self.search_btn = QPushButton("Search")
-        self.search_btn.clicked.connect(self.update_display)
+        self.search_btn = QPushButton('Search')
+        self.search_btn.clicked.connect(self.search)
         self.type_search = QComboBox()
         self.type_search.addItems(['contains', 'startsWith', 'endsWith'])
         # self.type_search.currentTextChanged.connect(self.update_display)
@@ -79,24 +79,26 @@ class MTVarSelector(QWidget):
         text = self.searchbar.text()
         if len(text) < 3:
             self.tree.set_model(self.get_current_source())
+
+    def search(self):
+        text = self.searchbar.text()
+        self.tree.set_model('SEARCH')
+
+        type_search = self.type_search.currentText()
+
+        if type_search == 'startsWith':
+            pattern = f'.*{text}'
+        elif type_search == 'contains':
+            pattern = f'.*{text}.*'
+        elif type_search == 'endsWith':
+            pattern = f'.*{text}'
         else:
-            self.tree.set_model("SEARCH")
+            pattern = ''
+        data_source_name = self.get_current_source()
+        found = AccessHelper.da.get_var_list(data_source_name=data_source_name, pattern=pattern)
 
-            type_search = self.type_search.currentText()
-
-            if type_search == 'startsWith':
-                pattern = f".*{text}"
-            elif type_search == 'contains':
-                pattern = f".*{text}.*"
-            elif type_search == 'endsWith':
-                pattern = f".*{text}"
-            else:
-                pattern = ""
-            data_source_name = self.get_current_source()
-            found = AccessHelper.da.get_var_list(data_source_name=data_source_name, pattern=pattern)
-
-            new_dict = parse_groups_to_dict(found)
-            self.tree.models["SEARCH"].load(new_dict)
+        new_dict = parse(found)
+        self.tree.models['SEARCH'].load(new_dict)
 
     def add_to_table(self):
         indexes = self.tree.selectedIndexes()

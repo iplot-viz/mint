@@ -46,11 +46,12 @@ class MTVarTree(QTreeView):
     def load_model(self, data_source_name):
         if data_source_name not in self.models:
             self.models[data_source_name] = JsonModel()
+            # AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
             file_path = QFileInfo(__file__).absoluteDir().filePath(f"{data_source_name}.txt")
             with open(file_path, encoding='utf-8') as file:
                 lines = file.read().split('\n')
                 document = parse_groups_to_dict(lines)
-                self.models[data_source_name].load(document)
+            self.models[data_source_name].load(document)
 
         self.setModel(self.models[data_source_name])
 
