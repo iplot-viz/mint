@@ -1,6 +1,6 @@
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QWidget, QStyle, QLineEdit, QPushButton, QComboBox, QHBoxLayout, QVBoxLayout
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from mint.gui.mtVarTree import MTVarTree
 from mint.gui.mtVarTable import MTVarTable
@@ -8,6 +8,7 @@ from mint.tools.converters import parse_groups_to_dict, parse
 
 
 class MTVarSelector(QWidget):
+    cmd_finish = Signal(object)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -64,10 +65,11 @@ class MTVarSelector(QWidget):
         mid_h_layout.addWidget(self.tableView)
         main_v_layout = QVBoxLayout()
         main_v_layout.addLayout(top_h_layout)
-        main_v_layout.addLayout(mid_h_layout)
+        self.add_layout = main_v_layout.addLayout(mid_h_layout)
         main_v_layout.addLayout(bot_v_layout)
         self.setLayout(main_v_layout)
 
+        self.finish_btn.clicked.connect(self.finish)
     def get_current_source(self):
         return self.sources_combo.currentText()
 
@@ -115,3 +117,8 @@ class MTVarSelector(QWidget):
             self.add_to_table()
         elif event.key() == Qt.Key.Key_Delete:
             self.tableView.remove_from_table()
+
+    def finish(self):
+        df = self.tableView.get_variables_df()
+        self.cmd_finish.emit(df)
+        self.tableView.clear_table()

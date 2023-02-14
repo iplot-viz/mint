@@ -144,6 +144,7 @@ class MTSignalConfigurator(QWidget):
     hideProgress = Signal()
     busy = Signal()
     ready = Signal()
+    add_dataframe = Signal(pd.DataFrame)
 
     def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
@@ -194,7 +195,8 @@ class MTSignalConfigurator(QWidget):
 
         self.selectVarDialog = MTVarSelector()
 
-        self.selectVarDialog.finish_btn.clicked.connect(self.insert_dataframe)
+        self.selectVarDialog.cmd_finish.connect(self.insert_dataframe)
+
         self.model.insertRows(0, 1, QModelIndex())
 
     def onCurrentViewChanged(self, index: int):
@@ -250,10 +252,8 @@ class MTSignalConfigurator(QWidget):
     def on_tree_view(self):
         self.selectVarDialog.show()
 
-    def insert_dataframe(self):
-        df = self.selectVarDialog.tableView.get_variables_df()
+    def insert_dataframe(self, df):
         self._model.append_dataframe(df)
-        self.selectVarDialog.tableView.clear_table()
 
     def insertRow(self):
         selection = []

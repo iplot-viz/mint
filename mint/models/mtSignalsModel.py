@@ -188,6 +188,13 @@ class MTSignalsModel(QAbstractItemModel):
         to_drop = list(range(self._max_id + 1, self._table.index.size))
         return self._table.drop(to_drop, axis=0)
 
+    def remove_empty_rows(self):
+        columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime', 'x', 'y', 'z', 'Plot type', 'Status']
+        self._table = self._table[(self._table[columns].isnull().sum(1) + (self._table[columns]=="").sum(1)) < 14]
+
+    def add_empty_row(self):
+        self._table = self._table.append(pd.Series(), ignore_index=True)
+
     def set_dataframe(self, df: pd.DataFrame):
         oldSz = self.rowCount(None)
         self.removeRows(0, oldSz)
@@ -235,6 +242,7 @@ class MTSignalsModel(QAbstractItemModel):
         self._max_id = df.index.size - 1
 
     def append_dataframe(self, df: pd.DataFrame):
+        self.remove_empty_rows()
         newSz = df.index.size
         self.insertRows(0, newSz)
 
@@ -276,7 +284,10 @@ class MTSignalsModel(QAbstractItemModel):
                 logger.debug(
                     f"{col_name} is not present in given dataframe.")
                 continue
-        self._max_id = df.index.size - 1
+
+        self.insertRows(0, 1)
+        self._max_id = self._table.index.size - 1
+
             
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
