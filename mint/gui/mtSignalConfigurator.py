@@ -195,7 +195,7 @@ class MTSignalConfigurator(QWidget):
 
         self.selectVarDialog = MTVarSelector()
 
-        self.selectVarDialog.cmd_finish.connect(self.insert_dataframe)
+        self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
         self.model.insertRows(0, 1, QModelIndex())
 
@@ -252,8 +252,9 @@ class MTSignalConfigurator(QWidget):
     def on_tree_view(self):
         self.selectVarDialog.show()
 
-    def insert_dataframe(self, df):
-        self._model.append_dataframe(df)
+    def append_dataframe(self, df):
+        if not df.empty:
+            self._model.append_dataframe(df)
 
     def insertRow(self):
         selection = []
