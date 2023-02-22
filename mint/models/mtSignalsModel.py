@@ -189,11 +189,25 @@ class MTSignalsModel(QAbstractItemModel):
         return self._table.drop(to_drop, axis=0)
 
     def remove_empty_rows(self):
-        columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime', 'x', 'y', 'z', 'Plot type', 'Status']
-        self._table = self._table[(self._table[columns].isnull().sum(1) + (self._table[columns]=="").sum(1)) < 14]
+        columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime',
+                   'x', 'y', 'z', 'Plot type', 'Status']
+        self._table = self._table[(self._table[columns].isnull().sum(1) + (self._table[columns] == "").sum(1)) < 14]
 
-    def add_empty_row(self):
-        self._table = self._table.append(pd.Series(), ignore_index=True)
+    def accommodate(self, df: pd.DataFrame):
+        # Accommodate for missing columns in df.
+        columns = list(mtbp.get_column_names(self._blueprint))
+        for df_column_name in df.columns:
+            if df_column_name not in columns:
+                if df_column_name == self.ROWUID_COLNAME:
+                    # Generate missing UID
+                    df.insert(df.columns.size, self.ROWUID_COLNAME,
+                              [str(uuid.uuid4()) for _ in range(df.index.size)])
+                else:
+                    logger.warning(f"{df_column_name} is not a valid column name.")
+                    if df_column_name in self._blueprint.keys():
+                        df.rename({df_column_name: mtbp.get_column_name(
+                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+        return df
 
     def set_dataframe(self, df: pd.DataFrame):
         oldSz = self.rowCount(None)
@@ -201,20 +215,8 @@ class MTSignalsModel(QAbstractItemModel):
         newSz = df.index.size
         self.insertRows(0, newSz)
 
-        # Accomodate for missing columns in df.
-        columns = list(mtbp.get_column_names(self._blueprint))
-        for df_column_name in df.columns:
-            if df_column_name not in columns:
-                if df_column_name == self.ROWUID_COLNAME:
-                    # Generate missing UID
-                    df.insert(df.columns.size, self.ROWUID_COLNAME,
-                        [str(uuid.uuid4()) for _ in range(df.index.size)])
-                else:
-                    logger.warning(f"{df_column_name} is not a valid column name.")
-                    if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtbp.get_column_name(
-                            self._blueprint, df_column_name)}, axis=1, inplace=True)
-        
+        df = self.accommodate(df)
+
         # Force blueprint to have uid column
         if not self._blueprint.get(self.ROWUID_COLNAME):
             self._blueprint[self.ROWUID_COLNAME] = {
@@ -242,53 +244,17 @@ class MTSignalsModel(QAbstractItemModel):
         self._max_id = df.index.size - 1
 
     def append_dataframe(self, df: pd.DataFrame):
-        self.remove_empty_rows()
-        newSz = df.index.size
-        self.insertRows(0, newSz)
+        df = self.accommodate(df)
+        df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
+        if len(self._table.columns[(self._table.iloc[[-1]] != '').all()]) < 3:
+            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
+            self._max_id = self._table.index.size - 2
+        else:
+            self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+            self._max_id = self._table.index.size - 1
 
-        # Accomodate for missing columns in df.
-        columns = list(mtbp.get_column_names(self._blueprint))
-        for df_column_name in df.columns:
-            if df_column_name not in columns:
-                if df_column_name == self.ROWUID_COLNAME:
-                    # Generate missing UID
-                    df.insert(df.columns.size, self.ROWUID_COLNAME,
-                        [str(uuid.uuid4()) for _ in range(df.index.size)])
-                else:
-                    logger.warning(f"{df_column_name} is not a valid column name.")
-                    if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtbp.get_column_name(
-                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+        self.layoutChanged.emit()
 
-        # Force blueprint to have uid column
-        if not self._blueprint.get(self.ROWUID_COLNAME):
-            self._blueprint[self.ROWUID_COLNAME] = {
-                "code_name": "uid",
-                "default": "",
-                "label": "uid",
-                "type_name": "str",
-                "type": str
-            }
-        columns = list(mtbp.get_column_names(self._blueprint))
-
-        for c, col_name in enumerate(columns):
-            if col_name in df.columns:
-                self._table.iloc[-newSz:, c] = df.loc[:, col_name]
-            elif col_name.lower() in df.columns:
-                self._table.iloc[-newSz:, c] = df.loc[:, col_name.lower()]
-            elif col_name.upper() in df.columns:
-                self._table.iloc[-newSz:, c] = df.loc[:, col_name.upper()]
-            elif col_name.capitalize() in df.columns:
-                self._table.iloc[-newSz:, c] = df.loc[:, col_name.capitalize()]
-            else:
-                logger.debug(
-                    f"{col_name} is not present in given dataframe.")
-                continue
-
-        self.insertRows(0, 1)
-        self._max_id = self._table.index.size - 1
-
-            
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
         output = dict()
@@ -312,7 +278,7 @@ class MTSignalsModel(QAbstractItemModel):
         if input_dict.get('table'):
             df = pd.DataFrame(input_dict.get('table'),
                               dtype=str, columns=column_names)
-        elif input_dict.get('variables_table'): # old style.
+        elif input_dict.get('variables_table'):  # old style.
             df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
             df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)
         else:
@@ -329,7 +295,7 @@ class MTSignalsModel(QAbstractItemModel):
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         if (row_idx > self._max_id):
             return
-            
+
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
             signal.status_info.reset()
@@ -421,13 +387,13 @@ class MTSignalsModel(QAbstractItemModel):
             # Override global values with locals for fields with 'override' attribute
             if v.get('override'):
                 override_global |= (
-                    get_value(inp, column_name, type_func) is not None)
+                        get_value(inp, column_name, type_func) is not None)
                 if override_global:
                     value = get_value(inp, column_name, type_func)
                 else:
                     value = default_value
             else:
-                if k == 'DataSource': # Do not read default value when parsing an already filled in table.
+                if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
                     value = get_value(inp, column_name, type_func)
                 else:
                     value = get_value(inp, column_name, type_func) or default_value
