@@ -107,7 +107,7 @@ class MTVarSelector(QWidget):
         data_list = self.tableView.get_variables_list()
         indexes = [ix.internalPointer() for ix in indexes]
         for ix in indexes:
-            value = ix.key
+            value = ix.key+ix.dimension
             if not ix.has_child() and [self.get_current_source(), value] not in data_list:
                 self.tableView.model.add_row([self.get_current_source(), value])
         self.tree.clearSelection()
