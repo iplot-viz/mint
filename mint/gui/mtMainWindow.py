@@ -110,6 +110,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.graphicsArea.layout().addWidget(self.canvasStack)
         self.streamerCfgWidget = MTStreamConfigurator(self)
         self.aboutMINT = MTAbout(self)
+        self.setAcceptDrops(True)
 
         if impl.lower() == "matplotlib":
             from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
