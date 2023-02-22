@@ -66,7 +66,10 @@ class JsonModel(QAbstractItemModel):
         item = index.internalPointer()
 
         if role == Qt.DisplayRole:
-            return item.key
+            if item.is_folder():
+                return item.key
+            else:
+                return f'{item.key} ({item.unit}) {item.data_type}{item.dimension}'
         elif role == Qt.EditRole:
             if index.column() == 1:
                 return item.key
@@ -168,14 +171,18 @@ class JsonModel(QAbstractItemModel):
 class TreeItem:
     """A Json item corresponding to a line in QTreeView"""
 
-    def __init__(self, parent: "TreeItem" = None):
+    def __init__(self, parent: 'TreeItem' = None, key='', consulted=False, unit='', description='',
+                 data_type='', dimension='', value_type='folder'):
         self._parent = parent
-        self._key = ""
-        self._value = ""
-        self._path = ""
-        self._consulted = False
-        self._unit = None
-        self._value_type = "folder"
+        self._key = key
+        # self._value = value
+        self._path = ''
+        self._consulted = consulted
+        self._unit = unit
+        self._description = description
+        self._dimension = dimension
+        self._data_type = data_type
+        self._value_type = value_type
         self._children = []
         self.SizeHintRole = 100
 
@@ -217,6 +224,14 @@ class TreeItem:
         self._key = key
 
     @property
+    def data_type(self) -> str:
+        return self._data_type
+
+    @data_type.setter
+    def data_type(self, data_type: str):
+        self._data_type = data_type
+
+    @property
     def path(self) -> str:
         """Return the path"""
         return self._path
@@ -241,25 +256,23 @@ class TreeItem:
         """Set unit of the current item"""
         self._unit = unit
 
-    @property
-    def value(self) -> str:
-        """Return the value name of the current item"""
-        return self._value
-
-    @value.setter
-    def value(self, value: str):
-        """Set value name of the current item"""
-        self._value = value
+    # @property
+    # def value(self) -> str:
+    #     """Return the value name of the current item"""
+    #     return self._value
+    #
+    # @value.setter
+    # def value(self, value: str):
+    #     """Set value name of the current item"""
+    #     self._value = value
 
     @property
     def value_type(self):
-        """Return the python type of the item's value."""
         return self._value_type
 
     @value_type.setter
-    def value_type(self, value):
-        """Set the python type of the item's value."""
-        self._value_type = value
+    def value_type(self, value_type):
+        self._value_type = value_type
 
     @property
     def consulted(self):
@@ -271,9 +284,25 @@ class TreeItem:
         """Set if item is consulted or not"""
         self._consulted = consulted
 
+    @property
+    def description(self):
+        return self._description
+
+    @description.setter
+    def description(self, description):
+        self._description = description
+
+    @property
+    def dimension(self):
+        return self._dimension
+
+    @dimension.setter
+    def dimension(self, dimension):
+        self._dimension = dimension
+
     @classmethod
-    def load(cls, value: Union[List, Dict], parent: "TreeItem" = None, path=None, sort=True,
-             consulted=False) -> "TreeItem":
+    def load(cls, value: Union[List, Dict], parent: "TreeItem" = None, path: object = None,
+             consulted: object = False) -> "TreeItem":
         if path is None:
             path = []
         if consulted:
@@ -282,30 +311,21 @@ class TreeItem:
         else:
             root_item = TreeItem(parent)
 
-        if isinstance(value, dict):
-            items = sorted(value.items()) if sort else value.items()
+        if not isinstance(value, dict):
+            return root_item
+        items = sorted(value.items())
 
-            for key, value in items:
-                path.append(key)
-                child = cls.load(value, root_item, path)
-                if value == '':
-                    child.key = key[:-2]
-                    child.value_type = "variable"
-                else:
-                    child.key = key
-                    child.value_type = "folder"
-                child.path = '-'.join(path)
-                root_item.append_child(child)
-                path.pop()
-
-        elif isinstance(value, list):
-            for index, value in enumerate(value):
-                child = cls.load(value, root_item)
-                child.key = index
-                root_item.append_child(child)
-
-        else:
-            root_item.value = value
-            root_item.value_type = type(value)
+        for key, val in items:
+            path.append(key)
+            child = cls.load(val, root_item, path)
+            if val == '':
+                child.key = key[:-2]
+                child.value_type = "variable"
+            else:
+                child.key = key
+                child.value_type = "folder"
+            child.path = '-'.join(path).replace('?V', '')
+            root_item.append_child(child)
+            path.pop()
 
         return root_item
