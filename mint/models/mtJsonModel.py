@@ -51,7 +51,8 @@ class JsonModel(QAbstractItemModel):
 
         return True
 
-    def add_children(self, parent: "TreeItem", document: dict):
+    @staticmethod
+    def add_children(parent: "TreeItem", document: dict):
         TreeItem.load(document, parent, consulted=True)
 
     def data(self, index: Union[QModelIndex, QPersistentModelIndex], role: int = ...) -> Any:
@@ -69,7 +70,7 @@ class JsonModel(QAbstractItemModel):
             if item.is_folder():
                 return item.key
             else:
-                return f'{item.key} ({item.unit}) {item.data_type}{item.dimension}'
+                return f'{item.key} ({item.unit}) {item.data_type}{item.get_dimension_str()}'
         elif role == Qt.EditRole:
             if index.column() == 1:
                 return item.key
@@ -134,9 +135,9 @@ class JsonModel(QAbstractItemModel):
 
         return child_list
 
-    def hasChildren(self, parent: QModelIndex()) -> bool:
+    def hasChildren(self, parent: Union[QModelIndex, QPersistentModelIndex] = ...) -> bool:
         if parent.column() > 0:
-            return 0
+            return False
 
         if not parent.isValid():
             parent_item = self._root_item
@@ -299,6 +300,18 @@ class TreeItem:
     @dimension.setter
     def dimension(self, dimension):
         self._dimension = dimension
+
+    def get_dimension_str(self):
+        if self.dimension == [1]:
+            return ''
+        else:
+            return '[' + ']['.join(str(v) for v in self.dimension) + ']'
+
+    def get_dimension_str_0(self):
+        if self.dimension == [1]:
+            return ''
+        else:
+            return '[' + ']['.join('0' for _ in self.dimension) + ']'
 
     @classmethod
     def load(cls, value: Union[List, Dict], parent: "TreeItem" = None, path: object = None,

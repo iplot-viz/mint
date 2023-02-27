@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QTreeView, QToolTip, QAbstractItemView
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from mint.models.mtJsonModel import JsonModel, TreeItem
 from mint.tools.converters import parse_groups_to_dict, parse_vars_to_dict
-
+from pathlib import Path
 DEFAULT_SOURCE = 'codacuda'
 
 
@@ -37,11 +37,10 @@ class MTVarTree(QTreeView):
         if data:
             data_parsed = parse_vars_to_dict(data, path)
 
-            self.models[data_source_name].layoutAboutToBeChanged.emit()
-            self.models[data_source_name].add_children(index.internalPointer(), data_parsed)
-            self.models[data_source_name].layoutChanged.emit()
+            self.model().add_children(parent=index.internalPointer(), document=data_parsed)
 
         self.check_folder(index.internalPointer(), data_source_name)
+        self.model().layoutChanged.emit()
 
     def check_folder(self, index, data_source_name):
         for child in index.children:
@@ -54,38 +53,41 @@ class MTVarTree(QTreeView):
                     child.data_type = data['val']['type']
                     child.unit = data['val']['units']
                     child.description = data['val']['description']
-                    if data['val']['dimensionality'] != [1]:
-                        child.dimension = '[' + ']['.join(str(v) for v in data['val']['dimensionality']) + ']'
+                    child.dimension = data['val']['dimensionality']
                 elif list(data.keys()) == ['value']:
                     child.data_type = data['value']['type']
                     child.unit = data['value']['units']
                     child.description = data['value']['description']
-                    if data['value']['dimensionality'] != [1]:
-                        child.dimension = '[' + ']['.join(str(v) for v in data['value']['dimensionality']) + ']'
+                    child.dimension = data['value']['dimensionality']
                 else:
                     child.value_type = 'folder'
                     for key, val in data.items():
-                        dimensionality = '' if val['dimensionality'] == [1] else '[' + ']['.join(
-                            str(v) for v in val['dimensionality']) + ']'
                         child.append_child(TreeItem(parent=child,
                                                     key=f'{child.key}/{key}',
                                                     consulted=True,
                                                     unit=val['units'],
                                                     description=val['description'],
-                                                    dimension=dimensionality,
+                                                    dimension=val['dimensionality'],
                                                     data_type=val['type'],
                                                     value_type='variable'
                                                     ))
 
     def load_model(self, data_source_name):
         if data_source_name not in self.models:
+
             self.models[data_source_name] = JsonModel()
-            # AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
-            file_path = QFileInfo(__file__).absoluteDir().filePath(f"{data_source_name}.txt")
-            with open(file_path, encoding='utf-8') as file:
-                lines = file.read().split('\n')
-                document = parse_groups_to_dict(lines)
-            self.models[data_source_name].load(document)
+            try:
+                document = AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
+                self.models[data_source_name].load(document)
+
+            except Exception as e:
+                file_path = QFileInfo(__file__).absoluteDir().filePath(f"{data_source_name}.txt")
+                if Path(file_path).is_file():
+                    with open(file_path, encoding='utf-8') as file:
+                        lines = file.read().split('\n')
+                        document = parse_groups_to_dict(lines)
+                        self.models[data_source_name].load(document)
+
             self.check_folder(self.models[data_source_name]._root_item, data_source_name)
 
         self.setModel(self.models[data_source_name])
