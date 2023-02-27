@@ -9,6 +9,7 @@ from mint.tools.converters import parse_groups_to_dict, parse
 
 class MTVarSelector(QWidget):
     cmd_finish = Signal(object)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -70,6 +71,7 @@ class MTVarSelector(QWidget):
         self.setLayout(main_v_layout)
 
         self.finish_btn.clicked.connect(self.finish)
+
     def get_current_source(self):
         return self.sources_combo.currentText()
 
@@ -84,6 +86,8 @@ class MTVarSelector(QWidget):
 
     def search(self):
         text = self.searchbar.text()
+        if text == '':
+            return
         self.tree.set_model('SEARCH')
 
         type_search = self.type_search.currentText()
@@ -98,16 +102,21 @@ class MTVarSelector(QWidget):
             pattern = ''
         data_source_name = self.get_current_source()
         found = AccessHelper.da.get_var_list(data_source_name=data_source_name, pattern=pattern)
+        if found:
+            new_dict = parse(found)
+            self.tree.models['SEARCH'].load(new_dict)
+        else:
+            self.tree.models['SEARCH'].load({})
 
-        new_dict = parse(found)
-        self.tree.models['SEARCH'].load(new_dict)
+        self.tree.check_folder(self.tree.model()._root_item, data_source_name)
 
     def add_to_table(self):
         indexes = self.tree.selectedIndexes()
         data_list = self.tableView.get_variables_list()
         indexes = [ix.internalPointer() for ix in indexes]
         for ix in indexes:
-            value = ix.key+ix.dimension
+
+            value = ix.key + ix.get_dimension_str_0()
             if not ix.has_child() and [self.get_current_source(), value] not in data_list:
                 self.tableView.model.add_row([self.get_current_source(), value])
         self.tree.clearSelection()
