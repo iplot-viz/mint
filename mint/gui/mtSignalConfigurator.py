@@ -251,6 +251,7 @@ class MTSignalConfigurator(QWidget):
 
     def on_tree_view(self):
         self.selectVarDialog.show()
+        self.selectVarDialog.activateWindow()
 
     def append_dataframe(self, df):
         if not df.empty:
