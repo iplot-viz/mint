@@ -40,6 +40,7 @@ class MTVarTree(QTreeView):
             self.model().add_children(parent=index.internalPointer(), document=data_parsed)
 
         self.check_folder(index.internalPointer(), data_source_name)
+        index.internalPointer().consulted = True
         self.model().layoutChanged.emit()
 
     def check_folder(self, index, data_source_name):
@@ -76,11 +77,11 @@ class MTVarTree(QTreeView):
         if data_source_name not in self.models:
 
             self.models[data_source_name] = JsonModel()
-            try:
-                document = AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
+            lines = AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
+            if lines:
+                document = parse_groups_to_dict(lines)
                 self.models[data_source_name].load(document)
-
-            except Exception as e:
+            else:
                 file_path = QFileInfo(__file__).absoluteDir().filePath(f"{data_source_name}.txt")
                 if Path(file_path).is_file():
                     with open(file_path, encoding='utf-8') as file:
