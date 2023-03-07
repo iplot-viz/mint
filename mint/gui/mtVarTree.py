@@ -5,13 +5,14 @@ from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from mint.models.mtJsonModel import JsonModel, TreeItem
 from mint.tools.converters import parse_groups_to_dict, parse_vars_to_dict
 from pathlib import Path
+
 DEFAULT_SOURCE = 'codacuda'
 
 
 class MTVarTree(QTreeView):
     def __init__(self):
         QTreeView.__init__(self)
-        self.models = {'SEARCH': JsonModel()}
+        self.models = {'SEARCH': JsonModel(name='SEARCH')}
         self.setSelectionMode(self.selectionMode().ExtendedSelection)
         self.setHeaderHidden(True)
         self.setColumnWidth(0, 205)
@@ -31,13 +32,13 @@ class MTVarTree(QTreeView):
         data_source_name = self.parent().get_current_source()
         if index.internalPointer().consulted:
             return
-        path = index.internalPointer().path
-        pattern = f'{path}:.*'
-        data = AccessHelper.da.get_var_list(data_source_name=data_source_name, pattern=pattern)
-        if data:
-            data_parsed = parse_vars_to_dict(data, path)
-
-            self.model().add_children(parent=index.internalPointer(), document=data_parsed)
+        if self.model().name != 'SEARCH':
+            path = index.internalPointer().path
+            pattern = f'{path}:.*'
+            data = AccessHelper.da.get_var_list(data_source_name=data_source_name, pattern=pattern)
+            if data:
+                data_parsed = parse_vars_to_dict(data, path)
+                self.model().add_children(parent=index.internalPointer(), document=data_parsed)
 
         self.check_folder(index.internalPointer(), data_source_name)
         index.internalPointer().consulted = True
@@ -76,7 +77,7 @@ class MTVarTree(QTreeView):
     def load_model(self, data_source_name):
         if data_source_name not in self.models:
 
-            self.models[data_source_name] = JsonModel()
+            self.models[data_source_name] = JsonModel(name=data_source_name)
             lines = AccessHelper.da.get_cbs_list(data_source_name=data_source_name)
             if lines:
                 document = parse_groups_to_dict(lines)
