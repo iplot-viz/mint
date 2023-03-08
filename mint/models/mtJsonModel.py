@@ -6,10 +6,11 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, QObject, Qt, QSize, 
 class JsonModel(QAbstractItemModel):
     """ An editable model of Json data """
 
-    def __init__(self, parent: QObject = None):
+    def __init__(self, parent: QObject = None, name=''):
         super().__init__(parent)
 
         self._root_item = TreeItem()
+        self.name = name
 
     def supportedDropActions(self):
         return Qt.CopyAction | Qt.MoveAction
@@ -176,7 +177,6 @@ class TreeItem:
                  data_type='', dimension='', value_type='folder'):
         self._parent = parent
         self._key = key
-        # self._value = value
         self._path = ''
         self._consulted = consulted
         self._unit = unit
