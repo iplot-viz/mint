@@ -20,7 +20,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
-from mint.gui.mtVarSelector import MTVarSelector
+from iplotwidgets.variableBrowser import VariableBrowser
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
@@ -144,7 +144,7 @@ class MTSignalConfigurator(QWidget):
     hideProgress = Signal()
     busy = Signal()
     ready = Signal()
-    add_dataframe = Signal(pd.DataFrame)
+    #add_dataframe = Signal(pd.DataFrame)
 
     def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
@@ -193,7 +193,7 @@ class MTSignalConfigurator(QWidget):
 
         self.model.dataChanged.connect(self.resizeViewToColumns)
 
-        self.selectVarDialog = MTVarSelector()
+        self.selectVarDialog = VariableBrowser()
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 

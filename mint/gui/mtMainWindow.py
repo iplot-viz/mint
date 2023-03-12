@@ -15,6 +15,7 @@ import pkgutil
 import socket
 from threading import Timer
 import typing
+import pandas as pd
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
@@ -66,6 +67,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.plot_class = PlotXY
         self.signal_class = signal_class
         self.appVersion = appVersion
+        self.dragItem = None
         try:
             blueprint['DataSource']['default'] = data_sources[0]
         except IndexError:
@@ -114,12 +116,12 @@ class MTMainWindow(IplotQtMainWindow):
 
         if impl.lower() == "matplotlib":
             from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
-            self.canvasStack.addWidget(QtMatplotlibCanvas(
-                tight_layout=True, canvas=self.canvas, parent=self.canvasStack))
+            self.qtcanvas=QtMatplotlibCanvas(tight_layout=True, canvas=self.canvas, parent=self.canvasStack)
         elif impl.lower() == "vtk":
             from iplotlib.impl.vtk.qt import QtVTKCanvas
-            self.canvasStack.addWidget(QtVTKCanvas(
-                canvas=self.canvas, parent=self.canvasStack))
+            self.qtcanvas=QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
+        self.canvasStack.addWidget(self.qtcanvas)
+        self.qtcanvas.dropSignal.connect(self.onDropPlot)
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -593,3 +595,12 @@ class MTMainWindow(IplotQtMainWindow):
                         for signal in signals:
                             plot.add_signal(signal, stack=stack)
                 self.canvas.add_plot(plot, col=colnum - 1)
+
+    def onDropPlot(self, dropInfo):
+        dragged_item=dropInfo.dragged_item
+        row = dropInfo.row
+        col = dropInfo.col
+        new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
+                               columns=['DS', 'Variable', 'Stack'])
+        self.sigCfgWidget._model.append_dataframe(new_data)
+        self.drawClicked()

@@ -32,7 +32,8 @@ def runApp(qApp: QApplication, args=None):
 
     from importlib import metadata
 
-    iplotlib_version = metadata.version('iplotlib')
+    #iplotlib_version = metadata.version('iplotlib')
+    iplotlib_version = '0.9.0'
 
     logger = ls.get_logger(__name__)
 
