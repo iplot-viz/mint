@@ -11,7 +11,6 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-
 def runApp(qApp: QApplication, args=None):
     if args is None:
         return
@@ -22,6 +21,7 @@ def runApp(qApp: QApplication, args=None):
     from iplotlib.core import Canvas
     from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
     from iplotDataAccess.dataAccess import DataAccess
+    from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as ls
 
     from mint.app.dirs import DEFAULT_DATA_DIR, DEFAULT_DATA_SOURCES_CFG
@@ -50,28 +50,14 @@ def runApp(qApp: QApplication, args=None):
         except FileNotFoundError:
             logger.error(f"Unable to open file: {canvas_filename}")
 
-    def load_data_sources(da: DataAccess):
-        try:
-            if len(da.loadConfig()) < 1:
-                return False
-            else:
-                return True
-        except (OSError, IOError, FileNotFoundError) as e:
-            logger.warning(
-                f"no data source file, fallback to {DEFAULT_DATA_SOURCES_CFG}")
-            os.environ.update({'DATASOURCESCONF': DEFAULT_DATA_SOURCES_CFG})
-            return load_data_sources(da)
-
     logger.info("Running version {} iplotlib version {}".format(
         qApp.applicationVersion(), iplotlib_version))
-    #########################################################################
-    # 1. Data access handle
-    da = DataAccess()
-    if not load_data_sources(da):
+
+    if not AppDataAccess.loadConfiguration():
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
-    AccessHelper.da = da
+    AccessHelper.da = AppDataAccess.getDataAccess()
     # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
     canvasImpl = args.impl
 
@@ -117,7 +103,7 @@ def runApp(qApp: QApplication, args=None):
             data_sources.append(ds_name)
 
     mainWin = MTMainWindow(canvas,
-                           da,
+                           AccessHelper.da,
                            time_model,
                            appVersion=qApp.applicationVersion(),
                            data_dir=DEFAULT_DATA_DIR,
