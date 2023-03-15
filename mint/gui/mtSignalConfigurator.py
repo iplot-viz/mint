@@ -20,7 +20,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
-from iplotwidgets.variableBrowser import VariableBrowser
+from iplotwidgets.variableBrowser.variableBrowser import VariableBrowser
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
