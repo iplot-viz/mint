@@ -50,7 +50,7 @@ def runApp(q_app: QApplication, args=None):
 
     logger.info("Running version {} iplotlib version {}".format(
         q_app.applicationVersion(), iplotlib_version))
-    if not AppDataAccess.loadConfiguration(DEFAULT_DATA_SOURCES_CFG):
+    if not AppDataAccess.initialize(DEFAULT_DATA_SOURCES_CFG):
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
