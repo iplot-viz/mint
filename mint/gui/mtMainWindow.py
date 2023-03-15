@@ -13,13 +13,13 @@ import os
 import copy
 import pkgutil
 import socket
-from threading import Timer
 import typing
 import pandas as pd
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
-from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QSplitter, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
+    QSplitter, QVBoxLayout, QWidget
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
@@ -29,7 +29,6 @@ from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
-
 from iplotDataAccess.dataAccess import DataAccess
 from mint.gui.mtAbout import MTAbout
 
@@ -38,12 +37,12 @@ from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
-from mint.models.utils import mtBlueprintParser as mtbp
+from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 
-
 from iplotLogging import setupLogger as sl
+
 logger = sl.get_logger(__name__)
 
 
@@ -56,7 +55,7 @@ class MTMainWindow(IplotQtMainWindow):
                  appVersion: str,
                  data_dir: os.PathLike = '.',
                  data_sources: list = [],
-                 blueprint: dict = mtbp.DEFAULT_BLUEPRINT,
+                 blueprint: dict = mtBlueprintParser.DEFAULT_BLUEPRINT,
                  impl: str = "matplotlib",
                  signal_class: type = IplotSignalAdapter,
                  parent: typing.Optional[QWidget] = None,
@@ -80,7 +79,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.model = model
         self.sigCfgWidget = MTSignalConfigurator(
             blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'), data_sources=data_sources)
-        self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"),)
+        self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
         self._progressBar = QProgressBar()
@@ -116,10 +115,10 @@ class MTMainWindow(IplotQtMainWindow):
 
         if impl.lower() == "matplotlib":
             from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
-            self.qtcanvas=QtMatplotlibCanvas(tight_layout=True, canvas=self.canvas, parent=self.canvasStack)
+            self.qtcanvas = QtMatplotlibCanvas(tight_layout=True, canvas=self.canvas, parent=self.canvasStack)
         elif impl.lower() == "vtk":
             from iplotlib.impl.vtk.qt import QtVTKCanvas
-            self.qtcanvas=QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
+            self.qtcanvas = QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.onDropPlot)
 
@@ -194,6 +193,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.toolBar.exportAction.triggered.connect(self.onExport)
         self.toolBar.importAction.triggered.connect(self.onImport)
 
+    @staticmethod
     def onTableAbort(self, message):
         logger.error(message)
 
@@ -279,8 +279,7 @@ class MTMainWindow(IplotQtMainWindow):
         })
         workspace.update({'data_range': self.dataRangeSelector.export_dict()})
         workspace.update({'signal_cfg': self.sigCfgWidget.export_dict()})
-        workspace.update(
-            {'main_canvas': self.canvasStack.currentWidget().export_dict()})
+        workspace.update({'main_canvas': self.canvasStack.currentWidget().export_dict()})
         self.indicateReady()
         return workspace
 
@@ -316,14 +315,11 @@ class MTMainWindow(IplotQtMainWindow):
 
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
-                self.sigCfgWidget.model.update_signal_data(
-                    waypt.idx, signal, True)
+                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
-            plot = self.canvas.plots[waypt.col_num -
-                                     1][waypt.row_num - 1]  # type: Plot
-            old_signal = plot.signals[str(
-                waypt.stack_num)][waypt.signal_stack_id]
+            plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
             for f in fields(old_signal):
@@ -336,20 +332,19 @@ class MTMainWindow(IplotQtMainWindow):
             if 'uid' not in params or params['uid'] is None:
                 params['uid'] = waypt.kwargs['uid']
 
-            new_signal = waypt.func(
-                *waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
 
-            self.sigCfgWidget.model.update_signal_data(
-                waypt.idx, new_signal, True)
+            self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
             # Replace signal.
-            plot.signals[str(waypt.stack_num)
-                         ][waypt.signal_stack_id] = new_signal
+            plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.setProgress(99)
 
-        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0), 
-            self.sigCfgWidget.model.index(self.sigCfgWidget.model.rowCount(QModelIndex()) - 1, self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
+        self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0),
+                                                 self.sigCfgWidget.model.index(
+                                                     self.sigCfgWidget.model.rowCount(QModelIndex()) - 1,
+                                                     self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
 
         self.sigCfgWidget.setProgress(100)
 
@@ -434,11 +429,11 @@ class MTMainWindow(IplotQtMainWindow):
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
 
-        self.drop_history()      # clean zoom history; is this best place?
+        self.drop_history()  # clean zoom history; is this best place?
         self.startAutoRefresh()
         self.indicateReady()
 
-    def streamClicked(self, no_build: bool = False):
+    def streamClicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         if self.streamerCfgWidget.isActivated():
             self.streamBtn.setText("Stopping")
@@ -535,19 +530,33 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
                 signal)
+        # import collections
+        # ord = collections.OrderedDict(sorted(plan.items()))
+        # new_plan = {}
+        # col_sp = 1
+        # for x, y in ord.items():
+        #     ord2 = collections.OrderedDict(sorted(y.items()))
+        #     row_sp = 1
+        #     rows = {}
+        #     next_col_sp = 1
+        #     for z, k in ord2.items():
+        #         rows[z + row_sp - 1] = k
+        #         row_sp = k[0]
+        #         next_col_sp = max(next_col_sp, k[1])
+        #     new_plan[x + col_sp - 1] = rows
+        #     col_sp = next_col_sp
 
         self.indicateBusy('Retrieving data...')
 
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
-        
-        self.build_canvas(self.canvas, plan, x_axis_date,
-                          x_axis_follow, x_axis_window)
+
+        self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicateBusy('Applying preferences...')
         # Merge with previous preferences
         self.canvas.merge(old_canvas)
-        
+
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
         self.indicateReady()
@@ -555,10 +564,8 @@ class MTMainWindow(IplotQtMainWindow):
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
             return
-
         canvas.cols = max(plan.keys())
-        canvas.rows = max([max(e.keys())
-                           for e in plan.values()])
+        canvas.rows = max([max(e.keys()) for e in plan.values()])
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for colnum, rows in plan.items():
@@ -583,9 +590,10 @@ class MTMainWindow(IplotQtMainWindow):
                     x_axis = LinearAxis(
                         is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow, window=x_axis_window)
 
-                    if x_axis_date and signal_x_is_date and rows[row+1][3][0] is not None and rows[row+1][3][1] is not None:
-                        x_axis.begin = rows[row+1][3][0]
-                        x_axis.end = rows[row+1][3][1]
+                    if x_axis_date and signal_x_is_date \
+                            and rows[row + 1][3][0] is not None and rows[row + 1][3][1] is not None:
+                        x_axis.begin = rows[row + 1][3][0]
+                        x_axis.end = rows[row + 1][3][1]
                         x_axis.original_begin = x_axis.begin
                         x_axis.original_end = x_axis.end
 
@@ -596,11 +604,11 @@ class MTMainWindow(IplotQtMainWindow):
                             plot.add_signal(signal, stack=stack)
                 self.canvas.add_plot(plot, col=colnum - 1)
 
-    def onDropPlot(self, dropInfo):
-        dragged_item=dropInfo.dragged_item
-        row = dropInfo.row
-        col = dropInfo.col
+    def onDropPlot(self, drop_info):
+        dragged_item = drop_info.dragged_item
+        row = drop_info.row
+        col = drop_info.col
         new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
-                               columns=['DS', 'Variable', 'Stack'])
+                                columns=['DS', 'Variable', 'Stack'])
         self.sigCfgWidget._model.append_dataframe(new_data)
         self.drawClicked()
