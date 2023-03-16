@@ -319,8 +319,7 @@ class MTMainWindow(IplotQtMainWindow):
 
             plot = self.canvas.plots[waypt.col_num -
                                      1][waypt.row_num - 1]  # type: Plot
-            old_signal = plot.signals[str(
-                waypt.stack_num)][waypt.signal_stack_id]
+            old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
             for f in fields(old_signal):
@@ -340,8 +339,7 @@ class MTMainWindow(IplotQtMainWindow):
                 waypt.idx, new_signal, True)
 
             # Replace signal.
-            plot.signals[str(waypt.stack_num)
-                         ][waypt.signal_stack_id] = new_signal
+            plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.setProgress(99)
 
