@@ -41,9 +41,9 @@ from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 
-from iplotLogging import setupLogger as sl
+from iplotLogging import setupLogger as setupLog
 
-logger = sl.get_logger(__name__)
+logger = setupLog.get_logger(__name__)
 
 
 class MTMainWindow(IplotQtMainWindow):
@@ -52,7 +52,7 @@ class MTMainWindow(IplotQtMainWindow):
                  canvas: Canvas,
                  da: DataAccess,
                  model: dict,
-                 appVersion: str,
+                 app_version: str,
                  data_dir: os.PathLike = '.',
                  data_sources: list = [],
                  blueprint: dict = mtBlueprintParser.DEFAULT_BLUEPRINT,
@@ -65,7 +65,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.da = da
         self.plot_class = PlotXY
         self.signal_class = signal_class
-        self.appVersion = appVersion
+        self.appVersion = app_version
         self.dragItem = None
         try:
             blueprint['DataSource']['default'] = data_sources[0]
@@ -194,7 +194,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.toolBar.importAction.triggered.connect(self.onImport)
 
     @staticmethod
-    def onTableAbort(self, message):
+    def onTableAbort(message):
         logger.error(message)
 
         box = QMessageBox()
@@ -311,7 +311,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         for i, waypt in enumerate(path):
             self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
-            self.sigCfgWidget.setProgress(i * 100 / path_len)
+            self.sigCfgWidget.setProgress(int(i * 100 / path_len))
 
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
@@ -366,8 +366,8 @@ class MTMainWindow(IplotQtMainWindow):
                                 'pulsenb': 'pulse_nb',
                                 'time_model': 'data_range'
                                 }
-                for f, r in replacements.items():
-                    payload = payload.replace(f, r)
+                for old, new in replacements.items():
+                    payload = payload.replace(old, new)
                 self.import_dict(json.loads(payload))
                 logger.info(f"Finished loading workspace {file_path}")
         except Exception as e:
