@@ -102,7 +102,7 @@ def runApp(q_app: QApplication, args=None):
     main_win = MTMainWindow(canvas,
                             AccessHelper.da,
                             time_model,
-                            appVersion=q_app.applicationVersion(),
+                            app_version=q_app.applicationVersion(),
                             data_dir=DEFAULT_DATA_DIR,
                             data_sources=data_sources,
                             blueprint=blueprint,
