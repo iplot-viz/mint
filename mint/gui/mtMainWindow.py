@@ -536,8 +536,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
         
-        self.build_canvas(self.canvas, plan, x_axis_date,
-                          x_axis_follow, x_axis_window)
+        self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicateBusy('Applying preferences...')
         # Merge with previous preferences
@@ -550,10 +549,15 @@ class MTMainWindow(IplotQtMainWindow):
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
             return
+        max_col = 0
+        max_row = 0
+        for col, row_plots in plan.items():
+            for row, plot in row_plots.items():
+                max_col = max(max_col, col + plot[1] - 1)
+                max_row = max(max_row, row + plot[0] - 1)
 
-        canvas.cols = max(plan.keys())
-        canvas.rows = max([max(e.keys())
-                           for e in plan.values()])
+        canvas.cols = max_col
+        canvas.rows = max_row
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for colnum, rows in plan.items():
