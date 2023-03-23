@@ -8,12 +8,27 @@ from PySide6.QtGui import QDoubleValidator
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
+class MyValidator(QDoubleValidator):
+    def __init__(self):
+        super(MyValidator, self).__init__()
+
+    def validate(self, s0: str, i1: int):
+        if not s0:
+            return QDoubleValidator.Acceptable, s0, i1
+
+        try:
+            float(s0)
+            return QDoubleValidator.Acceptable, s0, i1
+        except ValueError:
+            return QDoubleValidator.Invalid, s0, i1
+
+
 class MTPulseId(MTGenericAccessMode):
     def __init__(self, mappings: dict, parent=None):
         super().__init__(parent)
 
         self.options = [(1, "Second(s)"), (60, "Minute(s)"),
-                        (60*60, "Hour(s)"), (24*60*60, "Day(s)")]
+                        (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
 
         self.values = QStringListModel(self.form)
         self.values.setStringList([e[1] for e in self.options])
@@ -25,16 +40,16 @@ class MTPulseId(MTGenericAccessMode):
         self.units.setModel(self.values)
 
         self.startTime = QLineEdit(parent=self.form)
-        self.startTime.setValidator(QDoubleValidator())
+        self.startTime.setValidator(MyValidator())
 
         self.endTime = QLineEdit(parent=self.form)
-        self.endTime.setValidator(QDoubleValidator())
-
+        self.endTime.setValidator(MyValidator())
         self.mapper.setOrientation(Qt.Vertical)
-
-        mapAsList = mappings.get('value') if mappings.get(
-            'mode') == self.mode and mappings.get('value') else ['', '', '', '']
-        self.model.setStringList(mapAsList)
+        if mappings.get('mode') == self.mode and mappings.get('value'):
+            map_as_list = mappings.get('value')
+        else:
+            map_as_list = ['', '', '', '']
+        self.model.setStringList(map_as_list)
 
         self.mapper.setOrientation(Qt.Vertical)
         self.mapper.addMapping(self.pulseNumber, 0)
