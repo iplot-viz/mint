@@ -47,8 +47,8 @@ test_table_2 = {
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     def setUp(self) -> None:
         super().setUp()
-        if AppDataAccess.initialize():
-            self.sigCfgWidget = MTSignalConfigurator()
+        AppDataAccess.initialize()
+        self.sigCfgWidget = MTSignalConfigurator()
 
     def test_create_simple(self) -> None:
         self.sigCfgWidget.import_dict(test_table_1)
