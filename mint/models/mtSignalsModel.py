@@ -192,7 +192,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def accommodate(self, df: pd.DataFrame):
         # Accommodate for missing columns in df.
-        columns = list(mtbp.get_column_names(self._blueprint))
+        columns = list(mtBP.get_column_names(self._blueprint))
         for df_column_name in df.columns:
             if df_column_name not in columns:
                 if df_column_name == self.ROWUID_COLNAME:
