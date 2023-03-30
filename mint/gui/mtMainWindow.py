@@ -13,6 +13,7 @@ import os
 import copy
 import pkgutil
 import socket
+from threading import Timer
 import typing
 import pandas as pd
 
@@ -28,6 +29,7 @@ from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
+
 
 from iplotDataAccess.dataAccess import DataAccess
 from mint.gui.mtAbout import MTAbout
@@ -318,8 +320,9 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
-            plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-            old_signal = plot.signals[str(waypt.stack_num)][waypt.signal_stack_id]
+            plot = self.canvas.plots[waypt.col_num -
+                                     1][waypt.row_num - 1]  # type: Plot
+            old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
             for f in fields(old_signal):
@@ -337,7 +340,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
             # Replace signal.
-            plot.signals[str(waypt.stack_num)][waypt.signal_stack_id] = new_signal
+            plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.setProgress(99)
 
@@ -550,7 +553,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
-
+        
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicateBusy('Applying preferences...')
@@ -564,8 +567,15 @@ class MTMainWindow(IplotQtMainWindow):
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
             return
-        canvas.cols = max(plan.keys())
-        canvas.rows = max([max(e.keys()) for e in plan.values()])
+        max_col = 0
+        max_row = 0
+        for col, row_plots in plan.items():
+            for row, plot in row_plots.items():
+                max_col = max(max_col, col + plot[1] - 1)
+                max_row = max(max_row, row + plot[0] - 1)
+
+        canvas.cols = max_col
+        canvas.rows = max_row
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for colnum, rows in plan.items():

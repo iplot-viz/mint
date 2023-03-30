@@ -6,7 +6,6 @@
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
-import math
 import json
 import pandas as pd
 import typing
@@ -17,12 +16,12 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result
 
-from mint.models.utils import mtBlueprintParser as mtbp
+from mint.models.utils import mtBlueprintParser as mtBP
 from mint.tools.table_parser import get_value
 
-import iplotLogging.setupLogger as ls
+import iplotLogging.setupLogger as setupLog
 
-logger = ls.get_logger(__name__)
+logger = setupLog.get_logger(__name__)
 
 
 @dataclass
@@ -55,16 +54,16 @@ class MTSignalsModel(QAbstractItemModel):
 
     ROWUID_COLNAME = 'uid'
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, signal_class: type = IplotSignalAdapter, parent=None):
 
         super().__init__(parent)
 
-        column_names = list(mtbp.get_column_names(blueprint))
+        column_names = list(mtBP.get_column_names(blueprint))
 
         self._blueprint = blueprint
         self._max_id = -1
-        self._fast_mode = False # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
-        mtbp.parse_raw_blueprint(self._blueprint)
+        self._fast_mode = False  # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+        mtBP.parse_raw_blueprint(self._blueprint)
 
         self._table = pd.DataFrame(columns=column_names)
         self._signal_class = signal_class
@@ -110,37 +109,35 @@ class MTSignalsModel(QAbstractItemModel):
             self._fast_mode = False
 
     def _check_resize(self, row: int):
-        if (row >= self._table.index.size - 1):
+        if row >= self._table.index.size - 1:
             self.insertRows(row + 1, 1, QModelIndex())
 
     def _update_max_id(self, row: int):
-        if (row > self._max_id):
+        if row > self._max_id:
             self._max_id = row
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
-        if index.isValid():
-            row = index.row()
-            column = index.column()
-            if role == Qt.EditRole or role == Qt.DisplayRole:
-                
-                if isinstance(value, str):
-                    value = value.strip()
-                    if ',' in value:
-                        # replaces " with ' if value has , in it.
-                        value = value.replace('"', "'")
+        if not index.isValid():
+            return False
+        row = index.row()
+        column = index.column()
+        if role != Qt.EditRole and role != Qt.DisplayRole:
+            return False
+
+        if isinstance(value, str):
+            value = value.strip()
+            if ',' in value:
+                # replaces " with ' if value has , in it.
+                value = value.replace('"', "'")
 
                 self._check_resize(row)
                 self._update_max_id(row)
                 self._table.iloc[row, column] = value
 
-                if not self._fast_mode:
-                    self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
+        if not self._fast_mode:
+            self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
 
-                return True
-            else:
-                return False
-        else:
-            return False
+        return True
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         if index.isValid():
@@ -157,7 +154,7 @@ class MTSignalsModel(QAbstractItemModel):
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
             # Set default Datasource
-            empty_row.loc[0, mtbp.get_column_name(
+            empty_row.loc[0, mtBP.get_column_name(
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
@@ -205,7 +202,7 @@ class MTSignalsModel(QAbstractItemModel):
                 else:
                     logger.warning(f"{df_column_name} is not a valid column name.")
                     if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtbp.get_column_name(
+                        df.rename({df_column_name: mtBP.get_column_name(
                             self._blueprint, df_column_name)}, axis=1, inplace=True)
         return df
 
@@ -226,7 +223,7 @@ class MTSignalsModel(QAbstractItemModel):
                 "type_name": "str",
                 "type": str
             }
-        columns = list(mtbp.get_column_names(self._blueprint))
+        columns = list(mtBP.get_column_names(self._blueprint))
 
         for c, col_name in enumerate(columns):
             if col_name in df.columns:
@@ -238,8 +235,7 @@ class MTSignalsModel(QAbstractItemModel):
             elif col_name.capitalize() in df.columns:
                 self._table.iloc[:df.index.size, c] = df.loc[:, col_name.capitalize()]
             else:
-                logger.debug(
-                    f"{col_name} is not present in given dataframe.")
+                logger.debug(f"{col_name} is not present in given dataframe.")
                 continue
         self._max_id = df.index.size - 1
 
@@ -258,23 +254,22 @@ class MTSignalsModel(QAbstractItemModel):
     def export_dict(self) -> dict:
         # 1. blueprint defines columns..
         output = dict()
-        output.update({'blueprint': mtbp.remove_type_info(self.blueprint)})
+        output.update({'blueprint': mtBP.remove_type_info(self.blueprint)})
         # 2. table
-        output.update(
-            {'table': json.loads(self.get_dataframe().to_json(orient='values'))})
+        output.update({'table': json.loads(self.get_dataframe().to_json(orient='values'))})
         return output
 
     def import_dict(self, input_dict: dict):
         # 1. blueprint defines columns..
         try:
-            self._blueprint = mtbp.parse_raw_blueprint(input_dict['blueprint'])
+            self._blueprint = mtBP.parse_raw_blueprint(input_dict['blueprint'])
             if not self._blueprint.get("PulseNumber").get("label"):
                 self._blueprint.get("PulseNumber").update({"label": "PulseId"})
         except KeyError:
             pass
         # 2. table
-        column_names = list(mtbp.get_column_names(self.blueprint))
-        self._entity_attribs = list(mtbp.get_code_names(self.blueprint))
+        column_names = list(mtBP.get_column_names(self.blueprint))
+        self._entity_attribs = list(mtBP.get_code_names(self.blueprint))
         if input_dict.get('table'):
             df = pd.DataFrame(input_dict.get('table'),
                               dtype=str, columns=column_names)
@@ -293,7 +288,7 @@ class MTSignalsModel(QAbstractItemModel):
         self.import_dict(json.loads(input_file))
 
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
-        if (row_idx > self._max_id):
+        if row_idx > self._max_id:
             return
 
         with self.activate_fast_mode():
@@ -320,7 +315,7 @@ class MTSignalsModel(QAbstractItemModel):
 
         for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx])):
             signal_params.update(
-                mtbp.construct_params_from_series(self.blueprint, parsed_row))
+                mtBP.construct_params_from_series(self.blueprint, parsed_row))
 
             if i == 0:  # grab these from the first row we encounter.
                 stack_val = signal_params.get('stack_val')
@@ -328,10 +323,8 @@ class MTSignalsModel(QAbstractItemModel):
 
                 if stack_m:
                     stack_groups = stack_m.groups()
-                    col_num = int(stack_groups[0])
-                    row_num = int(stack_groups[1] or '1')
-                    if stack_groups[1] is None:
-                        col_num, row_num = row_num, col_num
+                    row_num = int(stack_groups[0])
+                    col_num = int(stack_groups[1] or '1')
                     stack_num = int(stack_groups[2] or '1')
 
                     bad_stack = col_num == 0 or row_num == 0 or stack_num == 0
@@ -359,7 +352,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 self._signal_stack_ids[col_num][row_num][stack_num],
                                 ts_start,
                                 ts_end,
-                                func=mtbp.construct_signal,
+                                func=mtBP.construct_signal,
                                 args=[self.blueprint],
                                 kwargs={
                                     'signal_class': self._signal_class, **signal_params}
@@ -376,7 +369,7 @@ class MTSignalsModel(QAbstractItemModel):
             if k.startswith('$'):
                 continue
 
-            column_name = mtbp.get_column_name(self._blueprint, k)
+            column_name = mtBP.get_column_name(self._blueprint, k)
             default_value = v.get('default') or (str(uuid.uuid4()) if column_name == 'uid' else '')
             out.update({column_name: default_value})
 
