@@ -130,9 +130,9 @@ class MTSignalsModel(QAbstractItemModel):
                 # replaces " with ' if value has , in it.
                 value = value.replace('"', "'")
 
-                self._check_resize(row)
-                self._update_max_id(row)
-                self._table.iloc[row, column] = value
+        self._check_resize(row)
+        self._update_max_id(row)
+        self._table.iloc[row, column] = value
 
         if not self._fast_mode:
             self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
