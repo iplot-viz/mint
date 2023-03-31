@@ -78,7 +78,7 @@
 <requires >libicu</requires>
 <requires codac="true">iplotDataAccess</requires>
 <requires codac="true">iplotLogging</requires>
- 
+<requires codac="true">iplotWidgets</requires>
 <include type="file" source="mint" target="apps/mint"/>
 
 <include type="file" source="mint/mint.sh" target="bin/mint" />
