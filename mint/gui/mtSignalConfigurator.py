@@ -13,12 +13,14 @@ import typing
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, QTabWidget, QTableView, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
+    QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
+from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
@@ -142,8 +144,10 @@ class MTSignalConfigurator(QWidget):
     hideProgress = Signal()
     busy = Signal()
     ready = Signal()
+    #add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [], signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
+                 signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
         self._signal_class = signal_class
@@ -152,9 +156,11 @@ class MTSignalConfigurator(QWidget):
             blueprint=blueprint, signal_class=self._signal_class)
 
         self._csv_dir = csv_dir
+        self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
         self._toolbar.openAction.triggered.connect(self.onImport)
         self._toolbar.saveAction.triggered.connect(self.onExport)
+        self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
 
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
@@ -186,6 +192,11 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self.parseBtn)
 
         self.model.dataChanged.connect(self.resizeViewToColumns)
+
+        self.selectVarDialog = VariableBrowser()
+
+        self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
+
         self.model.insertRows(0, 1, QModelIndex())
 
     def onCurrentViewChanged(self, index: int):
@@ -238,6 +249,14 @@ class MTSignalConfigurator(QWidget):
         if file and file[0]:
             self.import_csv(file[0])
 
+    def on_tree_view(self):
+        self.selectVarDialog.show()
+        self.selectVarDialog.activateWindow()
+
+    def append_dataframe(self, df):
+        if not df.empty:
+            self._model.append_dataframe(df)
+
     def insertRow(self):
         selection = []
         currentTabId = self._tabs.currentIndex()
@@ -251,8 +270,8 @@ class MTSignalConfigurator(QWidget):
 
     def removeRow(self):
         selected_rows = []
-        currentTabId = self._tabs.currentIndex()
-        for idx in self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes():
+        current_tab_id = self._tabs.currentIndex()
+        for idx in self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes():
             selected_rows.append(idx.row())
 
         for row in reversed(sorted(selected_rows)):
@@ -282,7 +301,7 @@ class MTSignalConfigurator(QWidget):
     def pasteContentsFromClipboard(self):
         currentTabId = self._tabs.currentIndex()
         selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
-        
+
         if (not len(selectedIds)):
             if not self._model.rowCount(None):
                 self.insertRow()
@@ -290,8 +309,8 @@ class MTSignalConfigurator(QWidget):
             else:
                 return
 
-        text = QCoreApplication.instance().clipboard().text() # type: str
-        text = text.strip() # sometimes, user might have copied unnecessary line breaks at the start / end.
+        text = QCoreApplication.instance().clipboard().text()  # type: str
+        text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
         # must have one header line and atleast another line with data values
         lines = text.splitlines()
         if len(lines) < 2:
@@ -318,10 +337,10 @@ class MTSignalConfigurator(QWidget):
 
         for line in data:
             values = line.split(',')
-        
-            if(len(values) != len(column_names)):
+
+            if len(values) != len(column_names):
                 continue
-            
+
             for i in range(len(values)):
                 column_idx = valid_column_names.index(column_names[i])
                 idx = self._model.createIndex(row, column_idx)
@@ -340,7 +359,7 @@ class MTSignalConfigurator(QWidget):
     def copyContentsToClipboard(self):
         currentTabId = self._tabs.currentIndex()
         selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
-        
+
         contents = defaultdict(lambda: defaultdict(str))
         rows = set()
         columns = set()
@@ -356,10 +375,10 @@ class MTSignalConfigurator(QWidget):
         for column in columns:
             column_name = self._model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
             text += column_name + ','
-        if len(text): # remove the last comma character
+        if len(text):  # remove the last comma character
             text = text[:-1]
         text += '\n'
-        
+
         for row in rows:
             row_text = ''
             for column in columns:
@@ -367,7 +386,7 @@ class MTSignalConfigurator(QWidget):
             if len(row_text):  # remove the last comma character
                 row_text = row_text[:-1]
             text += row_text + '\n'
-        
+
         QCoreApplication.instance().clipboard().setText(text)
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
@@ -412,7 +431,6 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
-
 
     def export_dict(self) -> dict:
         output = dict()
@@ -536,7 +554,7 @@ class MTSignalConfigurator(QWidget):
                                 break
                         except ValueError:
                             continue
-        
+
         if error_msgs:
             error_msg = '\n----\n'.join(error_msgs)
             self._abort_build(error_msg)
@@ -554,7 +572,8 @@ class MTSignalConfigurator(QWidget):
         self.ready.emit()
         self.endBuild()
 
-    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> typing.Iterator[Waypoint]:
+    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> \
+    typing.Iterator[Waypoint]:
         for idx in graph[row_idx]:
             if idx in processed:
                 continue
@@ -598,26 +617,28 @@ def main():
         blueprint = json.load(args.blueprint)
     else:
         blueprint = mtbp.DEFAULT_BLUEPRINT
+        blueprint = mtbp.DEFAULT_BLUEPRINT
 
-    mainWin = QMainWindow()
-    progressBar = QProgressBar(mainWin)
-    mainWin.statusBar().addPermanentWidget(progressBar)
-    progressBar.hide()
+    main_win = QMainWindow()
+    progress_bar = QProgressBar(main_win)
+    main_win.statusBar().addPermanentWidget(progress_bar)
+    progress_bar.hide()
 
-    sigTable = MTSignalConfigurator(blueprint=blueprint, parent=mainWin)
-    sigTable.statusChanged.connect(mainWin.statusBar().showMessage)
-    sigTable.progressChanged.connect(progressBar.setValue)
-    sigTable.showProgress.connect(progressBar.show)
-    sigTable.hideProgress.connect(progressBar.hide)
-    sigTable.buildAborted.connect(show_msg)
+    sig_table = MTSignalConfigurator(blueprint=blueprint, parent=main_win)
+    sig_table.statusChanged.connect(main_win.statusBar().showMessage)
+    sig_table.progressChanged.connect(progress_bar.setValue)
+    sig_table.showProgress.connect(progress_bar.show)
+    sig_table.hideProgress.connect(progress_bar.hide)
+    sig_table.buildAborted.connect(show_msg)
 
-    mainWin.setCentralWidget(sigTable)
+    main_win.setCentralWidget(sig_table)
 
     if isinstance(args.input, str) and args.input.endswith('.csv'):
-        sigTable.import_csv(args.input)
-    mainWin.show()
-    mainWin.resize(1280, 720)
+        sig_table.import_csv(args.input)
+    main_win.show()
+    main_win.resize(1280, 720)
     sys.exit(app.exec_())
+
 
 def show_msg(message):
     box = QMessageBox()
@@ -625,3 +646,4 @@ def show_msg(message):
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
+

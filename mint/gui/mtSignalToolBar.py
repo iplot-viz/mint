@@ -28,11 +28,14 @@ class MTSignalsToolBar(QWidget):
         self.openAction = QAction(QIcon(open_pxmap), "&Open Signal Sets")
         self.saveAction = QAction(QIcon(save_pxmap), "&Save Signal Sets")
         self.configureColsBtn = QPushButton("Hide/Show &Columns")
+        self.searchVarsBtn = QPushButton("&Search Vars")
         
         tb = QToolBar()
         tb.addAction(self.openAction)
         tb.addAction(self.saveAction)
         tb.addSeparator()
         tb.addWidget(self.configureColsBtn)
+        tb.addSeparator()
+        tb.addWidget(self.searchVarsBtn)
 
         self.layout().addWidget(tb)

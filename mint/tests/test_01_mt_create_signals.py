@@ -3,6 +3,7 @@
 
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
+from iplotDataAccess.appDataAccess import AppDataAccess
 
 
 test_table_1 = {
@@ -46,6 +47,7 @@ test_table_2 = {
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     def setUp(self) -> None:
         super().setUp()
+        AppDataAccess.initialize()
         self.sigCfgWidget = MTSignalConfigurator()
 
     def test_create_simple(self) -> None:

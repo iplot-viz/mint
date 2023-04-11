@@ -6,13 +6,12 @@
 
 from datetime import datetime, timedelta
 import json
-import os
 import sys
 
 from PySide6.QtWidgets import QApplication
 
 
-def runApp(qApp: QApplication, args=None):
+def runApp(q_app: QApplication, args=None):
     if args is None:
         return
 
@@ -21,22 +20,22 @@ def runApp(qApp: QApplication, args=None):
 
     from iplotlib.core import Canvas
     from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
-    from iplotDataAccess.dataAccess import DataAccess
-    import iplotLogging.setupLogger as ls
+    from iplotDataAccess.appDataAccess import AppDataAccess
+    import iplotLogging.setupLogger as SetupLog
 
-    from mint.app.dirs import DEFAULT_DATA_DIR, DEFAULT_DATA_SOURCES_CFG
+    from mint.app.dirs import DEFAULT_DATA_DIR
     from mint.models import MTGenericAccessMode
-    from mint.models.utils import mtBlueprintParser as mtbp
+    from mint.models.utils import mtBlueprintParser
     from mint.gui.mtMainWindow import MTMainWindow
     from mint.tools.icon_loader import create_pxmap
-
+    from mint.app.dirs import DEFAULT_DATA_DIR, DEFAULT_DATA_SOURCES_CFG
     from importlib import metadata
 
     iplotlib_version = metadata.version('iplotlib')
 
-    logger = ls.get_logger(__name__)
+    logger = SetupLog.get_logger(__name__)
 
-    def export_to_file(impl: str, canvas: Canvas, canvas_filename, **kwargs):
+    def export_to_file(impl: str, canvas_exported: Canvas, canvas_filename, **kwargs):
         try:
             if impl.lower() == "matplotlib":
                 import matplotlib
@@ -45,34 +44,19 @@ def runApp(qApp: QApplication, args=None):
 
                 mpl_canvas = MatplotlibParser()
                 mpl_canvas.export_image(
-                    canvas_filename, canvas=canvas, **kwargs)
+                    canvas_filename, canvas=canvas_exported, **kwargs)
         except FileNotFoundError:
             logger.error(f"Unable to open file: {canvas_filename}")
 
-    def load_data_sources(da: DataAccess):
-        try:
-            if len(da.loadConfig()) < 1:
-                return False
-            else:
-                return True
-        except (OSError, IOError, FileNotFoundError) as e:
-            logger.warning(
-                f"no data source file, fallback to {DEFAULT_DATA_SOURCES_CFG}")
-            os.environ.update({'DATASOURCESCONF': DEFAULT_DATA_SOURCES_CFG})
-            return load_data_sources(da)
-
     logger.info("Running version {} iplotlib version {}".format(
-        qApp.applicationVersion(), iplotlib_version))
-    #########################################################################
-    # 1. Data access handle
-    da = DataAccess()
-    if not load_data_sources(da):
+        q_app.applicationVersion(), iplotlib_version))
+    if not AppDataAccess.initialize(DEFAULT_DATA_SOURCES_CFG):
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
-    AccessHelper.da = da
-    # da.udahost = os.environ.get('UDA_HOST') or "io-ls-udafe01.iter.org"
-    canvasImpl = args.impl
+    AccessHelper.da = AppDataAccess.getDataAccess()
+    # da.udahost = os.environ.get('UDA_HOST') or "io-SetupLog-udafe01.iter.org"
+    canvas_impl = args.impl
 
     workspace_file = args.json_file
 
@@ -82,13 +66,13 @@ def runApp(qApp: QApplication, args=None):
 
     #########################################################################
     # 3. Prepare model for data range
-    tNow = datetime.utcnow().isoformat(timespec='seconds')
-    tNowDeltaSevenD = datetime.utcnow() - timedelta(days=7)
+    t_now = datetime.utcnow().isoformat(timespec='seconds')
+    t_now_delta_seven_d = datetime.utcnow() - timedelta(days=7)
 
     time_model = {
         "range": {
             "mode": MTGenericAccessMode.TIME_RANGE,
-            "value": [tNowDeltaSevenD.isoformat(timespec='seconds'), tNow]}
+            "value": [t_now_delta_seven_d.isoformat(timespec='seconds'), t_now]}
     }
 
     if args.blueprint_file:
@@ -97,9 +81,9 @@ def runApp(qApp: QApplication, args=None):
         except Exception as e:
             logger.warning(
                 f"Exception {e} occurred for blueprint file: {args.blueprint_file}")
-            blueprint = mtbp.DEFAULT_BLUEPRINT
+            blueprint = mtBlueprintParser.DEFAULT_BLUEPRINT
     else:
-        blueprint = mtbp.DEFAULT_BLUEPRINT
+        blueprint = mtBlueprintParser.DEFAULT_BLUEPRINT
 
     logger.debug(f"Detected {len(QGuiApplication.screens())} screen (s)")
     max_width = 0
@@ -115,38 +99,38 @@ def runApp(qApp: QApplication, args=None):
         if ds_name not in data_sources:
             data_sources.append(ds_name)
 
-    mainWin = MTMainWindow(canvas,
-                           da,
-                           time_model,
-                           appVersion=qApp.applicationVersion(),
-                           data_dir=DEFAULT_DATA_DIR,
-                           data_sources=data_sources,
-                           blueprint=blueprint,
-                           impl=canvasImpl,
-                           signal_class=IplotSignalAdapter)
+    main_win = MTMainWindow(canvas,
+                            AccessHelper.da,
+                            time_model,
+                            app_version=q_app.applicationVersion(),
+                            data_dir=DEFAULT_DATA_DIR,
+                            data_sources=data_sources,
+                            blueprint=blueprint,
+                            impl=canvas_impl,
+                            signal_class=IplotSignalAdapter)
 
-    mainWin.setWindowTitle(
-        f"{qApp.applicationName()}: {qApp.applicationPid()}")
-    mainWin.statusBar().addPermanentWidget(
-        QLabel("MINT version {} iplotlib {} |".format(qApp.applicationVersion(), iplotlib_version)))
+    main_win.setWindowTitle(
+        f"{q_app.applicationName()}: {q_app.applicationPid()}")
+    main_win.statusBar().addPermanentWidget(
+        QLabel("MINT version {} iplotlib {} |".format(q_app.applicationVersion(), iplotlib_version)))
 
     # Preload the table from a CSV file, if provided
     if args.csv_file:
-        mainWin.sigCfgWidget.import_csv(args.csv_file)
+        main_win.sigCfgWidget.import_csv(args.csv_file)
 
     if workspace_file:
-        mainWin.import_json(workspace_file)
+        main_win.import_json(workspace_file)
 
         if args.image_file:
-            export_to_file(canvasImpl, mainWin.canvas, args.image_file, dpi=args.export_dpi,
+            export_to_file(canvas_impl, main_win.canvas, args.image_file, dpi=args.export_dpi,
                            width=args.export_width, height=args.export_height)
             exit(0)
 
-    mainWin.show()
-    appIcon = QIcon()
+    main_win.show()
+    app_icon = QIcon()
     for i in range(4, 9):
         sz = 1 << i
-        appIcon.addPixmap(create_pxmap(f"mint{sz}x{sz}"))
-    qApp.setWindowIcon(appIcon)
+        app_icon.addPixmap(create_pxmap(f"mint{sz}x{sz}"))
+    q_app.setWindowIcon(app_icon)
 
-    return qApp.exec_()
+    return q_app.exec_()
