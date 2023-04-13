@@ -371,7 +371,8 @@ class MTMainWindow(IplotQtMainWindow):
                                 }
                 for old, new in replacements.items():
                     payload = payload.replace(old, new)
-                self.import_dict(json.loads(payload))
+                self.import_dict(json.loads(payload, object_hook=lambda d: {int(k) if k.lstrip('-').isdigit() else k: v
+                                                                            for k, v in d.items()}))
                 logger.info(f"Finished loading workspace {file_path}")
         except Exception as e:
             box = QMessageBox()
