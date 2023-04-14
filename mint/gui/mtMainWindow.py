@@ -92,7 +92,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.refreshTimer = QTimer(self)
         self.refreshTimer.setTimerType(Qt.CoarseTimer)
         self.refreshTimer.setSingleShot(False)
-        self.refreshTimer.timeout.connect(lambda: self.canvasStack.currentWidget().refresh())
+        self.refreshTimer.timeout.connect(lambda: self.on_timeout())
         self._memoryMonitor = MTMemoryMonitor(
             parent=self, pid=QCoreApplication.instance().applicationPid())
         self.sigCfgWidget.setParent(self)
@@ -614,6 +614,18 @@ class MTMainWindow(IplotQtMainWindow):
                         for signal in signals:
                             plot.add_signal(signal, stack=stack)
                 self.canvas.add_plot(plot, col=colnum - 1)
+
+    def on_timeout(self):
+        self.build()
+        self.indicateBusy("Drawing...")
+
+        self.canvasStack.currentWidget().unfocus_plot()
+        self.canvasStack.currentWidget().set_canvas(self.canvas)
+        self.canvasStack.refreshLinks()
+        self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
+        self.prefWindow.update()
+
+        self.indicateReady()
 
     def onDropPlot(self, drop_info):
         dragged_item = drop_info.dragged_item

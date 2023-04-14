@@ -35,11 +35,11 @@ setuptools.setup(
     packages=setuptools.find_packages(where="."),
     python_requires=">=3.8",
     install_requires=[
-        "iplotlogging",
-        "iplotlib",
-        "iplotDataAccess",
+        "iplotlogging>=0.2.1",
+        "iplotlib >= 0.5.0",
+        "iplotDataAccess >= 0.4.0",
         "iplotWidgets",
-        "iplotProcessing",
+        "iplotProcessing >= 0.4.0",
         "psutil >= 5.8.0",
     ],
     entry_points={
