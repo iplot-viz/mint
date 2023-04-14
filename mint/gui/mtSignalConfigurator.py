@@ -484,7 +484,8 @@ class MTSignalConfigurator(QWidget):
         for key in mtbp.get_keys_with_override(self._model.blueprint):
             v = self._model.blueprint.get(key)
             code_name = v.get('code_name')
-            v.update({'default': kwargs.get(code_name)})
+            # Check type of 'default'
+            v.update({'default': None if kwargs.get(code_name) is None else int(kwargs.get(code_name))})
 
         # Initialize pre-requisites
         df = self._model.get_dataframe()
