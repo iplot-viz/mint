@@ -8,11 +8,12 @@ from collections import defaultdict
 import json
 import os
 import pandas as pd
+import numpy as np
 import sys
 import typing
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence
+from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
@@ -144,8 +145,7 @@ class MTSignalConfigurator(QWidget):
     hideProgress = Signal()
     busy = Signal()
     ready = Signal()
-
-    # add_dataframe = Signal(pd.DataFrame)
+    #add_dataframe = Signal(pd.DataFrame)
 
     def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
@@ -166,8 +166,8 @@ class MTSignalConfigurator(QWidget):
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
                                      MTSignalItemView(
-                                         PLAYOUT_VIEW_NAME, parent=self)]  # ,
-        #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
+                                         PLAYOUT_VIEW_NAME, parent=self)]#,
+                                    #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
         self._tabs = QTabWidget(parent=self)
@@ -199,11 +199,6 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
         self.model.insertRows(0, 1, QModelIndex())
-
-        shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
-        shortcut.activated.connect(self.copyContentsToClipboard)
-        shortcut2 = QShortcut(QKeySequence("Ctrl+V"), self)
-        shortcut2.activated.connect(self.pasteContentsFromClipboard)
 
     def onCurrentViewChanged(self, index: int):
         currentView = self.itemWidgets[index]
@@ -300,29 +295,40 @@ class MTSignalConfigurator(QWidget):
         self.ready.emit()
 
     def deleteContents(self):
-        current_tab_id = self._tabs.currentIndex()
-        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-        self.setBulkContents('', selected_ids)
+        currentTabId = self._tabs.currentIndex()
+        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
+        self.setBulkContents('', selectedIds)
 
     def pasteContentsFromClipboard(self):
-        current_tab_id = self._tabs.currentIndex()
-        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        currentTabId = self._tabs.currentIndex()
+        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
 
-        if not len(selected_ids):
+        if (not len(selectedIds)):
             if not self._model.rowCount(None):
                 self.insertRow()
-                selected_ids = [self._model.createIndex(0, 0)]
+                selectedIds = [self._model.createIndex(0, 0)]
             else:
                 return
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
-
-        data = [line.split(',') for line in text.splitlines()]
-        if len(data) == 1 and len(data[0]) == 1:
-            self.setBulkContents(text, selected_ids)
+        # must have one header line and atleast another line with data values
+        lines = text.splitlines()
+        if len(lines) < 2:
+            self.setBulkContents(text, selectedIds)
             return
 
+        # check for presence of magic headers.
+        headers = lines[0]
+        column_names = headers.split(',')
+        valid_column_names = list(mtbp.get_column_names(self._model.blueprint))
+        if not all([name in valid_column_names for name in column_names]):
+            self.setBulkContents(text, selectedIds)
+            return
+
+        # text has the 'magic' headers. So paste it row by row.
+        data = lines[1:]
+        row = selectedIds[0].row()
         self.busy.emit()
 
         left = 1 << 32
@@ -330,32 +336,35 @@ class MTSignalConfigurator(QWidget):
         top = 1 << 32
         bottom = 0
 
-        row = selected_ids[0].row()
         for line in data:
+            values = line.split(',')
 
-            col = selected_ids[0].column()
-            for value in line:
-                idx = self._model.createIndex(row, col)
+            if len(values) != len(column_names):
+                continue
+
+            for i in range(len(values)):
+                column_idx = valid_column_names.index(column_names[i])
+                idx = self._model.createIndex(row, column_idx)
                 left = min(left, idx.column())
                 right = max(right, idx.column())
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
                 with self._model.activate_fast_mode():
-                    self._model.setData(idx, value, Qt.EditRole)
-                col += 1
+                    self._model.setData(idx, values[i], Qt.EditRole)
+
             row += 1
 
         self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
     def copyContentsToClipboard(self):
-        current_tab_id = self._tabs.currentIndex()
-        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        currentTabId = self._tabs.currentIndex()
+        selectedIds = self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes()
 
         contents = defaultdict(lambda: defaultdict(str))
         rows = set()
         columns = set()
-        for idx in selected_ids:
+        for idx in selectedIds:
             value = self._model.data(idx, Qt.DisplayRole)
             column = idx.column()
             row = idx.row()
@@ -364,6 +373,13 @@ class MTSignalConfigurator(QWidget):
             rows.add(row)
 
         text = ""
+        for column in columns:
+            column_name = self._model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
+            text += column_name + ','
+        if len(text):  # remove the last comma character
+            text = text[:-1]
+        text += '\n'
+
         for row in rows:
             row_text = ''
             for column in columns:
@@ -470,7 +486,8 @@ class MTSignalConfigurator(QWidget):
             v = self._model.blueprint.get(key)
             code_name = v.get('code_name')
             # Check type of 'default'
-            v.update({'default': None if kwargs.get(code_name) is None else int(kwargs.get(code_name))})
+            v.update({'default': kwargs.get(code_name) if not isinstance(kwargs.get(code_name), np.int64) else
+            int(kwargs.get(code_name))})
 
         # Initialize pre-requisites
         df = self._model.get_dataframe()
@@ -559,7 +576,7 @@ class MTSignalConfigurator(QWidget):
         self.endBuild()
 
     def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> \
-            typing.Iterator[Waypoint]:
+    typing.Iterator[Waypoint]:
         for idx in graph[row_idx]:
             if idx in processed:
                 continue
@@ -632,3 +649,4 @@ def show_msg(message):
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
+
