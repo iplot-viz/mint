@@ -399,7 +399,7 @@ class MTSignalConfigurator(QWidget):
         context_menu.addAction("Copy", self.copyContentsToClipboard)
         context_menu.addAction("Paste", self.pasteContentsFromClipboard)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogDiscardButton")), "Delete", self.deleteContents)
+            getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.deleteContents)
         context_menu.popup(event.globalPos())
 
     def export_csv(self, file_path=None):
