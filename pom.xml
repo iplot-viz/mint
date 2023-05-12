@@ -21,14 +21,14 @@
     <artifactId>mint</artifactId>
     <packaging>codac</packaging>
     <name>CODAC Core System Python3 plotting library which support Qt backend</name>
-    <version>0.9.0</version>
+    <version>1.0.0</version>
     <description>CODAC Core System Python 1-D tool for time traces</description>
     <url>http://www.iter.org/</url>
     <!--  parent pom.xml  -->
     <parent>
         <groupId>org.iter.codac.units</groupId>
         <artifactId>maven-iter-settings</artifactId>
-        <version>7.0.0</version>
+        <version>7.2.0</version>
     </parent>
     <licenses>
     </licenses>
@@ -68,7 +68,7 @@
 				<copy source="requirements.txt" target="mint/requirements.txt"/>
 				<copy source="default_proto_env" target="mint/default_proto_env"/>
 				<copy source="mint.sh" target="mint/mint.sh"/>
-
+				<expand source="mint/_version.py" file="mint/mint/_version.py" rpmeval="true" mvneval="true" />
                             </init>
                         <packaging>
                         <package>
