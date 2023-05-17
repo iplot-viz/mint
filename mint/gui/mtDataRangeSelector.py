@@ -129,7 +129,7 @@ class MTDataRangeSelector(QWidget):
         elif model.mode == MTGenericAccessMode.RELATIVE_TIME:
             time_base = model.properties().get("base")
             ts_end = int(self.getTimeNow())
-            ts_start = ts_end - 10 ** 9 * int(time_base)* int(time_base)*int(model.properties().get("relative"))
+            ts_start = ts_end - 10 ** 9 * int(time_base)*int(model.properties().get("relative"))
             return ts_start, ts_end
         else:
             time_base = model.properties().get("base")
