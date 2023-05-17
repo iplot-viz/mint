@@ -1,3 +1,3 @@
 DS,Variable,Stack,Row span,Col span,Envelope,Alias,Samples,PulseNumber,StartTime,EndTime
 codacuda,UTIL-SYSM-COM-4503-UT:SRV3602-NRBPS,1.1,,,,36nrp,-1,,,
-codacuda,UTIL-SYSM-COM-4503-UT:SRV3602-NRBPS,2.1,,,,,-1,,2021-09-22T08:00:00,2021-09-29T08:00:00
+codacuda,UTIL-SYSM-COM-4503-UT:SRV3602-NRBPS,1.2,,,,,-1,,2021-09-22T08:00:00,2021-09-29T08:00:00

@@ -5,7 +5,7 @@
 
  Authors       : Anze Zagar
 
- Copyright (c) : 2010-2021 ITER Organization,
+ Copyright (c) : 2010-2023 ITER Organization,
                  CS 90 046
                  13067 St. Paul-lez-Durance Cedex
                  France
@@ -21,14 +21,14 @@
     <artifactId>mint</artifactId>
     <packaging>codac</packaging>
     <name>CODAC Core System Python3 plotting library which support Qt backend</name>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <description>CODAC Core System Python 1-D tool for time traces</description>
     <url>http://www.iter.org/</url>
     <!--  parent pom.xml  -->
     <parent>
         <groupId>org.iter.codac.units</groupId>
         <artifactId>maven-iter-settings</artifactId>
-        <version>7.2.0</version>
+        <version>7.1.0</version>
     </parent>
     <licenses>
     </licenses>
