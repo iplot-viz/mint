@@ -1,4 +1,4 @@
 DS,Variable,Stack,Row span,Col span,Envelope,Alias,PulseNumber,StartTime,EndTime,x,y,z,Plot type,Status
 codacuda,IC_ICH1_FAFB_MEAS/topic_counter,1.1.1,,,,ic_id,,,,,,,,
 codacuda,IC_ICH1_FAFB_MEAS/phase,1.1.2,,,,ic_phase,,,,,,,,
-,,1.2,,,,,,,,${ic_id}.data,${ic_phase}.data,,,
+,,2.1,,,,,,,,${ic_id}.data,${ic_phase}.data,,,
