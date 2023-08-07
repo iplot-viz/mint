@@ -30,7 +30,6 @@ from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
-
 from iplotDataAccess.dataAccess import DataAccess
 from mint.gui.mtAbout import MTAbout
 
@@ -84,6 +83,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
+        self._data_export_dir = os.path.join(data_dir, 'data_signals')
         self._progressBar = QProgressBar()
         self._statusBar = MTStatusBar()
 
@@ -193,6 +193,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.sigCfgWidget.ready.connect(self.indicateReady)
         self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
         self.toolBar.exportAction.triggered.connect(self.onExport)
+        self.toolBar.exportDataAction.triggered.connect(self.onExportData)
         self.toolBar.importAction.triggered.connect(self.onImport)
 
     @staticmethod
@@ -246,6 +247,19 @@ class MTMainWindow(IplotQtMainWindow):
                 file_name = file[0]
             self.export_json(file_name)
             self._data_dir = os.path.dirname(file_name)
+
+    def onExportData(self):
+        file = QFileDialog.getSaveFileName(
+            self, "Save Data as ..",
+            dir=self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv",
+            filter='*.csv')
+        if file and file[0]:
+            if not file[0].endswith('.csv'):
+                file_name = file[0] + '.csv'
+            else:
+                file_name = file[0]
+            self.export_data_plots(file_name)
+            self._data_export_dir = os.path.dirname(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(
@@ -379,6 +393,21 @@ class MTMainWindow(IplotQtMainWindow):
             box.setIcon(QMessageBox.Critical)
             box.setText(
                 f"Error {str(e)}: cannot import workspace from file: {file_path}")
+            logger.exception(e)
+            box.exec_()
+            self.indicateReady()
+            return
+
+    def export_data_plots(self, file_path: os.PathLike):
+        self.statusBar().showMessage(f"Exporting {file_path} ..")
+        try:
+            with open(file_path, mode='w') as f:
+                f.write(self.canvas.get_signals_as_csv())
+        except Exception as e:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setText(
+                f"Error {str(e)}: cannot export data plots to file: {file_path}")
             logger.exception(e)
             box.exec_()
             self.indicateReady()
@@ -554,7 +583,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
-        
+
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicateBusy('Applying preferences...')
