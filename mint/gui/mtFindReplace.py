@@ -15,12 +15,10 @@ class FindReplaceDialog(QDialog):
 
         self.find_button = QPushButton("Find")
         self.find_button.clicked.connect(lambda: self.find_text(find_one=True))
-        self.replace_button = QPushButton("Replace")
-        self.replace_button.clicked.connect(lambda: self.replace_text(replace_one=True))
+        self.replace_button = QPushButton("Replace selection")
+        self.replace_button.clicked.connect(self.replace_text)
         self.find_all_button = QPushButton("Find All")
         self.find_all_button.clicked.connect(lambda: self.find_text(find_one=False))
-        self.replace_all_button = QPushButton("Replace All")
-        self.replace_all_button.clicked.connect(lambda: self.replace_text(replace_one=False))
 
         layout = QVBoxLayout()
         layout.addWidget(self.find_label)
@@ -28,13 +26,12 @@ class FindReplaceDialog(QDialog):
         layout.addWidget(self.replace_label)
         layout.addWidget(self.replace_input)
 
-        button_layout = QHBoxLayout()
-        button_layout1 = QVBoxLayout()
-        button_layout2 = QVBoxLayout()
+        button_layout = QVBoxLayout()
+        button_layout1 = QHBoxLayout()
+        button_layout2 = QHBoxLayout()
         button_layout1.addWidget(self.find_button)
-        button_layout1.addWidget(self.replace_button)
-        button_layout2.addWidget(self.find_all_button)
-        button_layout2.addWidget(self.replace_all_button)
+        button_layout1.addWidget(self.find_all_button)
+        button_layout2.addWidget(self.replace_button)
         button_layout.addLayout(button_layout1)
         button_layout.addLayout(button_layout2)
 
@@ -69,14 +66,12 @@ class FindReplaceDialog(QDialog):
                 if find_one:
                     return
 
-    def replace_text(self, replace_one):
+    def replace_text(self):
         model = self.table_view.model()
         text_to_find = self.find_input.text()
         text_to_replace = self.replace_input.text()
         all_indexes = self.table_view.selectionModel().selectedIndexes()
-        if replace_one and len(all_indexes) > 1:
-            self.find_text(find_one=True)
-            return
+
         for index in all_indexes:
             row = index.row()
             col = index.column()
