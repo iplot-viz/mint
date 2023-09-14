@@ -204,6 +204,15 @@ class MTSignalsModel(QAbstractItemModel):
                     if df_column_name in self._blueprint.keys():
                         df.rename({df_column_name: mtBP.get_column_name(
                             self._blueprint, df_column_name)}, axis=1, inplace=True)
+                    elif df_column_name.lower() in columns:
+                        df.rename({df_column_name: df_column_name.lower()}, axis=1, inplace=True)
+                    elif df_column_name.upper() in columns:
+                        df.rename({df_column_name: df_column_name.upper()}, axis=1, inplace=True)
+                    elif df_column_name.capitalize() in columns:
+                        df.rename({df_column_name: df_column_name.capitalize()}, axis=1, inplace=True)
+                    else:
+                        logger.warning(f"{df_column_name} is not possible to convert the column name.")
+                        df.drop(df_column_name, axis=1, inplace=True)
         return df
 
     def set_dataframe(self, df: pd.DataFrame):
@@ -228,12 +237,6 @@ class MTSignalsModel(QAbstractItemModel):
         for c, col_name in enumerate(columns):
             if col_name in df.columns:
                 self._table.iloc[:df.index.size, c] = df.loc[:, col_name]
-            elif col_name.lower() in df.columns:
-                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.lower()]
-            elif col_name.upper() in df.columns:
-                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.upper()]
-            elif col_name.capitalize() in df.columns:
-                self._table.iloc[:df.index.size, c] = df.loc[:, col_name.capitalize()]
             else:
                 logger.debug(f"{col_name} is not present in given dataframe.")
                 continue

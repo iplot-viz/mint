@@ -161,6 +161,7 @@ class MTSignalConfigurator(QWidget):
         self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
         self._toolbar.openAction.triggered.connect(self.onImport)
+        self._toolbar.appendAction.triggered.connect(self.onAppend)
         self._toolbar.saveAction.triggered.connect(self.onExport)
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
 
@@ -256,6 +257,11 @@ class MTSignalConfigurator(QWidget):
         if file and file[0]:
             self.import_csv(file[0])
 
+
+    def onAppend(self):
+        file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
+        if file and file[0]:
+            self.append_csv(file[0])
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
@@ -418,6 +424,21 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
+    def append_csv(self, file_path):
+        try:
+            self.busy.emit()
+            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            if not df.empty:
+                self._model.append_dataframe(df)
+            self.resizeViewsToContents()
+        except Exception as e:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Critical)
+            box.setText(f"Error parsing file. {e}")
+            logger.exception(e)
+            box.exec_()
+        finally:
+            self.ready.emit()
     def export_dict(self) -> dict:
         output = dict()
         # 1. view options.

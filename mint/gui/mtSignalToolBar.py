@@ -21,17 +21,22 @@ class MTSignalsToolBar(QWidget):
         open_pxmap = QPixmap()
         open_pxmap.loadFromData(pkgutil.get_data(
             'mint.gui', 'icons/open_file.png'))
+        append_pxmap = QPixmap()
+        append_pxmap.loadFromData(pkgutil.get_data(
+            'mint.gui', 'icons/append_file.png'))
         save_pxmap = QPixmap()
         save_pxmap.loadFromData(pkgutil.get_data(
             'mint.gui', 'icons/save_as.png'))
 
         self.openAction = QAction(QIcon(open_pxmap), "&Open Signal Sets")
+        self.appendAction = QAction(QIcon(append_pxmap), "&Append Signal Sets")
         self.saveAction = QAction(QIcon(save_pxmap), "&Save Signal Sets")
         self.configureColsBtn = QPushButton("Hide/Show &Columns")
         self.searchVarsBtn = QPushButton("&Search Vars")
-        
+
         tb = QToolBar()
         tb.addAction(self.openAction)
+        tb.addAction(self.appendAction)
         tb.addAction(self.saveAction)
         tb.addSeparator()
         tb.addWidget(self.configureColsBtn)
