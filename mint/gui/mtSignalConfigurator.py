@@ -12,16 +12,17 @@ import numpy as np
 import sys
 import typing
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
+from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
-from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from mint.gui.mtSignalToolBar import MTSignalsToolBar
+from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
@@ -201,6 +202,7 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
         self.model.insertRows(0, 1, QModelIndex())
+        self._find_replace_dialog = None
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copyContentsToClipboard)
@@ -381,6 +383,21 @@ class MTSignalConfigurator(QWidget):
 
         QCoreApplication.instance().clipboard().setText(text)
 
+    def findReplace(self):
+        current_tab_id = self._tabs.currentIndex()
+        table_view = self._signal_item_widgets[current_tab_id].view()
+
+        if not self._find_replace_dialog:
+            self._find_replace_dialog = FindReplaceDialog(self, model=table_view)
+            palette = table_view.palette()
+            palette.setColor(QPalette.ColorRole.Highlight, palette.color(QPalette.ColorRole.Highlight))
+            table_view.setPalette(palette)
+        else:
+            self._find_replace_dialog.set_model(model=table_view)
+        self._find_replace_dialog.show()
+
+        self._find_replace_dialog.show()
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
@@ -391,6 +408,8 @@ class MTSignalConfigurator(QWidget):
         context_menu.addAction("Paste", self.pasteContentsFromClipboard)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.deleteContents)
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.findReplace)
         context_menu.popup(event.globalPos())
 
     def export_csv(self, file_path=None):
@@ -653,3 +672,4 @@ def show_msg(message):
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
+
