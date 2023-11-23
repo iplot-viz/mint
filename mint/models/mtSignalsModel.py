@@ -61,7 +61,6 @@ class MTSignalsModel(QAbstractItemModel):
         column_names = list(mtBP.get_column_names(blueprint))
 
         self._blueprint = blueprint
-        self._max_id = -1
         self._fast_mode = False  # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
         mtBP.parse_raw_blueprint(self._blueprint)
 
@@ -112,9 +111,6 @@ class MTSignalsModel(QAbstractItemModel):
         if row >= self._table.index.size - 1:
             self.insertRows(row + 1, 1, QModelIndex())
 
-    def _update_max_id(self, row: int):
-        if row > self._max_id:
-            self._max_id = row
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -131,7 +127,6 @@ class MTSignalsModel(QAbstractItemModel):
                 value = value.replace('"', "'")
 
         self._check_resize(row)
-        self._update_max_id(row)
         self._table.iloc[row, column] = value
 
         if not self._fast_mode:
@@ -169,9 +164,7 @@ class MTSignalsModel(QAbstractItemModel):
         self.beginRemoveRows(parent, row, row + count)
 
         try:
-            self._table = self._table.drop(
-                list(range(row, row + count)), axis=0).reset_index(drop=True)
-            self._max_id = self._max_id - 1
+            self._table = self._table.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
             self.layoutChanged.emit()
             success = True
         except KeyError:
@@ -182,8 +175,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        to_drop = list(range(self._max_id + 1, self._table.index.size))
-        return self._table.drop(to_drop, axis=0)
+        return self._table
 
     def remove_empty_rows(self):
         columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime',
@@ -240,17 +232,14 @@ class MTSignalsModel(QAbstractItemModel):
             else:
                 logger.debug(f"{col_name} is not present in given dataframe.")
                 continue
-        self._max_id = df.index.size - 1
 
     def append_dataframe(self, df: pd.DataFrame):
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
         if len(self._table.columns[(self._table.iloc[[-1]] != '').all()]) < 3:
             self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
-            self._max_id = self._table.index.size - 2
         else:
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
-            self._max_id = self._table.index.size - 1
 
         self.layoutChanged.emit()
 
@@ -291,9 +280,6 @@ class MTSignalsModel(QAbstractItemModel):
         self.import_dict(json.loads(input_file))
 
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
-        if row_idx > self._max_id:
-            return
-
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
             signal.status_info.reset()
