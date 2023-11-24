@@ -459,7 +459,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
+
         self.prefWindow.update()
 
         self.drop_history()  # clean zoom history; is this best place?
