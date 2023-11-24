@@ -284,12 +284,12 @@ class MTSignalConfigurator(QWidget):
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
     def removeRow(self):
-        selected_rows = []
+        selected_rows = set()
         current_tab_id = self._tabs.currentIndex()
         for idx in self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes():
-            selected_rows.append(idx.row())
+            selected_rows.add(idx.row())
 
-        for row in reversed(sorted(selected_rows)):
+        for row in sorted(selected_rows, reverse=True):
             self._model.removeRow(row)
 
     def setBulkContents(self, text: str, indices: typing.List[QModelIndex]):
