@@ -175,7 +175,8 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        return self._table
+        max_idx = self._table[self._table.iloc[:, 1:-1].any(axis=1)].index[-1]
+        return self._table[:max_idx+1]
 
     def remove_empty_rows(self):
         columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime',
@@ -359,7 +360,12 @@ class MTSignalsModel(QAbstractItemModel):
                 continue
 
             column_name = mtBP.get_column_name(self._blueprint, k)
-            default_value = v.get('default') or (str(uuid.uuid4()) if column_name == 'uid' else '')
+            default_value = v.get('default')
+            if not default_value:
+                if column_name == 'uid':
+                    default_value = str(uuid.uuid4())
+                elif default_value is None:
+                    default_value = ""
             out.update({column_name: default_value})
 
             type_func = v.get('type')
