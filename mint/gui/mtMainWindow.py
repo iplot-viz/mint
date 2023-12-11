@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY, Plot
+from iplotlib.core.plot import PlotXY, Plot, PlotContour
 from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -64,7 +64,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.canvas = canvas
         self.da = da
-        self.plot_class = PlotXY
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
         self.signal_class = signal_class
         self.appVersion = app_version
         self.dragItem = None
@@ -596,6 +596,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
+            canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -609,39 +610,45 @@ class MTMainWindow(IplotQtMainWindow):
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for colnum, rows in plan.items():
-            for row in range(max(rows.keys())):
-                plot = None
-                if row + 1 in rows.keys():
-                    if not canvas.streaming:
-                        signal_x_is_date = False
-                        for stack, signals in rows[row + 1][2].items():
-                            for signal in signals:
-                                try:
-                                    x_data = signal.get_data()[0]
-                                    signal_x_is_date |= bool(max(x_data) > (1 << 53))
-                                except (IndexError, ValueError) as _:
-                                    signal_x_is_date = True
-                    else:
-                        signal_x_is_date = True
+            for row in range(1, max(rows.keys())+1):
+                if row not in rows.keys():
+                    self.canvas.add_plot(None, col=colnum - 1)
+                    continue
+                plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
+                if len(plot_types) > 1:
+                    self.canvas.add_plot(None, col=colnum - 1)
+                    continue
 
-                    y_axes = [LinearAxis()
-                              for _ in range(len(rows[row + 1][2].items()))]
-
-                    x_axis = LinearAxis(
-                        is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow, window=x_axis_window)
-
-                    if x_axis_date and signal_x_is_date \
-                            and rows[row + 1][3][0] is not None and rows[row + 1][3][1] is not None:
-                        x_axis.begin = rows[row + 1][3][0]
-                        x_axis.end = rows[row + 1][3][1]
-                        x_axis.original_begin = x_axis.begin
-                        x_axis.original_end = x_axis.end
-
-                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
-                                           col_span=rows[row + 1][1])
-                    for stack, signals in rows[row + 1][2].items():
+                if not canvas.streaming:
+                    signal_x_is_date = False
+                    for stack, signals in rows[row][2].items():
                         for signal in signals:
-                            plot.add_signal(signal, stack=stack)
+                            try:
+                                x_data = signal.get_data()[0]
+                                signal_x_is_date |= bool(max(x_data) > (1 << 53))
+                            except (IndexError, ValueError) as _:
+                                signal_x_is_date = True
+                else:
+                    signal_x_is_date = True
+
+                y_axes = [LinearAxis()
+                          for _ in range(len(rows[row][2].items()))]
+
+                x_axis = LinearAxis(
+                    is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow, window=x_axis_window)
+
+                if x_axis_date and signal_x_is_date \
+                        and rows[row][3][0] is not None and rows[row][3][1] is not None:
+                    x_axis.begin = rows[row][3][0]
+                    x_axis.end = rows[row][3][1]
+                    x_axis.original_begin = x_axis.begin
+                    x_axis.original_end = x_axis.end
+
+                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row][0],
+                                                        col_span=rows[row][1])
+                for stack, signals in rows[row][2].items():
+                    for signal in signals:
+                        plot.add_signal(signal, stack=stack)
                 self.canvas.add_plot(plot, col=colnum - 1)
 
     def on_timeout(self):
