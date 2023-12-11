@@ -15,7 +15,6 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         combobox = QComboBox(parent)
         combobox.addItems(self._data_sources)
-        combobox.addItem('')
         if combobox.count():
             combobox.setCurrentIndex(0)
         return combobox
@@ -39,6 +38,45 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         maxWidth = 0
         for value in self._data_sources:
+            itemWidth = option.fontMetrics.horizontalAdvance(self.displayText(value, QLocale()))
+            maxWidth = max(itemWidth, maxWidth)
+
+        return QCoreApplication.instance().style().sizeFromContents(
+            QStyle.CT_ComboBox,
+            option,
+            QSize(maxWidth * 1.5, option.fontMetrics.height())
+        )
+
+
+class MTPlotTypeDelegate(QStyledItemDelegate):
+    def __init__(self, plot_types: list, parent: typing.Optional[QObject] = None):
+        super().__init__(parent=parent)
+        self._plot_types = plot_types
+
+    def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+        combobox = QComboBox(parent)
+        combobox.addItems(self._plot_types)
+        if combobox.count():
+            combobox.setCurrentIndex(0)
+        return combobox
+
+    def setEditorData(self, editor: QWidget, index: QModelIndex):
+        value = index.data(Qt.EditRole)
+        loc = editor.findText(value)
+        if loc >= 0:
+            editor.setCurrentIndex(loc)
+        else:
+            editor.setCurrentIndex(0)
+
+    def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
+        model.setData(index, editor.currentText(), Qt.EditRole)
+
+    def updateEditorGeometry(self, editor: QWidget, option: QStyleOptionViewItem, index: QModelIndex):
+        editor.setGeometry(option.rect)
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        maxWidth = 0
+        for value in self._plot_types:
             itemWidth = option.fontMetrics.horizontalAdvance(self.displayText(value, QLocale()))
             maxWidth = max(itemWidth, maxWidth)
 

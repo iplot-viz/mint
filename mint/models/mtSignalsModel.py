@@ -151,6 +151,9 @@ class MTSignalsModel(QAbstractItemModel):
             # Set default Datasource
             empty_row.loc[0, mtBP.get_column_name(
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
+            # Set default PlotType
+            empty_row.loc[0, mtBP.get_column_name(
+                self.blueprint, 'PlotType')] = self.blueprint.get('PlotType').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
             self._table = self._table.append(empty_row).reset_index(drop=True)
