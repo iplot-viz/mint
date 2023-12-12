@@ -64,7 +64,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYSlider": PlotXY}
         self.signal_class = signal_class
         self.appVersion = app_version
         self.dragItem = None
@@ -526,7 +526,7 @@ class MTMainWindow(IplotQtMainWindow):
         plan = dict()
 
         for waypt in self.sigCfgWidget.build(**da_params):
-
+            existing = None
             if not waypt.func and not waypt.args:
                 continue
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
@@ -561,8 +561,27 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
-                signal)
+
+            if existing is None:
+                plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            else:
+                prev_stack = plan[waypt.col_num][waypt.row_num][2][waypt.stack_num-1][0].plot_type
+                try:
+                    if prev_stack in ["PlotXYSlider", "PlotContourSlider"]:
+                        raise ValueError("stack signals must not have plot type with slider")
+                    else:
+                        if signal.plot_type in ["PlotXYSlider", "PlotContourSlider"]:
+                            raise ValueError("stack signals must not have plot type with slider")
+                        else:
+                            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+                except (IndexError, ValueError) as e:
+                    box = QMessageBox()
+                    box.setIcon(QMessageBox.Critical)
+                    box.setText(f"Error {str(e)}")
+                    logger.exception(e)
+                    box.exec_()
+                    self.indicateReady()
+                    return
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
