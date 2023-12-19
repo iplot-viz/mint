@@ -596,6 +596,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
+            self.canvas.plots = []
             return
         max_col = 0
         max_row = 0
