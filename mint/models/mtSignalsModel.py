@@ -111,7 +111,6 @@ class MTSignalsModel(QAbstractItemModel):
         if row >= self._table.index.size - 1:
             self.insertRows(row + 1, 1, QModelIndex())
 
-
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
             return False
@@ -175,8 +174,12 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        max_idx = self._table[self._table.iloc[:, 1:-1].any(axis=1)].index[-1]
-        return self._table[:max_idx+1]
+        filtered_rows = self._table[self._table.iloc[:, 1:-1].any(axis=1)]
+        if not filtered_rows.empty:
+            max_idx = filtered_rows.index[-1]
+            return self._table[:max_idx + 1]
+        else:
+            return pd.DataFrame(columns=self._table.columns)
 
     def remove_empty_rows(self):
         columns = ['Variable', 'Stack', 'Row span', 'Col span', 'Envelope', 'Alias', 'PulseId', 'StartTime', 'EndTime',
