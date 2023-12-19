@@ -259,11 +259,11 @@ class MTSignalConfigurator(QWidget):
         if file and file[0]:
             self.import_csv(file[0])
 
-
     def onAppend(self):
         file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
         if file and file[0]:
             self.append_csv(file[0])
+
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
@@ -326,8 +326,11 @@ class MTSignalConfigurator(QWidget):
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
+        if not text:
+            data = [['']]
+        else:
+            data = [line.split(',') for line in text.splitlines()]
 
-        data = [line.split(',') for line in text.splitlines()]
         if len(data) == 1 and len(data[0]) == 1:
             self.setBulkContents(text, selected_ids)
             return
@@ -458,6 +461,7 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
+
     def export_dict(self) -> dict:
         output = dict()
         # 1. view options.
@@ -672,4 +676,3 @@ def show_msg(message):
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
-
