@@ -149,7 +149,7 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: str = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
@@ -245,18 +245,19 @@ class MTSignalConfigurator(QWidget):
                 view.resizeColumnsToContents()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv')
+        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv', dir=self._csv_dir)
         if file and file[0]:
             if not file[0].endswith('.csv'):
                 file_name = file[0] + '.csv'
             else:
                 file_name = file[0]
-            self.export_csv(file_name)
             self._csv_dir = os.path.dirname(file_name)
+            self.export_csv(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)
         if file and file[0]:
+            self._csv_dir = os.path.dirname(file[0])
             self.import_csv(file[0])
 
     def onAppend(self):

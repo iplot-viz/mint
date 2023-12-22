@@ -258,12 +258,12 @@ class MTMainWindow(IplotQtMainWindow):
                 file_name = file[0] + '.csv'
             else:
                 file_name = file[0]
-            self.export_data_plots(file_name)
             self._data_export_dir = os.path.dirname(file_name)
+            self.export_data_plots(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(
-            self, "Open a workspace ..", dir=os.path.join(self._data_dir, 'workspaces'))
+            self, "Open a workspace ..", dir=self._data_dir)
         if file and file[0]:
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
