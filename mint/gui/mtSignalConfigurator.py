@@ -15,7 +15,7 @@ import typing
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
@@ -118,13 +118,13 @@ class RowAliasType:
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict, text: str) -> typing.Tuple[RowAliasType, str]:
     alias = row[mtbp.get_column_name(blueprint, 'Alias')]
     name = row[mtbp.get_column_name(blueprint, 'Variable')]
 
     alias_valid = is_non_empty_string(alias)
 
-    p = Parser().set_expression(name)
+    p = Parser(text).set_expression(name)
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         raw_name &= all(
@@ -165,6 +165,7 @@ class MTSignalConfigurator(QWidget):
         self._toolbar.appendAction.triggered.connect(self.onAppend)
         self._toolbar.saveAction.triggered.connect(self.onExport)
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
+        self._toolbar.loadModules.clicked.connect(self.onLoad)
 
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
@@ -200,6 +201,8 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog = VariableBrowser()
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
+
+        self.text = ""
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -263,10 +266,13 @@ class MTSignalConfigurator(QWidget):
         file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
         if file and file[0]:
             self.append_csv(file[0])
-
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
+    def onLoad(self):
+        self.text, ok = QInputDialog.getText(self, '', 'Module name:')
+        if ok:
+            print(f"Texto ingresado: {self.text}")
 
     def append_dataframe(self, df):
         if not df.empty:
@@ -326,11 +332,8 @@ class MTSignalConfigurator(QWidget):
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
-        if not text:
-            data = [['']]
-        else:
-            data = [line.split(',') for line in text.splitlines()]
 
+        data = [line.split(',') for line in text.splitlines()]
         if len(data) == 1 and len(data[0]) == 1:
             self.setBulkContents(text, selected_ids)
             return
@@ -461,7 +464,6 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
-
     def export_dict(self) -> dict:
         output = dict()
         # 1. view options.
@@ -540,9 +542,9 @@ class MTSignalConfigurator(QWidget):
                 logger.debug(f"Row: {idx}")
                 modelIdx = self.model.createIndex(idx, statusColIdx)
                 row_type, name = _row_predicate(
-                    row, aliases, self._model.blueprint)
+                    row, aliases, self._model.blueprint, self.text)
 
-                p = Parser().set_expression(name)
+                p = Parser(self.text).set_expression(name)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
