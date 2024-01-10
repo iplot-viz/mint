@@ -21,6 +21,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.variableBrowser.variableBrowser import ModuleBrowser
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -202,6 +203,9 @@ class MTSignalConfigurator(QWidget):
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
+        self.selectModuleDialog = ModuleBrowser()
+        #self.selectModuleDialog.cmd_finish.connect()
+
         self.text = ""
 
         self.model.insertRows(0, 1, QModelIndex())
@@ -270,9 +274,8 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
     def onLoad(self):
-        self.text, ok = QInputDialog.getText(self, '', 'Module name:')
-        if ok:
-            print(f"Texto ingresado: {self.text}")
+        self.selectModuleDialog.show()
+        self.selectModuleDialog.activateWindow()
 
     def append_dataframe(self, df):
         if not df.empty:
