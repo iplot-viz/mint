@@ -330,7 +330,7 @@ class MTSignalConfigurator(QWidget):
         if not text:
             data = [['']]
         else:
-            data = [line.split(',') for line in text.splitlines()]
+            data = [line.split(';') for line in text.splitlines()]
 
         if len(data) == 1 and len(data[0]) == 1:
             self.setBulkContents(text, selected_ids)
@@ -381,7 +381,7 @@ class MTSignalConfigurator(QWidget):
             row_text = []
             for intern_key, value in row.items():
                 row_text.append(str(value))
-            result.append(','.join(row_text))
+            result.append(';'.join(row_text))
 
         text = '\n'.join(result)
 
