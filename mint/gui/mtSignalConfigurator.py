@@ -420,7 +420,7 @@ class MTSignalConfigurator(QWidget):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
-            return df.to_csv(file_path, index=False)
+            return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
