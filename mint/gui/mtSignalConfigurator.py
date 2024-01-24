@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
     QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
-from iplotProcessing.tools.parsers import ParserSingleton
+from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.variableBrowser.variableBrowser import ModuleBrowser
@@ -125,7 +125,7 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict, text: str) ->
 
     alias_valid = is_non_empty_string(alias)
 
-    p = ParserSingleton().set_expression(name)
+    p = Parser().set_expression(name)
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         raw_name &= all(
@@ -547,7 +547,7 @@ class MTSignalConfigurator(QWidget):
                 row_type, name = _row_predicate(
                     row, aliases, self._model.blueprint, self.text)
 
-                p = ParserSingleton().set_expression(name)
+                p = Parser().set_expression(name)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
