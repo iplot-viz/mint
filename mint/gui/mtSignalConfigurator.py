@@ -119,7 +119,7 @@ class RowAliasType:
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict, text: str) -> typing.Tuple[RowAliasType, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
     alias = row[mtbp.get_column_name(blueprint, 'Alias')]
     name = row[mtbp.get_column_name(blueprint, 'Variable')]
 
@@ -204,9 +204,6 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
         self.selectModuleDialog = ModuleBrowser()
-        #self.selectModuleDialog.cmd_finish.connect()
-
-        self.text = ""
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -545,7 +542,7 @@ class MTSignalConfigurator(QWidget):
                 logger.debug(f"Row: {idx}")
                 modelIdx = self.model.createIndex(idx, statusColIdx)
                 row_type, name = _row_predicate(
-                    row, aliases, self._model.blueprint, self.text)
+                    row, aliases, self._model.blueprint)
 
                 p = Parser().set_expression(name)
 
