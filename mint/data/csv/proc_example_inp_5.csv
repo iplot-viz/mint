@@ -1,2 +1,0 @@
-DS,Variable,Stack,Row span,Col span,Envelope,Alias,PulseNumber,StartTime,EndTime,x,y,z,Plot type,Status
-codacuda,CWS-SCSU-HR00:ML0004-LT-XI,1.1,,,,ml0004,,,,${self}.time-1D,np.max(${self}.data) * np.ones(${self}.data.size),,,
