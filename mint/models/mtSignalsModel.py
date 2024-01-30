@@ -243,7 +243,6 @@ class MTSignalsModel(QAbstractItemModel):
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
 
-
         if self._table.empty:
             self._table = df
         else:
