@@ -434,7 +434,7 @@ class MTSignalConfigurator(QWidget):
     def import_csv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
             self.resizeViewsToContents()
@@ -450,7 +450,7 @@ class MTSignalConfigurator(QWidget):
     def append_csv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.append_dataframe(df)
             self.resizeViewsToContents()
