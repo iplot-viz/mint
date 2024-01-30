@@ -21,7 +21,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
-from iplotWidgets.variableBrowser.variableBrowser import ModuleBrowser
+from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -203,7 +203,7 @@ class MTSignalConfigurator(QWidget):
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
-        self.selectModuleDialog = ModuleBrowser()
+        self.selectModuleDialog = ModuleImporter()
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
