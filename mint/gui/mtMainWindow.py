@@ -79,7 +79,7 @@ class MTMainWindow(IplotQtMainWindow):
         check_data_range(model)
         self.model = model
         self.sigCfgWidget = MTSignalConfigurator(
-            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'), data_sources=data_sources)
+            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'scsv'), data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
