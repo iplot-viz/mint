@@ -15,12 +15,13 @@ import typing
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -165,6 +166,7 @@ class MTSignalConfigurator(QWidget):
         self._toolbar.appendAction.triggered.connect(self.onAppend)
         self._toolbar.saveAction.triggered.connect(self.onExport)
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
+        self._toolbar.loadModules.clicked.connect(self.onLoad)
 
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
@@ -200,6 +202,8 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog = VariableBrowser()
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
+
+        self.selectModuleDialog = ModuleImporter()
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -268,6 +272,10 @@ class MTSignalConfigurator(QWidget):
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
+
+    def onLoad(self):
+        self.selectModuleDialog.show()
+        self.selectModuleDialog.activateWindow()
 
     def append_dataframe(self, df):
         if not df.empty:

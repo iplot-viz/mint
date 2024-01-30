@@ -8,12 +8,14 @@ from PySide6.QtGui import QDoubleValidator
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
+# Validator that checks if a string is a float and if it is not, it returns the value before the one entered.
+# It also allows the empty character, the dot and the minus.
 class MyValidator(QDoubleValidator):
     def __init__(self):
         super(MyValidator, self).__init__()
 
     def validate(self, s0: str, i1: int):
-        if not s0:
+        if s0 in ['', '.', '-']:
             return QDoubleValidator.Acceptable, s0, i1
 
         try:
