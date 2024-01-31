@@ -23,17 +23,19 @@ def runApp(q_app: QApplication, args=None):
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
 
-    from mint.app.dirs import DEFAULT_DATA_DIR
     from mint.models import MTGenericAccessMode
     from mint.models.utils import mtBlueprintParser
     from mint.gui.mtMainWindow import MTMainWindow
     from mint.tools.icon_loader import create_pxmap
-    from mint.app.dirs import DEFAULT_DATA_DIR, DEFAULT_DATA_SOURCES_CFG
+    from mint.app.dirs import DEFAULT_DATA_DIR
     from importlib import metadata
 
     iplotlib_version = metadata.version('iplotlib')
 
     logger = SetupLog.get_logger(__name__)
+
+    # Remove older logs
+    SetupLog.delete_older_logs(logger)
 
     def export_to_file(impl: str, canvas_exported: Canvas, canvas_filename, **kwargs):
         try:
