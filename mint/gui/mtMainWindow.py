@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY, Plot, PlotContour, PlotXYSlider
+from iplotlib.core.plot import PlotXY, Plot, PlotContour
 from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -64,7 +64,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYSlider": PlotXYSlider}
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
         self.signal_class = signal_class
         self.appVersion = app_version
         self.dragItem = None
@@ -562,26 +562,21 @@ class MTMainWindow(IplotQtMainWindow):
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
 
-            if existing is None:
-                plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
-            else:
-                prev_stack = plan[waypt.col_num][waypt.row_num][2][waypt.stack_num][0].plot_type # check: -1
-                try:
-                    if prev_stack in ["PlotXYSlider", "PlotContourSlider"]:
-                        raise ValueError("stack signals must not have plot type with slider")
-                    else:
-                        if signal.plot_type in ["PlotXYSlider", "PlotContourSlider"]:
-                            raise ValueError("stack signals must not have plot type with slider")
-                        else:
-                            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
-                except (IndexError, ValueError) as e:
-                    box = QMessageBox()
-                    box.setIcon(QMessageBox.Critical)
-                    box.setText(f"Error {str(e)}")
-                    logger.exception(e)
-                    box.exec_()
-                    self.indicateReady()
-                    return
+            try:
+                prev_stack = [signal[0].plot_type for signal in plan[waypt.col_num][waypt.row_num][2].values() if
+                              signal]
+                if len(prev_stack) > 1:
+                    raise ValueError("stack signals must not have different plotTypes")
+                else:
+                    plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            except (IndexError, ValueError) as e:
+                box = QMessageBox()
+                box.setIcon(QMessageBox.Critical)
+                box.setText(f"Error {str(e)}")
+                logger.exception(e)
+                box.exec_()
+                self.indicateReady()
+                return
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
@@ -646,7 +641,7 @@ class MTMainWindow(IplotQtMainWindow):
                                 x_data = signal.get_data()[0]
                                 signal_x_is_date |= bool(max(x_data) > (1 << 53))
                             except (IndexError, ValueError) as _:
-                                signal_x_is_date = True
+                                signal_x_is_date = False
                 else:
                     signal_x_is_date = True
 
