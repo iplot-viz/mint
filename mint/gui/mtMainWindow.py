@@ -258,12 +258,12 @@ class MTMainWindow(IplotQtMainWindow):
                 file_name = file[0] + '.csv'
             else:
                 file_name = file[0]
-            self.export_data_plots(file_name)
             self._data_export_dir = os.path.dirname(file_name)
+            self.export_data_plots(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(
-            self, "Open a workspace ..", dir=os.path.join(self._data_dir, 'workspaces'))
+            self, "Open a workspace ..", dir=self._data_dir)
         if file and file[0]:
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
@@ -610,7 +610,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
         if not plan.keys():
-            canvas.plots = [[]]
+            self.canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -641,7 +641,7 @@ class MTMainWindow(IplotQtMainWindow):
                                 x_data = signal.get_data()[0]
                                 signal_x_is_date |= bool(max(x_data) > (1 << 53))
                             except (IndexError, ValueError) as _:
-                                signal_x_is_date = False
+                                signal_x_is_date = True
                 else:
                     signal_x_is_date = True
 

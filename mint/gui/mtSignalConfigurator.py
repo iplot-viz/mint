@@ -15,12 +15,13 @@ import typing
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -150,7 +151,7 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: os.PathLike = '.', data_sources: list = [],
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: str = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
@@ -166,6 +167,7 @@ class MTSignalConfigurator(QWidget):
         self._toolbar.appendAction.triggered.connect(self.onAppend)
         self._toolbar.saveAction.triggered.connect(self.onExport)
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
+        self._toolbar.loadModules.clicked.connect(self.onLoad)
 
         self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
                                      MTSignalItemView(DA_VIEW_NAME, parent=self),
@@ -203,6 +205,8 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog = VariableBrowser()
 
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
+
+        self.selectModuleDialog = ModuleImporter()
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -248,20 +252,20 @@ class MTSignalConfigurator(QWidget):
                 view.resizeColumnsToContents()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv')
+        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv', dir=self._csv_dir)
         if file and file[0]:
             if not file[0].endswith('.csv'):
                 file_name = file[0] + '.csv'
             else:
                 file_name = file[0]
-            self.export_csv(file_name)
             self._csv_dir = os.path.dirname(file_name)
+            self.export_csv(file_name)
 
     def onImport(self):
         file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)
         if file and file[0]:
+            self._csv_dir = os.path.dirname(file[0])
             self.import_csv(file[0])
-
 
     def onAppend(self):
         file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
@@ -270,6 +274,9 @@ class MTSignalConfigurator(QWidget):
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
+    def onLoad(self):
+        self.selectModuleDialog.show()
+        self.selectModuleDialog.activateWindow()
 
     def append_dataframe(self, df):
         if not df.empty:
@@ -675,4 +682,3 @@ def show_msg(message):
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
-

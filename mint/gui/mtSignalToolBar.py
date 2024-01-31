@@ -33,6 +33,7 @@ class MTSignalsToolBar(QWidget):
         self.saveAction = QAction(QIcon(save_pxmap), "&Save Signal Sets")
         self.configureColsBtn = QPushButton("Hide/Show &Columns")
         self.searchVarsBtn = QPushButton("&Search Vars")
+        self.loadModules = QPushButton("&Load new module")
 
         tb = QToolBar()
         tb.addAction(self.openAction)
@@ -42,5 +43,7 @@ class MTSignalsToolBar(QWidget):
         tb.addWidget(self.configureColsBtn)
         tb.addSeparator()
         tb.addWidget(self.searchVarsBtn)
+        tb.addSeparator()
+        tb.addWidget(self.loadModules)
 
         self.layout().addWidget(tb)
