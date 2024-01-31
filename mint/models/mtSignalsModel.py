@@ -403,7 +403,8 @@ class MTSignalsModel(QAbstractItemModel):
                 for member in v:
                     serie = out.copy()
                     serie.update({k: member})
-                    if "uid" in out:
+                    # Checks if there is more than one pulseId to change de uid of the signal
+                    if "uid" in out and len(v) > 1:
                         # append pulse nb to uid to make it unique
                         serie['uid'] = str(uuid.uuid5(uuid.UUID(serie['uid']), member))
                     yield pd.Series(serie)
