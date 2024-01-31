@@ -12,10 +12,10 @@ import numpy as np
 import sys
 import typing
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
+    QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
@@ -268,9 +268,11 @@ class MTSignalConfigurator(QWidget):
         file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
         if file and file[0]:
             self.append_csv(file[0])
+
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
+
     def onLoad(self):
         self.selectModuleDialog.show()
         self.selectModuleDialog.activateWindow()
@@ -333,8 +335,11 @@ class MTSignalConfigurator(QWidget):
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
+        if not text:
+            data = [['']]
+        else:
+            data = [line.split(';') for line in text.splitlines()]
 
-        data = [line.split(',') for line in text.splitlines()]
         if len(data) == 1 and len(data[0]) == 1:
             self.setBulkContents(text, selected_ids)
             return
@@ -384,7 +389,7 @@ class MTSignalConfigurator(QWidget):
             row_text = []
             for intern_key, value in row.items():
                 row_text.append(str(value))
-            result.append(','.join(row_text))
+            result.append(';'.join(row_text))
 
         text = '\n'.join(result)
 
@@ -423,7 +428,7 @@ class MTSignalConfigurator(QWidget):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
-            return df.to_csv(file_path, index=False)
+            return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
@@ -437,7 +442,7 @@ class MTSignalConfigurator(QWidget):
     def import_csv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
             self.resizeViewsToContents()
@@ -453,7 +458,7 @@ class MTSignalConfigurator(QWidget):
     def append_csv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.append_dataframe(df)
             self.resizeViewsToContents()
@@ -465,6 +470,7 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
+
     def export_dict(self) -> dict:
         output = dict()
         # 1. view options.

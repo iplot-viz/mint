@@ -174,7 +174,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-1].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-3].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -238,12 +238,19 @@ class MTSignalsModel(QAbstractItemModel):
                 continue
 
     def append_dataframe(self, df: pd.DataFrame):
+        if df.empty:
+            return
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
-        if len(self._table.columns[(self._table.iloc[[-1]] != '').all()]) < 3:
-            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
+
+        if self._table.empty:
+            self._table = df
         else:
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+
+        # Check if last row is empty
+        if self._table.iloc[-1:, 1:-3].any(axis=1).bool():
+            self.insertRows(0, 1, QModelIndex())
 
         self.layoutChanged.emit()
 

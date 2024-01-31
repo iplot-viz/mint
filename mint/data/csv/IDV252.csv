@@ -1,5 +1,0 @@
-DS,Variable,Stack,Row span,Col span,Envelope,Alias,Samples,PulseNumber,StartTime,EndTime,x,y,z,Plot type
-codacuda,UTIL-SYSM-COM-4503-UT:SRV3602-NRBPS,1.1,,,,36nrp,-1,,,,,,,
-codacuda,UTIL-SYSM-COM-4503-UT:SRV6102-NRBPS,2.1,,,,61nrp,-1,,,,,,,
-codacuda,UTIL-SYSM-COM-4503-UT:SRV3302-NRBPS,3.1,,,,33nrp,-1,,,,,,,
-,${36nrp}+${61nrp}+${33nrp},4.1,,,,,,,,,,,,

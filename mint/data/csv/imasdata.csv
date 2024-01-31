@@ -1,5 +1,0 @@
-DataSource,Variable,Stack,Row span,Col span
-imasuda,summary/heating_current_drive/ec[0]/power/value,1,,
-imasuda,summary/heating_current_drive/ic[0]/power/value,1,,
-imasuda,summary/heating_current_drive/nbi[0]/power/value,1,,
-imasuda,summary/fusion/power/value,1,,
