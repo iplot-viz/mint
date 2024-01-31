@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY, Plot
+from iplotlib.core.plot import PlotXY, Plot, PlotContour, PlotXYWithSlider, PlotContourWithSlider
 from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -64,7 +64,8 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.canvas = canvas
         self.da = da
-        self.plot_class = PlotXY
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotContourWithSlider": PlotContourWithSlider}
         self.signal_class = signal_class
         self.appVersion = app_version
         self.dragItem = None
@@ -561,8 +562,11 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
-                signal)
+            prev_stack = [signal[0].plot_type for signal in plan[waypt.col_num][waypt.row_num][2].values() if
+                          signal]
+            if len(prev_stack) > 1 and ("PlotXYSlider" in prev_stack or 'PlotContourSlider' in prev_stack):
+                raise ValueError("stack signals must not have plot type with slider")
+
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
