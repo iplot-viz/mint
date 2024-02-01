@@ -1,8 +1,9 @@
 #######################################################
 # Default environment variables for DAN API library
 #######################################################
-#PROTO_LOG_PATH=
-PROTO_LOG_LEVEL=INFO
-PROTO_LOG_FILENAME=mint.log
-DATASOURCESCONF=/opt/codac/apps/mint/mint/mydatasources.cfg
+#IPLOT_LOG_PATH=
+IPLOT_LOG_LEVEL=INFO
+IPLOT_LOG_FILENAME=mint.log
+IPLOT_SOURCES_CONFIG=/opt/codac/apps/mint/mint/mydatasources.cfg
+IPLOT_LOG_LIMIT=10
 
