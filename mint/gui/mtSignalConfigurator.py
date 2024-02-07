@@ -535,11 +535,11 @@ class MTSignalConfigurator(QWidget):
         except KeyError:
             pass
 
-        # if len(duplicates):
-        #     invalid_rows = [aliases.index(dup) for dup in duplicates]
-        #     self._abort_build(
-        #         f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-        #     return
+        if len(duplicates):
+            invalid_rows = [aliases.index(dup)+1 for dup in duplicates]
+            self._abort_build(
+            f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
+            return
 
         error_msgs = []
         graph = defaultdict(list)
