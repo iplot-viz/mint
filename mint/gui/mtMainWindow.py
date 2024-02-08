@@ -549,10 +549,10 @@ class MTMainWindow(IplotQtMainWindow):
                 existing = plan[waypt.col_num][waypt.row_num]
                 existing[0] = waypt.row_span if waypt.row_span > existing[0] else existing[0]
                 existing[1] = waypt.col_span if waypt.col_span > existing[1] else existing[1]
-
-                if waypt.ts_start is not None or waypt.ts_start is not None:
+                if waypt.ts_start is not None:
                     if existing[3][0] is None or waypt.ts_start < existing[3][0]:
                         existing[3][0] = waypt.ts_start
+                if waypt.ts_end is not None:
                     if existing[3][1] is None or waypt.ts_end > existing[3][1]:
                         existing[3][1] = waypt.ts_end
 
