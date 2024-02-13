@@ -249,7 +249,7 @@ class MTSignalConfigurator(QWidget):
                 view.resizeColumnsToContents()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv', dir=self._csv_dir)
+        file = QFileDialog.getSaveFileName(self, "Save SCSV", filter='*.csv', dir=self._csv_dir)
         if file and file[0]:
             if not file[0].endswith('.csv'):
                 file_name = file[0] + '.csv'
@@ -259,13 +259,13 @@ class MTSignalConfigurator(QWidget):
             self.export_csv(file_name)
 
     def onImport(self):
-        file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._csv_dir)
         if file and file[0]:
             self._csv_dir = os.path.dirname(file[0])
             self.import_csv(file[0])
 
     def onAppend(self):
-        file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._csv_dir)
         if file and file[0]:
             self.append_csv(file[0])
 
