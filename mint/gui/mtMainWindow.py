@@ -629,7 +629,8 @@ class MTMainWindow(IplotQtMainWindow):
                     self.canvas.add_plot(None, col=colnum - 1)
                     continue
                 plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
-                if len(plot_types) > 1:
+                # Check if all plot_types are the same and if the plot_type is a valid plot_type
+                if len(plot_types) > 1 or any(value not in self.plot_classes.keys() for value in plot_types):
                     self.canvas.add_plot(None, col=colnum - 1)
                     continue
 
@@ -641,7 +642,7 @@ class MTMainWindow(IplotQtMainWindow):
                                 x_data = signal.get_data()[0]
                                 signal_x_is_date |= bool(max(x_data) > (1 << 53))
                             except (IndexError, ValueError) as _:
-                                signal_x_is_date = True
+                                signal_x_is_date = False
                 else:
                     signal_x_is_date = True
 
