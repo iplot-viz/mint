@@ -283,12 +283,13 @@ class MTSignalConfigurator(QWidget):
 
     def insertRow(self):
         selection = []
+        idx = None
         currentTabId = self._tabs.currentIndex()
         for idx in self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes():
             selection.append(idx)
 
         if len(selection):
-            self._model.insertRow(self._model.rowCount(selection[0]))
+            self._model.insertRows(idx.row(), len(selection), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
