@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import sys
 import typing
+from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
@@ -282,14 +283,12 @@ class MTSignalConfigurator(QWidget):
             self._model.append_dataframe(df)
 
     def insertRow(self):
-        selection = []
-        idx = None
         currentTabId = self._tabs.currentIndex()
-        for idx in self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes():
-            selection.append(idx)
+        selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
+            .selectedIndexes()  # type: List[QModelIndex()]
 
-        if len(selection):
-            self._model.insertRows(idx.row(), len(selection), QModelIndex())
+        if selection:
+            self._model.insertRows(selection[-1].row(), len(selection), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 

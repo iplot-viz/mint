@@ -153,7 +153,8 @@ class MTSignalsModel(QAbstractItemModel):
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = pd.concat([self._table.iloc[:(new_row)], empty_row, self._table.iloc[(new_row):]]).reset_index(drop=True)
+            self._table = pd.concat([self._table.iloc[:new_row], empty_row, self._table.iloc[
+                                                                            new_row:]]).reset_index(drop=True)
             new_row += 1
         self.layoutChanged.emit()
 
