@@ -447,11 +447,13 @@ class MTMainWindow(IplotQtMainWindow):
             return
 
         if not no_build:
-            self.build()
+            # Dumps are done before canvas processing
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
             self.sigCfgWidget.export_csv(os.path.join(
                 dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
+
+            self.build()
 
         self.indicateBusy("Drawing...")
         self.stopAutoRefresh()
