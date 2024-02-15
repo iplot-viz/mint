@@ -36,6 +36,7 @@ def runApp(q_app: QApplication, args=None):
 
     # Remove older logs
     SetupLog.delete_older_logs(logger)
+    SetupLog.delete_older_dumps(logger)
 
     def export_to_file(impl: str, canvas_exported: Canvas, canvas_filename, **kwargs):
         try:
