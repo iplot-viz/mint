@@ -384,8 +384,7 @@ class MTSignalsModel(QAbstractItemModel):
 
             # Override global values with locals for fields with 'override' attribute
             if v.get('override'):
-                override_global = (
-                        get_value(inp, column_name, type_func) is not None)
+                override_global |= (get_value(inp, column_name, type_func) is not None)
                 if override_global:
                     value = get_value(inp, column_name, type_func)
                 else:
