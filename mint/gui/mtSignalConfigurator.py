@@ -259,13 +259,13 @@ class MTSignalConfigurator(QWidget):
             self.export_scsv(file_name)
 
     def onImport(self):
-        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir)
+        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
             self._scsv_dir = os.path.dirname(file[0])
             self.import_scsv(file[0])
 
     def onAppend(self):
-        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir)
+        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
             self.append_scsv(file[0])
 
