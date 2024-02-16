@@ -79,7 +79,7 @@ class MTMainWindow(IplotQtMainWindow):
         check_data_range(model)
         self.model = model
         self.sigCfgWidget = MTSignalConfigurator(
-            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'scsv'), data_sources=data_sources)
+            blueprint=blueprint, scsv_dir=os.path.join(data_dir, 'scsv'), data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
@@ -450,8 +450,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.build()
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
-            self.sigCfgWidget.export_csv(os.path.join(
-                dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
+            self.sigCfgWidget.export_scsv(os.path.join(dump_dir, "signals_table" + str(os.getpid()) + ".scsv"))
 
         self.indicateBusy("Drawing...")
         self.stopAutoRefresh()

@@ -150,7 +150,7 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: str = '.', data_sources: list = [],
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
@@ -159,7 +159,7 @@ class MTSignalConfigurator(QWidget):
         self._model = MTSignalsModel(
             blueprint=blueprint, signal_class=self._signal_class)
 
-        self._csv_dir = csv_dir
+        self._scsv_dir = scsv_dir
         self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
         self._toolbar.openAction.triggered.connect(self.onImport)
@@ -249,25 +249,25 @@ class MTSignalConfigurator(QWidget):
                 view.resizeColumnsToContents()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save SCSV", filter='*.csv', dir=self._csv_dir)
+        file = QFileDialog.getSaveFileName(self, "Save SCSV", filter='*.scsv', dir=self._scsv_dir)
         if file and file[0]:
-            if not file[0].endswith('.csv'):
-                file_name = file[0] + '.csv'
+            if not file[0].endswith('.scsv'):
+                file_name = file[0] + '.scsv'
             else:
                 file_name = file[0]
-            self._csv_dir = os.path.dirname(file_name)
-            self.export_csv(file_name)
+            self._scsv_dir = os.path.dirname(file_name)
+            self.export_scsv(file_name)
 
     def onImport(self):
-        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir)
         if file and file[0]:
-            self._csv_dir = os.path.dirname(file[0])
-            self.import_csv(file[0])
+            self._scsv_dir = os.path.dirname(file[0])
+            self.import_scsv(file[0])
 
     def onAppend(self):
-        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir)
         if file and file[0]:
-            self.append_csv(file[0])
+            self.append_scsv(file[0])
 
     def on_tree_view(self):
         self.selectVarDialog.show()
@@ -424,7 +424,7 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.findReplace)
         context_menu.popup(event.globalPos())
 
-    def export_csv(self, file_path=None):
+    def export_scsv(self, file_path=None):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
@@ -439,7 +439,7 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
-    def import_csv(self, file_path):
+    def import_scsv(self, file_path):
         try:
             self.busy.emit()
             df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
@@ -455,7 +455,7 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
-    def append_csv(self, file_path):
+    def append_scsv(self, file_path):
         try:
             self.busy.emit()
             df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
@@ -644,10 +644,8 @@ def main():
     from PySide6.QtWidgets import QApplication
 
     parser = argparse.ArgumentParser('Quick demonstration of Signal Table')
-    parser.add_argument(
-        '-b', '--blueprint', help="Path to blueprint.json file", type=str, required=False)
-    parser.add_argument(
-        '-i', '--input', help="Path to input *.csv file", type=str, required=False)
+    parser.add_argument('-b', '--blueprint', help="Path to blueprint.json file", type=str, required=False)
+    parser.add_argument('-i', '--input', help="Path to input *.scsv file", type=str, required=False)
     args = parser.parse_args()
 
     app = QApplication([])
@@ -672,8 +670,8 @@ def main():
 
     main_win.setCentralWidget(sig_table)
 
-    if isinstance(args.input, str) and args.input.endswith('.csv'):
-        sig_table.import_csv(args.input)
+    if isinstance(args.input, str) and args.input.endswith('.scsv'):
+        sig_table.import_scsv(args.input)
     main_win.show()
     main_win.resize(1280, 720)
     sys.exit(app.exec_())

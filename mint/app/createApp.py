@@ -14,7 +14,7 @@ def createApp(argv: list = []) -> QApplication:
     parser.add_argument('-use-fallback-samples', dest='use_fallback_samples', action='store_true', default=False)
     parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
                         help='Load blueprint from .json file', default=None)
-    parser.add_argument('-d', dest='csv_file', metavar='csv_file',
+    parser.add_argument('-d', dest='scsv_file', metavar='scsv_file',
                         help='Load variables table from file')
     parser.add_argument('-w', dest='json_file', metavar='json_file',
                         help='Load a workspace from json file')
