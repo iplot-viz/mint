@@ -107,9 +107,6 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._fast_mode = False
 
-    def _check_resize(self, row: int):
-        if row >= self._table.index.size - 1:
-            self.insertRows(row + 1, 1, QModelIndex())
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -125,7 +122,8 @@ class MTSignalsModel(QAbstractItemModel):
                 # replaces " with ' if value has , in it.
                 value = value.replace('"', "'")
 
-        self._check_resize(row)
+        if row + 1 >= self._table.index.size:
+            self.insertRows(row + 1, 1, QModelIndex())
         self._table.iloc[row, column] = value
 
         if not self._fast_mode:
@@ -142,9 +140,8 @@ class MTSignalsModel(QAbstractItemModel):
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
-        new_row = row + 1
 
-        for _ in range(count):
+        for new_row in range(row, row+count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
@@ -153,9 +150,9 @@ class MTSignalsModel(QAbstractItemModel):
                 self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = pd.concat([self._table.iloc[:new_row], empty_row, self._table.iloc[
-                                                                            new_row:]]).reset_index(drop=True)
-            new_row += 1
+            self._table = pd.concat([self._table.iloc[:new_row],
+                                     empty_row,
+                                     self._table.iloc[new_row:]]).reset_index(drop=True)
         self.layoutChanged.emit()
 
         self.endInsertRows()

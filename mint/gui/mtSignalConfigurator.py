@@ -282,13 +282,17 @@ class MTSignalConfigurator(QWidget):
         if not df.empty:
             self._model.append_dataframe(df)
 
-    def insertRow(self):
+    def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
         selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
             .selectedIndexes()  # type: List[QModelIndex()]
 
         if selection:
-            self._model.insertRows(selection[-1].row(), len(selection), QModelIndex())
+            if above:
+                row_position = selection[0].row() - 1
+            else:
+                row_position = selection[-1].row() + 1
+            self._model.insertRows(row_position, len(selection), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
@@ -413,7 +417,9 @@ class MTSignalConfigurator(QWidget):
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
+            getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_DialogOkButton")), "Insert below", lambda: self.insert_empty_rows(False))
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.addAction("Copy", self.copyContentsToClipboard)
