@@ -391,7 +391,7 @@ class MTSignalsModel(QAbstractItemModel):
                         plus_pattern = re.compile(r"\+\((.*)\)")
                         minus_pattern = re.compile(r"-\((.*)\)")
 
-                        # Listas para almacenar los elementos correspondientes a cada patrón
+                        # Lists to store the elements corresponding to every pattern
                         elements = [[], [], []]
 
                         # Iterar sobre la lista y clasificar los elementos
