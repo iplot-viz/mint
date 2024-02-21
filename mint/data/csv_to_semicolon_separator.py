@@ -23,7 +23,7 @@ def convert_csv(input_path, output_path):
 
     for csv_file in csv_files:
         input_file_path = os.path.join(input_path, csv_file)
-        output_file_path = os.path.join(output_path, f"{os.path.splitext(csv_file)[0]}.csv")
+        output_file_path = os.path.join(output_path, f"{os.path.splitext(csv_file)[0]}.scsv")
 
         # Check if the CSV file already uses ';' as a separator
         with open(input_file_path, 'r', encoding='utf-8') as input_file:
@@ -43,7 +43,7 @@ def convert_csv(input_path, output_path):
 
         print(f"File converted: {output_file_path}")
 
-    print(f"Conversion completed. CSV files converted in {output_path}.")
+    print(f"Conversion completed. CSV files converted to SCSV in {output_path}.")
 
 
 if __name__ == "__main__":

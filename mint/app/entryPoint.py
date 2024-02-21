@@ -117,9 +117,9 @@ def runApp(q_app: QApplication, args=None):
     main_win.statusBar().addPermanentWidget(
         QLabel("MINT version {} iplotlib {} |".format(q_app.applicationVersion(), iplotlib_version)))
 
-    # Preload the table from a CSV file, if provided
-    if args.csv_file:
-        main_win.sigCfgWidget.import_csv(args.csv_file)
+    # Preload the table from a SCSV file, if provided
+    if args.scsv_file:
+        main_win.sigCfgWidget.import_scsv(args.scsv_file)
 
     if workspace_file:
         main_win.import_json(workspace_file)
