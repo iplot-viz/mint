@@ -15,7 +15,6 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         combobox = QComboBox(parent)
         combobox.addItems(self._data_sources)
-        combobox.addItem('')
         if combobox.count():
             combobox.setCurrentIndex(0)
         return combobox

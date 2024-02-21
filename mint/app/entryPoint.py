@@ -98,8 +98,8 @@ def runApp(q_app: QApplication, args=None):
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
     data_sources = [AccessHelper.da.getDefaultDSName()]
-    for ds_name in AccessHelper.da.dslist.keys():
-        if ds_name not in data_sources:
+    for ds_name, ds in AccessHelper.da.dslist.items():
+        if ds_name not in data_sources and ds.connected:
             data_sources.append(ds_name)
 
     main_win = MTMainWindow(canvas,
