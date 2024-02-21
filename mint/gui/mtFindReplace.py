@@ -71,13 +71,22 @@ class FindReplaceDialog(QDialog):
         text_to_find = self.find_input.text()
         text_to_replace = self.replace_input.text()
         all_indexes = self.table_view.selectionModel().selectedIndexes()
-
+        rows = set()
+        cols = set()
         for index in all_indexes:
             row = index.row()
+            rows.add(row)
             col = index.column()
+            cols.add(col)
             new_index = model.index(row, col)
             item_data = model.data(new_index, Qt.ItemDataRole.DisplayRole)
             if item_data and text_to_find in item_data:
-                self.table_view.model().setData(new_index, item_data.replace(text_to_find, text_to_replace),
-                                                Qt.ItemDataRole.EditRole)
+                with self.table_view.model().activate_fast_mode():
+                    self.table_view.model().setData(new_index,
+                                                    item_data.replace(text_to_find, text_to_replace),
+                                                    Qt.ItemDataRole.EditRole)
+
+        self.table_view.model().dataChanged.emit(self.table_view.model().index(min(rows), min(cols)),
+                                                 self.table_view.model().index(max(rows), max(cols)))
+
         self.find_text(find_one=True)
