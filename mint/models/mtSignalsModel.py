@@ -243,10 +243,7 @@ class MTSignalsModel(QAbstractItemModel):
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
 
-        if self._table.empty:
-            self._table = df
-        else:
-            self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+        self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
 
         # Check if last row is empty
         if self._table.iloc[-1:, 1:-3].any(axis=1).bool():
