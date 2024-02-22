@@ -289,7 +289,7 @@ class MTSignalConfigurator(QWidget):
 
         if selection:
             if above:
-                row_position = selection[0].row() - 1
+                row_position = selection[0].row()
             else:
                 row_position = selection[-1].row() + 1
             self._model.insertRows(row_position, len(selection), QModelIndex())
