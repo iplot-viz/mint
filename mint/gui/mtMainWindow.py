@@ -139,6 +139,11 @@ class MTMainWindow(IplotQtMainWindow):
         about_action.setStatusTip("About MINT")
         about_action.triggered.connect(self.aboutMINT.exec_)
 
+        clear_cache_action = QAction("Clear cache", self.menuBar())
+        clear_cache_action.setStatusTip("Clear cache")
+        clear_cache_action.triggered.connect(self.da.clear_cache)
+
+        help_menu.addAction(clear_cache_action)
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
