@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import sys
 import typing
+from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
@@ -281,14 +282,17 @@ class MTSignalConfigurator(QWidget):
         if not df.empty:
             self._model.append_dataframe(df)
 
-    def insertRow(self):
-        selection = []
+    def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
-        for idx in self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes():
-            selection.append(idx)
+        selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
+            .selectedIndexes()  # type: List[QModelIndex()]
 
-        if len(selection):
-            self._model.insertRow(self._model.rowCount(selection[0]))
+        if selection:
+            if above:
+                row_position = selection[0].row()
+            else:
+                row_position = selection[-1].row() + 1
+            self._model.insertRows(row_position, len(selection), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
@@ -413,7 +417,9 @@ class MTSignalConfigurator(QWidget):
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
+            getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_DialogOkButton")), "Insert below", lambda: self.insert_empty_rows(False))
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.addAction("Copy", self.copyContentsToClipboard)
