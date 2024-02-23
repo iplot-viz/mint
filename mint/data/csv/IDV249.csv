@@ -1,9 +1,0 @@
-DS,Variable,Stack,Row span,Col span,Envelope,Alias,Samples
-codacuda,CWS-SCSU-HR00:ML0004-LT-XI,1.1,,,,,-1
-codacuda,CWS-SCSU-HR00:ML0002-LT-XI,2.1,,,,,-1
-codacuda,CWS-SCSU-HR00:ML0001-LT-XI,3.1,,,,,-1
-codacuda,CWS-SCSU-HR00:ML0003-LT-XI,4.1,,,,,-1
-codacuda,np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI}))),1.1,,,,max_level,-1
-codacuda,np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI}))),4.1,,,,max_level,-1
-codacuda,np.amax(${CWS-SCSU-HR00:ML0004-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0004-LT-XI}))) - ${CWS-SCSU-HR00:ML0004-LT-XI},5.1,,,,diff_level,-1
-codacuda,np.amax(${CWS-SCSU-HR00:ML0003-LT-XI})*(np.ones(np.size(${CWS-SCSU-HR00:ML0003-LT-XI})))-${CWS-SCSU-HR00:ML0003-LT-XI},6.1,,,,diff_level,-1

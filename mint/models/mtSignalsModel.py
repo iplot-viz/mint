@@ -107,9 +107,6 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._fast_mode = False
 
-    def _check_resize(self, row: int):
-        if row >= self._table.index.size - 1:
-            self.insertRows(row + 1, 1, QModelIndex())
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -125,7 +122,8 @@ class MTSignalsModel(QAbstractItemModel):
                 # replaces " with ' if value has , in it.
                 value = value.replace('"', "'")
 
-        self._check_resize(row)
+        if row + 1 >= self._table.index.size:
+            self.insertRows(row + 1, 1, QModelIndex())
         self._table.iloc[row, column] = value
 
         if not self._fast_mode:
@@ -143,7 +141,7 @@ class MTSignalsModel(QAbstractItemModel):
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
 
-        for _ in range(count):
+        for new_row in range(row, row+count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
@@ -155,7 +153,9 @@ class MTSignalsModel(QAbstractItemModel):
                 self.blueprint, 'PlotType')] = self.blueprint.get('PlotType').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = self._table.append(empty_row).reset_index(drop=True)
+            self._table = pd.concat([self._table.iloc[:new_row],
+                                     empty_row,
+                                     self._table.iloc[new_row:]]).reset_index(drop=True)
         self.layoutChanged.emit()
 
         self.endInsertRows()
@@ -177,7 +177,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-1].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-3].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -241,12 +241,16 @@ class MTSignalsModel(QAbstractItemModel):
                 continue
 
     def append_dataframe(self, df: pd.DataFrame):
+        if df.empty:
+            return
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
-        if len(self._table.columns[(self._table.iloc[[-1]] != '').all()]) < 3:
-            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
-        else:
-            self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+
+        self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+
+        # Check if last row is empty
+        if self._table.iloc[-1:, 1:-3].any(axis=1).bool():
+            self.insertRows(0, 1, QModelIndex())
 
         self.layoutChanged.emit()
 
@@ -380,10 +384,33 @@ class MTSignalsModel(QAbstractItemModel):
 
             # Override global values with locals for fields with 'override' attribute
             if v.get('override'):
-                override_global |= (
-                        get_value(inp, column_name, type_func) is not None)
+                override_global |= (get_value(inp, column_name, type_func) is not None)
                 if override_global:
                     value = get_value(inp, column_name, type_func)
+                    if column_name == 'PulseId':
+                        plus_pattern = re.compile(r"\+\((.*)\)")
+                        minus_pattern = re.compile(r"-\((.*)\)")
+
+                        # Lists to store the elements corresponding to every pattern
+                        elements = [[], [], []]
+
+                        # Iterar sobre la lista y clasificar los elementos
+                        for element in value:
+                            match_plus = plus_pattern.match(element)
+                            match_minus = minus_pattern.match(element)
+                            if match_plus:
+                                elements[0].append(match_plus.group(1))
+                            elif match_minus:
+                                elements[1].append(match_minus.group(1))
+                            else:
+                                elements[2].append(element)
+
+                        if len(elements[2]) == 0:
+                            # Remove pulses from global
+                            value = [i for i in default_value if i not in elements[1]]
+                            # Add pulses from global
+                            value.extend([i for i in elements[0] if i not in default_value])
+
                 else:
                     value = default_value
             else:
@@ -399,7 +426,8 @@ class MTSignalsModel(QAbstractItemModel):
                 for member in v:
                     serie = out.copy()
                     serie.update({k: member})
-                    if "uid" in out:
+                    # Checks if there is more than one pulseId to change de uid of the signal
+                    if "uid" in out and len(v) > 1:
                         # append pulse nb to uid to make it unique
                         serie['uid'] = str(uuid.uuid5(uuid.UUID(serie['uid']), member))
                     yield pd.Series(serie)

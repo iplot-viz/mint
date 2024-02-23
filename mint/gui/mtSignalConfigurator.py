@@ -11,11 +11,12 @@ import pandas as pd
 import numpy as np
 import sys
 import typing
+from typing import List
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal, QItemSelectionModel
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QLabel, QDialog, QLineEdit, QHBoxLayout, QInputDialog
+    QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
@@ -151,7 +152,7 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, csv_dir: str = '.', data_sources: list = [],
+    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources: list = [],
                  signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
@@ -160,7 +161,7 @@ class MTSignalConfigurator(QWidget):
         self._model = MTSignalsModel(
             blueprint=blueprint, signal_class=self._signal_class)
 
-        self._csv_dir = csv_dir
+        self._scsv_dir = scsv_dir
         self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
         self._toolbar.openAction.triggered.connect(self.onImport)
@@ -252,28 +253,30 @@ class MTSignalConfigurator(QWidget):
                 view.resizeColumnsToContents()
 
     def onExport(self):
-        file = QFileDialog.getSaveFileName(self, "Save CSV", filter='*.csv', dir=self._csv_dir)
+        file = QFileDialog.getSaveFileName(self, "Save SCSV", filter='*.scsv', dir=self._scsv_dir)
         if file and file[0]:
-            if not file[0].endswith('.csv'):
-                file_name = file[0] + '.csv'
+            if not file[0].endswith('.scsv'):
+                file_name = file[0] + '.scsv'
             else:
                 file_name = file[0]
-            self._csv_dir = os.path.dirname(file_name)
-            self.export_csv(file_name)
+            self._scsv_dir = os.path.dirname(file_name)
+            self.export_scsv(file_name)
 
     def onImport(self):
-        file = QFileDialog.getOpenFileName(self, "Open CSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
-            self._csv_dir = os.path.dirname(file[0])
-            self.import_csv(file[0])
+            self._scsv_dir = os.path.dirname(file[0])
+            self.import_scsv(file[0])
 
     def onAppend(self):
-        file = QFileDialog.getOpenFileName(self, "Append CSV", dir=self._csv_dir)
+        file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
-            self.append_csv(file[0])
+            self.append_scsv(file[0])
+
     def on_tree_view(self):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
+
     def onLoad(self):
         self.selectModuleDialog.show()
         self.selectModuleDialog.activateWindow()
@@ -282,14 +285,17 @@ class MTSignalConfigurator(QWidget):
         if not df.empty:
             self._model.append_dataframe(df)
 
-    def insertRow(self):
-        selection = []
+    def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
-        for idx in self._signal_item_widgets[currentTabId].view().selectionModel().selectedIndexes():
-            selection.append(idx)
+        selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
+            .selectedIndexes()  # type: List[QModelIndex()]
 
-        if len(selection):
-            self._model.insertRow(self._model.rowCount(selection[0]))
+        if selection:
+            if above:
+                row_position = selection[0].row()
+            else:
+                row_position = selection[-1].row() + 1
+            self._model.insertRows(row_position, len(selection), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
@@ -336,8 +342,11 @@ class MTSignalConfigurator(QWidget):
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
+        if not text:
+            data = [['']]
+        else:
+            data = [line.split(';') for line in text.splitlines()]
 
-        data = [line.split(',') for line in text.splitlines()]
         if len(data) == 1 and len(data[0]) == 1:
             self.setBulkContents(text, selected_ids)
             return
@@ -387,7 +396,7 @@ class MTSignalConfigurator(QWidget):
             row_text = []
             for intern_key, value in row.items():
                 row_text.append(str(value))
-            result.append(','.join(row_text))
+            result.append(';'.join(row_text))
 
         text = '\n'.join(result)
 
@@ -411,7 +420,9 @@ class MTSignalConfigurator(QWidget):
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogOkButton")), "Add", self.insertRow)
+            getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_DialogOkButton")), "Insert below", lambda: self.insert_empty_rows(False))
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
         context_menu.addAction("Copy", self.copyContentsToClipboard)
@@ -422,11 +433,11 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.findReplace)
         context_menu.popup(event.globalPos())
 
-    def export_csv(self, file_path=None):
+    def export_scsv(self, file_path=None):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
-            return df.to_csv(file_path, index=False)
+            return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
@@ -437,10 +448,10 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
-    def import_csv(self, file_path):
+    def import_scsv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
             self.resizeViewsToContents()
@@ -453,10 +464,10 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
-    def append_csv(self, file_path):
+    def append_scsv(self, file_path):
         try:
             self.busy.emit()
-            df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.append_dataframe(df)
             self.resizeViewsToContents()
@@ -468,6 +479,7 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
+
     def export_dict(self) -> dict:
         output = dict()
         # 1. view options.
@@ -532,11 +544,11 @@ class MTSignalConfigurator(QWidget):
         except KeyError:
             pass
 
-        # if len(duplicates):
-        #     invalid_rows = [aliases.index(dup) for dup in duplicates]
-        #     self._abort_build(
-        #         f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-        #     return
+        if len(duplicates):
+            invalid_rows = [aliases.index(dup)+1 for dup in duplicates]
+            self._abort_build(
+            f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
+            return
 
         error_msgs = []
         graph = defaultdict(list)
@@ -641,10 +653,8 @@ def main():
     from PySide6.QtWidgets import QApplication
 
     parser = argparse.ArgumentParser('Quick demonstration of Signal Table')
-    parser.add_argument(
-        '-b', '--blueprint', help="Path to blueprint.json file", type=str, required=False)
-    parser.add_argument(
-        '-i', '--input', help="Path to input *.csv file", type=str, required=False)
+    parser.add_argument('-b', '--blueprint', help="Path to blueprint.json file", type=str, required=False)
+    parser.add_argument('-i', '--input', help="Path to input *.scsv file", type=str, required=False)
     args = parser.parse_args()
 
     app = QApplication([])
@@ -669,8 +679,8 @@ def main():
 
     main_win.setCentralWidget(sig_table)
 
-    if isinstance(args.input, str) and args.input.endswith('.csv'):
-        sig_table.import_csv(args.input)
+    if isinstance(args.input, str) and args.input.endswith('.scsv'):
+        sig_table.import_scsv(args.input)
     main_win.show()
     main_win.resize(1280, 720)
     sys.exit(app.exec_())

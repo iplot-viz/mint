@@ -79,7 +79,7 @@ class MTMainWindow(IplotQtMainWindow):
         check_data_range(model)
         self.model = model
         self.sigCfgWidget = MTSignalConfigurator(
-            blueprint=blueprint, csv_dir=os.path.join(data_dir, 'csv'), data_sources=data_sources)
+            blueprint=blueprint, scsv_dir=os.path.join(data_dir, 'scsv'), data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
@@ -139,6 +139,11 @@ class MTMainWindow(IplotQtMainWindow):
         about_action.setStatusTip("About MINT")
         about_action.triggered.connect(self.aboutMINT.exec_)
 
+        clear_cache_action = QAction("Clear cache", self.menuBar())
+        clear_cache_action.setStatusTip("Clear cache")
+        clear_cache_action.triggered.connect(self.da.clear_cache)
+
+        help_menu.addAction(clear_cache_action)
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
@@ -447,11 +452,12 @@ class MTMainWindow(IplotQtMainWindow):
             return
 
         if not no_build:
-            self.build()
+            # Dumps are done before canvas processing
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
-            self.sigCfgWidget.export_csv(os.path.join(
-                dump_dir, "signals_table" + str(os.getpid()) + ".csv"))
+            self.sigCfgWidget.export_scsv(os.path.join(dump_dir, "signals_table" + str(os.getpid()) + ".scsv"))
+
+            self.build()
 
         self.indicateBusy("Drawing...")
         self.stopAutoRefresh()
@@ -549,10 +555,10 @@ class MTMainWindow(IplotQtMainWindow):
                 existing = plan[waypt.col_num][waypt.row_num]
                 existing[0] = waypt.row_span if waypt.row_span > existing[0] else existing[0]
                 existing[1] = waypt.col_span if waypt.col_span > existing[1] else existing[1]
-
-                if waypt.ts_start is not None or waypt.ts_start is not None:
+                if waypt.ts_start is not None:
                     if existing[3][0] is None or waypt.ts_start < existing[3][0]:
                         existing[3][0] = waypt.ts_start
+                if waypt.ts_end is not None:
                     if existing[3][1] is None or waypt.ts_end > existing[3][1]:
                         existing[3][1] = waypt.ts_end
 
