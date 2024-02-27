@@ -56,6 +56,7 @@ class MTPlotTypeDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         combobox = QComboBox(parent)
         combobox.addItems(self._plot_types)
+        combobox.addItems('')
         if combobox.count():
             combobox.setCurrentIndex(0)
         return combobox
