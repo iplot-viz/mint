@@ -11,7 +11,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 
-def runApp(q_app: QApplication, args=None):
+def run_app(q_app: QApplication, args=None):
     if args is None:
         return
 

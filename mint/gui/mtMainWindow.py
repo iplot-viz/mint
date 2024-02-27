@@ -7,13 +7,12 @@
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
-import json
 from pathlib import Path
+import json
 import os
 import copy
 import pkgutil
 import socket
-from threading import Timer
 import typing
 import pandas as pd
 
@@ -31,8 +30,8 @@ from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 from iplotDataAccess.dataAccess import DataAccess
-from mint.gui.mtAbout import MTAbout
 
+from mint.gui.mtAbout import MTAbout
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
@@ -55,13 +54,15 @@ class MTMainWindow(IplotQtMainWindow):
                  model: dict,
                  app_version: str,
                  data_dir: os.PathLike = '.',
-                 data_sources: list = [],
+                 data_sources=None,
                  blueprint: dict = mtBlueprintParser.DEFAULT_BLUEPRINT,
                  impl: str = "matplotlib",
                  signal_class: type = IplotSignalAdapter,
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
+        if data_sources is None:
+            data_sources = []
         self.canvas = canvas
         self.da = da
         self.plot_class = PlotXY
@@ -122,7 +123,7 @@ class MTMainWindow(IplotQtMainWindow):
             from iplotlib.impl.vtk.qt import QtVTKCanvas
             self.qtcanvas = QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
-        self.qtcanvas.dropSignal.connect(self.onDropPlot)
+        self.qtcanvas.dropSignal.connect(self.on_drop_plot)
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -181,28 +182,28 @@ class MTMainWindow(IplotQtMainWindow):
         self.setStatusBar(self._statusBar)
 
         # Setup connections
-        self.drawBtn.clicked.connect(self.drawClicked)
-        self.streamBtn.clicked.connect(self.streamClicked)
-        self.streamerCfgWidget.streamStarted.connect(self.onStreamStarted)
-        self.streamerCfgWidget.streamStopped.connect(self.onStreamStopped)
-        self.dataRangeSelector.cancelRefresh.connect(self.stopAutoRefresh)
+        self.drawBtn.clicked.connect(self.draw_clicked)
+        self.streamBtn.clicked.connect(self.stream_clicked)
+        self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
+        self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
+        self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
     def wireConnections(self):
         super().wireConnections()
         self.sigCfgWidget.statusChanged.connect(self._statusBar.showMessage)
-        self.sigCfgWidget.buildAborted.connect(self.onTableAbort)
+        self.sigCfgWidget.buildAborted.connect(self.on_table_abort)
         self.sigCfgWidget.showProgress.connect(self._progressBar.show)
         self.sigCfgWidget.hideProgress.connect(self._progressBar.hide)
-        self.sigCfgWidget.busy.connect(self.indicateBusy)
-        self.sigCfgWidget.ready.connect(self.indicateReady)
+        self.sigCfgWidget.busy.connect(self.indicate_busy)
+        self.sigCfgWidget.ready.connect(self.indicate_ready)
         self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
-        self.toolBar.exportAction.triggered.connect(self.onExport)
-        self.toolBar.exportDataAction.triggered.connect(self.onExportData)
-        self.toolBar.importAction.triggered.connect(self.onImport)
+        self.toolBar.exportAction.triggered.connect(self.on_export)
+        self.toolBar.exportDataAction.triggered.connect(self.on_export_data)
+        self.toolBar.importAction.triggered.connect(self.on_import)
 
     @staticmethod
-    def onTableAbort(message):
+    def on_table_abort(message):
         logger.error(message)
 
         box = QMessageBox()
@@ -233,16 +234,16 @@ class MTMainWindow(IplotQtMainWindow):
             self._floatingWindow.hide()
 
     def updateCanvasPreferences(self):
-        self.indicateBusy('Applying preferences...')
+        self.indicate_busy('Applying preferences...')
         super().updateCanvasPreferences()
-        self.indicateReady()
+        self.indicate_ready()
 
     def reDraw(self):
-        self.indicateBusy('Redrawing...')
+        self.indicate_busy('Redrawing...')
         super().reDraw()
-        self.indicateReady()
+        self.indicate_ready()
 
-    def onExport(self):
+    def on_export(self):
         file = QFileDialog.getSaveFileName(
             self, "Save workspaces as ..", dir=self._data_dir, filter='*.json')
         if file and file[0]:
@@ -253,7 +254,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.export_json(file_name)
             self._data_dir = os.path.dirname(file_name)
 
-    def onExportData(self):
+    def on_export_data(self):
         file = QFileDialog.getSaveFileName(
             self, "Save Data as ..",
             dir=self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv",
@@ -266,21 +267,21 @@ class MTMainWindow(IplotQtMainWindow):
             self._data_export_dir = os.path.dirname(file_name)
             self.export_data_plots(file_name)
 
-    def onImport(self):
+    def on_import(self):
         file = QFileDialog.getOpenFileName(
             self, "Open a workspace ..", dir=self._data_dir)
         if file and file[0]:
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
-    def indicateBusy(self, msg='Hang on ..'):
+    def indicate_busy(self, msg='Hang on ..'):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
         self._progressBar.show()
         self.statusBar().showMessage(msg)
         QCoreApplication.processEvents()
 
-    def indicateReady(self):
+    def indicate_ready(self):
         self._progressBar.hide()
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
@@ -288,7 +289,7 @@ class MTMainWindow(IplotQtMainWindow):
         QCoreApplication.processEvents()
 
     def export_dict(self) -> dict:
-        self.indicateBusy('Exporting workspace...')
+        self.indicate_busy('Exporting workspace...')
         workspace = {}
         workspace.update({
             '_metadata': {
@@ -301,11 +302,11 @@ class MTMainWindow(IplotQtMainWindow):
         workspace.update({'data_range': self.dataRangeSelector.export_dict()})
         workspace.update({'signal_cfg': self.sigCfgWidget.export_dict()})
         workspace.update({'main_canvas': self.canvasStack.currentWidget().export_dict()})
-        self.indicateReady()
+        self.indicate_ready()
         return workspace
 
     def import_dict(self, input_dict: dict):
-        self.indicateBusy('Importing workspace...')
+        self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
 
@@ -313,8 +314,8 @@ class MTMainWindow(IplotQtMainWindow):
         main_canvas = input_dict.get('main_canvas')
         self.canvas = Canvas.from_dict(main_canvas)
 
-        ts, te = self.dataRangeSelector.getTimeRange()
-        pulse_number = self.dataRangeSelector.getPulseNumber()
+        ts, te = self.dataRangeSelector.get_time_range()
+        pulse_number = self.dataRangeSelector.get_pulse_number()
         da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
 
         signal_cfg = input_dict.get('signal_cfg') or input_dict
@@ -324,7 +325,7 @@ class MTMainWindow(IplotQtMainWindow):
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
         ParserHelper.env.clear()  # Removes any previously aliased signals.
-        self.indicateReady()
+        self.indicate_ready()
         self.sigCfgWidget.setStatusMessage("Update signals ..")
         self.sigCfgWidget.beginBuild()
         self.sigCfgWidget.setProgress(0)
@@ -370,10 +371,10 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.sigCfgWidget.setProgress(100)
 
-        self.indicateBusy('Drawing...')
+        self.indicate_busy('Drawing...')
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.indicateReady()
+        self.indicate_ready()
         self.sigCfgWidget.resizeViewsToContents()
 
     def import_json(self, file_path: os.PathLike):
@@ -400,7 +401,7 @@ class MTMainWindow(IplotQtMainWindow):
                 f"Error {str(e)}: cannot import workspace from file: {file_path}")
             logger.exception(e)
             box.exec_()
-            self.indicateReady()
+            self.indicate_ready()
             return
 
     def export_data_plots(self, file_path: os.PathLike):
@@ -415,7 +416,7 @@ class MTMainWindow(IplotQtMainWindow):
                 f"Error {str(e)}: cannot export data plots to file: {file_path}")
             logger.exception(e)
             box.exec_()
-            self.indicateReady()
+            self.indicate_ready()
             return
 
     def export_json(self, file_path: os.PathLike):
@@ -430,22 +431,22 @@ class MTMainWindow(IplotQtMainWindow):
                 f"Error {str(e)}: cannot export workspace to file: {file_path}")
             logger.exception(e)
             box.exec_()
-            self.indicateReady()
+            self.indicate_ready()
             return
 
-    def startAutoRefresh(self):
+    def start_auto_refresh(self):
         if self.canvas.auto_refresh:
             logger.info(
                 F"Scheduling canvas refresh in {self.canvas.auto_refresh} seconds")
             self.refreshTimer.start(self.canvas.auto_refresh * 1000)
             self.dataRangeSelector.refreshActivate.emit()
 
-    def stopAutoRefresh(self):
+    def stop_auto_refresh(self):
         self.dataRangeSelector.refreshDeactivate.emit()
         if self.refreshTimer is not None:
             self.refreshTimer.stop()
 
-    def drawClicked(self, no_build: bool = False):
+    def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
         if self.streamerCfgWidget.isActivated():
@@ -459,8 +460,8 @@ class MTMainWindow(IplotQtMainWindow):
 
             self.build()
 
-        self.indicateBusy("Drawing...")
-        self.stopAutoRefresh()
+        self.indicate_busy("Drawing...")
+        self.stop_auto_refresh()
 
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
@@ -469,10 +470,10 @@ class MTMainWindow(IplotQtMainWindow):
         self.prefWindow.update()
 
         self.drop_history()  # clean zoom history; is this best place?
-        self.startAutoRefresh()
-        self.indicateReady()
+        self.start_auto_refresh()
+        self.indicate_ready()
 
-    def streamClicked(self):
+    def stream_clicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
         if self.streamerCfgWidget.isActivated():
             self.streamBtn.setText("Stopping")
@@ -480,25 +481,25 @@ class MTMainWindow(IplotQtMainWindow):
         else:
             self.streamerCfgWidget.show()
 
-    def streamCallback(self, signal):
+    def stream_callback(self, signal):
         self.canvasStack.currentWidget()._parser.process_ipl_signal(signal)
 
-    def onStreamStarted(self):
+    def on_stream_started(self):
         self.streamerCfgWidget.hide()
         self.streamBtn.setText("Stop")
         self.build(stream=True)
 
-        self.indicateBusy('Connecting to stream and drawing...')
+        self.indicate_busy('Connecting to stream and drawing...')
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
         self.streamerCfgWidget.streamer.start(
-            self.canvas, self.streamCallback)
-        self.indicateReady()
+            self.canvas, self.stream_callback)
+        self.indicate_ready()
 
-    def onStreamStopped(self):
+    def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -510,17 +511,17 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.timeWindow() * 1000000000
 
-        x_axis_date = (self.dataRangeSelector.isXAxisDate() and not stream) or stream
+        x_axis_date = (self.dataRangeSelector.is_x_axis_date() and not stream) or stream
         x_axis_follow = stream
         x_axis_window = stream_window if stream else None
-        refresh_interval = 0 if stream else self.dataRangeSelector.getAutoRefresh()
-        pulse_number = None if stream else self.dataRangeSelector.getPulseNumber()
+        refresh_interval = 0 if stream else self.dataRangeSelector.get_auto_refresh()
+        pulse_number = None if stream else self.dataRangeSelector.get_pulse_number()
 
         if stream and stream_window > 0:
-            now = self.dataRangeSelector.getTimeNow()
+            now = self.dataRangeSelector.get_time_now()
             ts, te = now - stream_window, now
         else:
-            ts, te = self.dataRangeSelector.getTimeRange()
+            ts, te = self.dataRangeSelector.get_time_range()
 
         self.canvas.auto_refresh = refresh_interval
         if stream:
@@ -585,22 +586,22 @@ class MTMainWindow(IplotQtMainWindow):
         #     new_plan[x + col_sp - 1] = rows
         #     col_sp = next_col_sp
 
-        self.indicateBusy('Retrieving data...')
+        self.indicate_busy('Retrieving data...')
 
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
-        self.indicateBusy('Applying preferences...')
+        self.indicate_busy('Applying preferences...')
         # Merge with previous preferences
         self.canvas.merge(old_canvas)
 
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
-        self.indicateReady()
+        self.indicate_ready()
 
-    def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=False):
+    def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=None):
         if not plan.keys():
             self.canvas.plots = []
             return
@@ -653,7 +654,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def on_timeout(self):
         self.build()
-        self.indicateBusy("Drawing...")
+        self.indicate_busy("Drawing...")
 
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
@@ -661,13 +662,13 @@ class MTMainWindow(IplotQtMainWindow):
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
 
-        self.indicateReady()
+        self.indicate_ready()
 
-    def onDropPlot(self, drop_info):
+    def on_drop_plot(self, drop_info):
         dragged_item = drop_info.dragged_item
         row = drop_info.row
         col = drop_info.col
         new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
                                 columns=['DS', 'Variable', 'Stack'])
-        self.sigCfgWidget._model.append_dataframe(new_data)
-        self.drawClicked()
+        self.sigCfgWidget.append_dataframe(new_data)
+        self.draw_clicked()

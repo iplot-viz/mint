@@ -169,10 +169,9 @@ class MTSignalConfigurator(QWidget):
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
         self._toolbar.loadModules.clicked.connect(self.onLoad)
 
-        self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
-                                     MTSignalItemView(DA_VIEW_NAME, parent=self),
-                                     MTSignalItemView(
-                                         PLAYOUT_VIEW_NAME, parent=self)]  # ,
+        self._signal_item_widgets = [MTSignalItemView(title=ALL_VIEW_NAME, parent=self),
+                                     MTSignalItemView(title=DA_VIEW_NAME, parent=self),
+                                     MTSignalItemView(title=PLAYOUT_VIEW_NAME, parent=self)]  # ,
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
@@ -183,14 +182,14 @@ class MTSignalConfigurator(QWidget):
         self.parseBtn.clicked.connect(self.onParseButtonPressed)
 
         for wdgt in self._signal_item_widgets:
-            wdgt.setModel(self._model)
+            wdgt.set_model(self._model)
             wdgt.import_dict(NEAT_VIEW.get(wdgt.windowTitle()))
             self._tabs.addTab(wdgt, wdgt.windowTitle())
             wdgt.view().setItemDelegateForColumn(0, self._ds_delegate)
 
         self._tabs.currentChanged.connect(self.onCurrentViewChanged)
         # Set menu for configure columns button.
-        self._toolbar.configureColsBtn.setMenu(self._signal_item_widgets[0].headerMenu())
+        self._toolbar.configureColsBtn.setMenu(self._signal_item_widgets[0].header_menu())
 
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
@@ -216,7 +215,7 @@ class MTSignalConfigurator(QWidget):
 
     def onCurrentViewChanged(self, index: int):
         currentView = self.itemWidgets[index]
-        self._toolbar.configureColsBtn.setMenu(currentView.headerMenu())
+        self._toolbar.configureColsBtn.setMenu(currentView.header_menu())
 
     def onParseButtonPressed(self, val: bool):
         logger.debug('Build order:')

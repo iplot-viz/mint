@@ -7,8 +7,8 @@
 from datetime import datetime
 from functools import partial
 import numpy as np
-import json
-import typing
+
+from typing import Union, List, Tuple
 
 from PySide6.QtCore import QMargins, Signal
 from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QRadioButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
@@ -16,9 +16,10 @@ from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QRadioButton, QSizePolicy,
 from mint.tools.converters import to_unix_time_stamp
 from mint.models import MTGenericAccessMode, MTAbsoluteTime, MTPulseId, MTRelativeTime
 
-from iplotLogging import setupLogger as sl
+from iplotLogging import setupLogger
 
-logger = sl.get_logger(__name__)
+logger = setupLogger.get_logger(__name__)
+
 
 class MTDataRangeSelector(QWidget):
     modeChanged = Signal()
@@ -40,17 +41,17 @@ class MTDataRangeSelector(QWidget):
             QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
         self.radioGroup.setLayout(QHBoxLayout())
 
-        self.accesModes = [MTAbsoluteTime(self.mappings),
-                           MTPulseId(self.mappings),
-                           MTRelativeTime(self.mappings)]  # type: typing.List[MTGenericAccessMode]
+        self.accessModes = [MTAbsoluteTime(self.mappings),
+                            MTPulseId(self.mappings),
+                            MTRelativeTime(self.mappings)]  # type: List[MTGenericAccessMode]
 
         self.stack = QStackedWidget(parent=self)
 
-        for idx, item in enumerate(self.accesModes):
+        for idx, item in enumerate(self.accessModes):
             self.stack.addWidget(item.form)
             button = QRadioButton(parent=self.radioGroup)
             button.setText(item.label())
-            button.clicked.connect(partial(self.selectPage, idx))
+            button.clicked.connect(partial(self.select_page, idx))
             self.radioGroup.layout().addWidget(button)
 
             if self.mappings.get('mode') == item.mode:
@@ -64,18 +65,12 @@ class MTDataRangeSelector(QWidget):
             self.radioGroup.layout().itemAt(0).widget().setChecked(True)
 
         # special connections
-        self.accesModes[2].cancelButton.clicked.connect(
-            self.cancelRefresh.emit)
-        self.refreshActivate.connect(
-            partial(self.accesModes[2].cancelButton.setDisabled, False))
-        self.refreshDeactivate.connect(
-            partial(self.accesModes[2].cancelButton.setDisabled, True))
-
-    def getModel(self):
-        return self.accesModes[self.stack.currentIndex()].to_dict()
+        self.accessModes[2].cancelButton.clicked.connect(self.cancelRefresh.emit)
+        self.refreshActivate.connect(partial(self.accessModes[2].cancelButton.setDisabled, False))
+        self.refreshDeactivate.connect(partial(self.accessModes[2].cancelButton.setDisabled, True))
 
     def export_dict(self) -> dict:
-        item = self.accesModes[self.stack.currentIndex()]
+        item = self.accessModes[self.stack.currentIndex()]
         return item.toDict()
 
     def import_dict(self, input_dict: dict):
@@ -83,53 +78,47 @@ class MTDataRangeSelector(QWidget):
         # for ex: even if pulse numbers were specified, the 'mode' key was set to TIME_RANGE.
         # We fix that inconsistency here.
         for idx, mode_name in enumerate(MTGenericAccessMode.getSupportedModes()):
-            if any([k in input_dict.keys() for k in self.accesModes[idx].properties().keys()]):
+            if any([k in input_dict.keys() for k in self.accessModes[idx].properties().keys()]):
                 input_dict.update({'mode': mode_name})
                 self.radioGroup.layout().itemAt(idx).widget().click()
                 break
-        else: # cannot understand input_dict, log error and fail.
+        else:  # cannot understand input_dict, log error and fail.
             msg = f"Failed to initialize DataRangeSelector. data_range = {input_dict}"
             logger.error(msg)
             raise Exception(msg)
 
-        item = self.accesModes[self.stack.currentIndex()]
+        item = self.accessModes[self.stack.currentIndex()]
         item.fromDict(input_dict)
 
-    def exportJson(self) -> str:
-        return json.dumps(self.export_dict())
-
-    def importJson(self, json_string):
-        self.import_dict(json.loads(json_string))
-
-    def selectPage(self, pageId: int):
-        self.stack.setCurrentIndex(pageId)
+    def select_page(self, page_id: int):
+        self.stack.setCurrentIndex(page_id)
         self.modeChanged.emit()
 
-    def isXAxisDate(self) -> bool:
-        mode = self.accesModes[self.stack.currentIndex()].mode
+    def is_x_axis_date(self) -> bool:
+        mode = self.accessModes[self.stack.currentIndex()].mode
         return mode in [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.RELATIVE_TIME]
 
-    def getPulseNumber(self) -> typing.List[int]:
+    def get_pulse_number(self) -> List[int]:
         """Extracts pulse numbers if present in time_model """
-        model = self.accesModes[self.stack.currentIndex()]
+        model = self.accessModes[self.stack.currentIndex()]
         if model.mode == MTGenericAccessMode.PULSE_NUMBER:
             return model.properties().get("pulse_nb")
 
     @staticmethod
-    def getTimeNow() -> int:
+    def get_time_now() -> int:
         return np.datetime64(datetime.utcnow(), 'ns').astype('int64')
 
-    def getTimeRange(self) -> typing.Tuple[int, int]:
+    def get_time_range(self) -> Tuple[Union[int, str], Union[int, str]]:
         """Extract begin and end timestamps if present in time_model"""
-        model = self.accesModes[self.stack.currentIndex()]
+        model = self.accessModes[self.stack.currentIndex()]
         if model.mode == MTGenericAccessMode.TIME_RANGE:
             ts_start = model.properties().get("ts_start")
             ts_end = model.properties().get("ts_end")
             return to_unix_time_stamp(ts_start), to_unix_time_stamp(ts_end)
         elif model.mode == MTGenericAccessMode.RELATIVE_TIME:
             time_base = model.properties().get("base")
-            ts_end = int(self.getTimeNow())
-            ts_start = ts_end - 10 ** 9 * int(time_base)*int(model.properties().get("relative"))
+            ts_end = int(self.get_time_now())
+            ts_start = ts_end - 10 ** 9 * int(time_base) * int(model.properties().get("relative"))
             return ts_start, ts_end
         else:
             time_base = model.properties().get("base")
@@ -143,8 +132,8 @@ class MTDataRangeSelector(QWidget):
                 t_end = ''
             return t_start, t_end
 
-    def getAutoRefresh(self) -> int:
-        model = self.accesModes[self.stack.currentIndex()]
+    def get_auto_refresh(self) -> int:
+        model = self.accessModes[self.stack.currentIndex()]
         if model.mode == MTGenericAccessMode.RELATIVE_TIME:
             return model.properties().get("auto_refresh") * 60
         else:

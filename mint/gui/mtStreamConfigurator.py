@@ -6,7 +6,7 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QDialog
 
-from mint.gui.compiled.ui_streamerconfig import Ui_StreamerConfig
+from mint.gui.compiled.uiStreamerConfig import UiStreamerConfig
 
 from iplotlib.data_access.streamer import CanvasStreamer
 from iplotLogging import setupLogger as sl
@@ -24,9 +24,7 @@ class MTStreamConfigurator(QDialog):
         self.streamer = CanvasStreamer(kwargs.get('da'))
         self._active = False
         self.streamTimeWindow = 3600
-        self.ui = Ui_StreamerConfig()
-        self.ui.setupUi(self)
-
+        self.ui = UiStreamerConfig(self)
         # Configure time window range
         self.ui.windowSpinBox.setMinimum(1)
         self.ui.windowSpinBox.setMaximum(100000)
