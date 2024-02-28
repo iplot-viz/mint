@@ -73,11 +73,11 @@ class MTPulseId(MTGenericAccessMode):
             "t_end": self.model.stringList()[3]
         }
 
-    def fromDict(self, contents: dict):
+    def from_dict(self, contents: dict):
         self.mapper.model().setStringList(
             [",".join(contents.get("pulse_nb") or []),
              contents.get("base") or 'Seconds',
              contents.get("t_start") or '',
              contents.get("t_end") or '']
         )
-        super().fromDict(contents)
+        super().from_dict(contents)

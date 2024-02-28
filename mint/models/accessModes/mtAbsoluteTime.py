@@ -6,11 +6,13 @@ from PySide6.QtCore import Qt
 
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
+
 class MTAbsoluteTime(MTGenericAccessMode):
     TIME_FORMAT = "yyyy-MM-ddThh:mm:ss"
+
     def __init__(self, mappings: dict, parent=None):
         super().__init__(parent)
-        
+
         self.mode = MTGenericAccessMode.TIME_RANGE
         self.fromTime = QDateTimeEdit(parent=self.form)
         self.fromTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
@@ -35,7 +37,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
             "ts_end": self.model.stringList()[1]
         }
 
-    def fromDict(self, contents: dict):
+    def from_dict(self, contents: dict):
         self.mapper.model().setStringList(
             [contents.get("ts_start"), contents.get("ts_end")])
-        super().fromDict(contents)
+        super().from_dict(contents)

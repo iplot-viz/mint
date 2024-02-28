@@ -148,8 +148,8 @@ class MTMainWindow(IplotQtMainWindow):
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
-        file_menu.addAction(self.sigCfgWidget.toolBar().openAction)
-        file_menu.addAction(self.sigCfgWidget.toolBar().saveAction)
+        file_menu.addAction(self.sigCfgWidget.tool_bar().openAction)
+        file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
         file_menu.addAction(exit_action)
@@ -222,7 +222,7 @@ class MTMainWindow(IplotQtMainWindow):
             self._floatingWindow.setWindowTitle(self.windowTitle())
             self._floatingWindow.show()
             self.toolBar.detachAction.setText('Reattach')
-            self.sigCfgWidget.resizeViewsToContents()
+            self.sigCfgWidget.resize_views_to_contents()
         elif self.toolBar.detachAction.text() == 'Reattach':
             # we attach now.
             self.toolBar.detachAction.setText('Detach')
@@ -326,14 +326,14 @@ class MTMainWindow(IplotQtMainWindow):
         path_len = len(path)
         ParserHelper.env.clear()  # Removes any previously aliased signals.
         self.indicate_ready()
-        self.sigCfgWidget.setStatusMessage("Update signals ..")
-        self.sigCfgWidget.beginBuild()
-        self.sigCfgWidget.setProgress(0)
+        self.sigCfgWidget.set_status_message("Update signals ..")
+        self.sigCfgWidget.begin_build()
+        self.sigCfgWidget.set_progress(0)
 
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         for i, waypt in enumerate(path):
-            self.sigCfgWidget.setStatusMessage(f"Updating {waypt} ..")
-            self.sigCfgWidget.setProgress(int(i * 100 / path_len))
+            self.sigCfgWidget.set_status_message(f"Updating {waypt} ..")
+            self.sigCfgWidget.set_progress(int(i * 100 / path_len))
 
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
@@ -362,20 +362,20 @@ class MTMainWindow(IplotQtMainWindow):
             # Replace signal.
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
-        self.sigCfgWidget.setProgress(99)
+        self.sigCfgWidget.set_progress(99)
 
         self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0),
                                                  self.sigCfgWidget.model.index(
                                                      self.sigCfgWidget.model.rowCount(QModelIndex()) - 1,
                                                      self.sigCfgWidget.model.columnCount(QModelIndex()) - 1))
 
-        self.sigCfgWidget.setProgress(100)
+        self.sigCfgWidget.set_progress(100)
 
         self.indicate_busy('Drawing...')
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.indicate_ready()
-        self.sigCfgWidget.resizeViewsToContents()
+        self.sigCfgWidget.resize_views_to_contents()
 
     def import_json(self, file_path: os.PathLike):
         self.statusBar().showMessage(f"Importing {file_path} ..")
@@ -449,7 +449,7 @@ class MTMainWindow(IplotQtMainWindow):
     def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
-        if self.streamerCfgWidget.isActivated():
+        if self.streamerCfgWidget.is_activated():
             return
 
         if not no_build:
@@ -475,7 +475,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def stream_clicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
-        if self.streamerCfgWidget.isActivated():
+        if self.streamerCfgWidget.is_activated():
             self.streamBtn.setText("Stopping")
             self.streamerCfgWidget.stop()
         else:
@@ -509,7 +509,7 @@ class MTMainWindow(IplotQtMainWindow):
     def build(self, stream=False):
 
         self.canvas.streaming = stream
-        stream_window = self.streamerCfgWidget.timeWindow() * 1000000000
+        stream_window = self.streamerCfgWidget.time_window() * 1000000000
 
         x_axis_date = (self.dataRangeSelector.is_x_axis_date() and not stream) or stream
         x_axis_follow = stream

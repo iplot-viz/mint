@@ -58,10 +58,13 @@ class MTSignalsModel(QAbstractItemModel):
 
         super().__init__(parent)
 
+        self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
 
         self._blueprint = blueprint
-        self._fast_mode = False  # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+
+        # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+        self._fast_mode = False
         mtBP.parse_raw_blueprint(self._blueprint)
 
         self._table = pd.DataFrame(columns=column_names)
@@ -79,10 +82,10 @@ class MTSignalsModel(QAbstractItemModel):
     def parent(self, child: QModelIndex) -> QModelIndex:
         return QModelIndex()
 
-    def rowCount(self, parent: QModelIndex):
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.index.size
 
-    def columnCount(self, parent: QModelIndex):
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
@@ -92,7 +95,7 @@ class MTSignalsModel(QAbstractItemModel):
                 return value
         return None
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int):
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             try:
                 return self._table.columns[section]
@@ -106,7 +109,6 @@ class MTSignalsModel(QAbstractItemModel):
             yield None
         finally:
             self._fast_mode = False
-
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -141,7 +143,7 @@ class MTSignalsModel(QAbstractItemModel):
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
 
-        for new_row in range(row, row+count):
+        for new_row in range(row, row + count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
@@ -212,7 +214,7 @@ class MTSignalsModel(QAbstractItemModel):
         return df
 
     def set_dataframe(self, df: pd.DataFrame):
-        oldSz = self.rowCount(None)
+        oldSz = self.rowCount()
         self.removeRows(0, oldSz)
         newSz = df.index.size
         self.insertRows(0, newSz)
@@ -311,8 +313,7 @@ class MTSignalsModel(QAbstractItemModel):
         signal_params = dict()
 
         for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx])):
-            signal_params.update(
-                mtBP.construct_params_from_series(self.blueprint, parsed_row))
+            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row))
 
             if i == 0:  # grab these from the first row we encounter.
                 stack_val = signal_params.get('stack_val')

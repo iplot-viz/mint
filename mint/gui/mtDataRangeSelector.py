@@ -71,13 +71,13 @@ class MTDataRangeSelector(QWidget):
 
     def export_dict(self) -> dict:
         item = self.accessModes[self.stack.currentIndex()]
-        return item.toDict()
+        return item.to_dict()
 
     def import_dict(self, input_dict: dict):
         # older versions of MINT did not set the appropriate mode in the workspace.
         # for ex: even if pulse numbers were specified, the 'mode' key was set to TIME_RANGE.
         # We fix that inconsistency here.
-        for idx, mode_name in enumerate(MTGenericAccessMode.getSupportedModes()):
+        for idx, mode_name in enumerate(MTGenericAccessMode.get_supported_modes()):
             if any([k in input_dict.keys() for k in self.accessModes[idx].properties().keys()]):
                 input_dict.update({'mode': mode_name})
                 self.radioGroup.layout().itemAt(idx).widget().click()
@@ -88,7 +88,7 @@ class MTDataRangeSelector(QWidget):
             raise Exception(msg)
 
         item = self.accessModes[self.stack.currentIndex()]
-        item.fromDict(input_dict)
+        item.from_dict(input_dict)
 
     def select_page(self, page_id: int):
         self.stack.setCurrentIndex(page_id)

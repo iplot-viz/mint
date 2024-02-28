@@ -7,11 +7,12 @@ import typing
 
 from iplotProcessing.core import Signal
 
-import iplotLogging.setupLogger as ls
+from  iplotLogging import setupLogger
 
-logger = ls.get_logger(__name__)
+logger = setupLogger.get_logger(__name__)
 
 DEFAULT_BLUEPRINT = json.loads(pkgutil.get_data('mint.data', 'blueprint.json'))
+
 
 def parse_raw_blueprint(blueprint: dict) -> dict:
     blueprint_out = dict(blueprint)
@@ -22,15 +23,14 @@ def parse_raw_blueprint(blueprint: dict) -> dict:
             type_name = v.get('type_name')
             parts = type_name.split('.')
             try:
-                type_func = getattr(importlib.import_module(
-                    '.'.join(parts[:-1])), parts[-1])
+                type_func = getattr(importlib.import_module('.'.join(parts[:-1])), parts[-1])
             except ValueError:
-                type_func = getattr(
-                    importlib.import_module("builtins"), type_name)
+                type_func = getattr(importlib.import_module("builtins"), type_name)
             assert callable(type_func)
             v.update({'type': type_func})
             logger.debug(f"Updated {k}.type = {type_func}")
     return blueprint_out
+
 
 def remove_type_info(blueprint: dict) -> dict:
     blueprint_out = copy.deepcopy(blueprint)
@@ -41,6 +41,7 @@ def remove_type_info(blueprint: dict) -> dict:
             v.pop('type')
     return blueprint_out
 
+
 def get_column_names(blueprint: dict) -> typing.Iterator[str]:
     for k, v in blueprint.items():
         if k.startswith('$'):
@@ -48,10 +49,12 @@ def get_column_names(blueprint: dict) -> typing.Iterator[str]:
         if not v.get('no_export'):
             yield get_column_name(blueprint, k)
 
+
 def get_column_name(blueprint: dict, key: str) -> str:
     if key.startswith('$'):
         return key
     return blueprint.get(key).get('label') or key
+
 
 def get_keys_with_override(blueprint: dict) -> typing.Iterator[str]:
     for k, v in blueprint.items():
@@ -60,6 +63,7 @@ def get_keys_with_override(blueprint: dict) -> typing.Iterator[str]:
         if v.get('override'):
             yield k
 
+
 def get_keys_with_export(blueprint: dict) -> typing.Iterator[str]:
     for k, v in blueprint.items():
         if k.startswith('$'):
@@ -67,7 +71,11 @@ def get_keys_with_export(blueprint: dict) -> typing.Iterator[str]:
         if v.get('export'):
             yield k
 
-def get_code_names(blueprint: dict, predicate_keys: list=['no_construct']):
+
+def get_code_names(blueprint: dict, predicate_keys=None):
+    if predicate_keys is None:
+        predicate_keys = ['no_construct']
+
     for k, v in blueprint.items():
         if k.startswith('$'):
             continue
@@ -77,6 +85,7 @@ def get_code_names(blueprint: dict, predicate_keys: list=['no_construct']):
                 break
         else:
             yield v.get('code_name')
+
 
 def construct_signal(blueprint: dict, signal_class: type = Signal, **signal_params) -> Signal:
     for k, v in blueprint.items():
@@ -89,8 +98,9 @@ def construct_signal(blueprint: dict, signal_class: type = Signal, **signal_para
                 continue
     return signal_class(**signal_params)
 
+
 def construct_params_from_signal(blueprint: dict, sig: Signal) -> dict:
-    params = {}    
+    params = {}
     for k, v in blueprint.items():
         if k.startswith('$'):
             continue
@@ -102,6 +112,7 @@ def construct_params_from_signal(blueprint: dict, sig: Signal) -> dict:
             logger.debug(f"Ignoring {v}")
             continue
     return params
+
 
 def construct_params_from_series(blueprint: dict, row: pd.Series) -> dict:
     params = {}
@@ -116,6 +127,7 @@ def construct_params_from_series(blueprint: dict, row: pd.Series) -> dict:
             logger.debug(f"Ignoring {k}, {v}")
             continue
     return params
+
 
 def adjust_dataframe(blueprint: dict, df: pd.DataFrame):
     for col_name in get_column_names(blueprint):
