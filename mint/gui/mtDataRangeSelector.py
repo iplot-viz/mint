@@ -33,12 +33,10 @@ class MTDataRangeSelector(QWidget):
 
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
-        self.setSizePolicy(QSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Maximum))
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum))
 
         self.radioGroup = QGroupBox(parent=self)
-        self.radioGroup.setSizePolicy(QSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
+        self.radioGroup.setSizePolicy(QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum))
         self.radioGroup.setLayout(QHBoxLayout())
 
         self.accessModes = [MTAbsoluteTime(self.mappings),

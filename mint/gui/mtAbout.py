@@ -11,7 +11,7 @@ import typing
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QShowEvent, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, \
-    QWidget
+    QWidget, QMainWindow
 
 from mint.tools.icon_loader import create_pxmap
 
@@ -41,7 +41,7 @@ feature_req_link = ("https://jira.iter.org/secure/CreateIssueDetails!init.jspa?p
 
 
 class MTAbout(QDialog):
-    def __init__(self, parent: typing.Optional[QDialog] = None):
+    def __init__(self, parent: typing.Optional[QMainWindow] = None):
         super().__init__(parent=parent)
         self._model = QStandardItemModel()
         self._layout = QGridLayout()
@@ -137,8 +137,6 @@ class MTAbout(QDialog):
         for row, pkg in enumerate(packages):
             for col in range(1, ncols):
                 col_name = self._model.headerData(col, Qt.Horizontal, Qt.DisplayRole)
-                output[pkg].update({
-                    col_name: self._model.data(self._model.index(row, col, root_idx))
-                })
+                output[pkg].update({col_name: self._model.data(self._model.index(row, col, root_idx))})
 
         return json.dumps(output, indent=4)

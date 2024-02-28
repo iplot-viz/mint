@@ -129,8 +129,7 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
     p = Parser().set_expression(name)
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        raw_name &= all(
-            [var not in aliases for var in list(p.var_map.keys())])
+        raw_name &= all(            [var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
         return RowAliasType.Simple, name
@@ -331,11 +330,7 @@ class MTSignalConfigurator(QWidget):
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
 
         if not len(selected_ids):
-            if not self._model.rowCount(None):
-                self.insertRow()
-                selected_ids = [self._model.createIndex(0, 0)]
-            else:
-                return
+            return
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.

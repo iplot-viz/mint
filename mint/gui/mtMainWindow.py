@@ -79,8 +79,8 @@ class MTMainWindow(IplotQtMainWindow):
 
         check_data_range(model)
         self.model = model
-        self.sigCfgWidget = MTSignalConfigurator(
-            blueprint=blueprint, scsv_dir=os.path.join(data_dir, 'scsv'), data_sources=data_sources)
+        self.sigCfgWidget = MTSignalConfigurator(blueprint=blueprint, scsv_dir=os.path.join(data_dir, 'scsv'),
+                                                 data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
         self._data_dir = os.path.join(data_dir, 'workspaces')
@@ -94,8 +94,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.refreshTimer.setTimerType(Qt.CoarseTimer)
         self.refreshTimer.setSingleShot(False)
         self.refreshTimer.timeout.connect(lambda: self.on_timeout())
-        self._memoryMonitor = MTMemoryMonitor(
-            parent=self, pid=QCoreApplication.instance().applicationPid())
+        self._memoryMonitor = MTMemoryMonitor(parent=self, pid=QCoreApplication.instance().applicationPid())
         self.sigCfgWidget.setParent(self)
         self.dataRangeSelector.setParent(self)
         self._statusBar.setParent(self)
@@ -255,10 +254,8 @@ class MTMainWindow(IplotQtMainWindow):
             self._data_dir = os.path.dirname(file_name)
 
     def on_export_data(self):
-        file = QFileDialog.getSaveFileName(
-            self, "Save Data as ..",
-            dir=self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv",
-            filter='*.csv')
+        directory = self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv"
+        file = QFileDialog.getSaveFileName(self, "Save Data as ..", dir=directory, filter='*.csv')
         if file and file[0]:
             if not file[0].endswith('.csv'):
                 file_name = file[0] + '.csv'
@@ -268,8 +265,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.export_data_plots(file_name)
 
     def on_import(self):
-        file = QFileDialog.getOpenFileName(
-            self, "Open a workspace ..", dir=self._data_dir)
+        file = QFileDialog.getOpenFileName(self, "Open a workspace ..", dir=self._data_dir)
         if file and file[0]:
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
@@ -340,8 +336,7 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
-            plot = self.canvas.plots[waypt.col_num -
-                                     1][waypt.row_num - 1]  # type: Plot
+            plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -397,8 +392,7 @@ class MTMainWindow(IplotQtMainWindow):
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
-            box.setText(
-                f"Error {str(e)}: cannot import workspace from file: {file_path}")
+            box.setText(f"Error {str(e)}: cannot import workspace from file: {file_path}")
             logger.exception(e)
             box.exec_()
             self.indicate_ready()
@@ -412,8 +406,7 @@ class MTMainWindow(IplotQtMainWindow):
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
-            box.setText(
-                f"Error {str(e)}: cannot export data plots to file: {file_path}")
+            box.setText(f"Error {str(e)}: cannot export data plots to file: {file_path}")
             logger.exception(e)
             box.exec_()
             self.indicate_ready()
@@ -427,8 +420,7 @@ class MTMainWindow(IplotQtMainWindow):
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
-            box.setText(
-                f"Error {str(e)}: cannot export workspace to file: {file_path}")
+            box.setText(f"Error {str(e)}: cannot export workspace to file: {file_path}")
             logger.exception(e)
             box.exec_()
             self.indicate_ready()
@@ -436,8 +428,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def start_auto_refresh(self):
         if self.canvas.auto_refresh:
-            logger.info(
-                F"Scheduling canvas refresh in {self.canvas.auto_refresh} seconds")
+            logger.info(F"Scheduling canvas refresh in {self.canvas.auto_refresh} seconds")
             self.refreshTimer.start(self.canvas.auto_refresh * 1000)
             self.dataRangeSelector.refreshActivate.emit()
 
@@ -495,8 +486,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
-        self.streamerCfgWidget.streamer.start(
-            self.canvas, self.stream_callback)
+        self.streamerCfgWidget.streamer.start(self.canvas, self.stream_callback)
         self.indicate_ready()
 
     def on_stream_stopped(self):
@@ -539,17 +529,14 @@ class MTMainWindow(IplotQtMainWindow):
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
-                    self.sigCfgWidget.model.update_signal_data(
-                        waypt.idx, signal, True)
+                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
             if waypt.col_num not in plan:
                 plan[waypt.col_num] = {}
 
             if waypt.row_num not in plan[waypt.col_num]:
-                plan[waypt.col_num][waypt.row_num] = [waypt.row_span,
-                                                      waypt.col_span,
-                                                      defaultdict(list),
+                plan[waypt.col_num][waypt.row_num] = [waypt.row_span, waypt.col_span, defaultdict(list),
                                                       [waypt.ts_start, waypt.ts_end]]
 
             else:
@@ -568,8 +555,7 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(
-                signal)
+            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
@@ -632,11 +618,10 @@ class MTMainWindow(IplotQtMainWindow):
                     else:
                         signal_x_is_date = True
 
-                    y_axes = [LinearAxis()
-                              for _ in range(len(rows[row + 1][2].items()))]
+                    y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
 
-                    x_axis = LinearAxis(
-                        is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow, window=x_axis_window)
+                    x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
+                                        window=x_axis_window)
 
                     if x_axis_date and signal_x_is_date \
                             and rows[row + 1][3][0] is not None and rows[row + 1][3][1] is not None:
@@ -645,8 +630,7 @@ class MTMainWindow(IplotQtMainWindow):
                         x_axis.original_begin = x_axis.begin
                         x_axis.original_end = x_axis.end
 
-                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0],
-                                           col_span=rows[row + 1][1])
+                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
                         for signal in signals:
                             plot.add_signal(signal, stack=stack)

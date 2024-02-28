@@ -43,10 +43,7 @@ class Waypoint:
         return f"c:{self.col_num}|r:{self.row_num}|sn:{self.stack_num}|si:{self.signal_stack_id}"
 
 
-exp_stack = re.compile(r'(\d+)'
-                       r'(?:[.](\d+))?'
-                       r'(?:[.](\d+))?'
-                       r'$')
+exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -69,8 +66,7 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table = pd.DataFrame(columns=column_names)
         self._signal_class = signal_class
-        self._signal_stack_ids = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(int)))
+        self._signal_stack_ids = defaultdict(            lambda: defaultdict(lambda: defaultdict(int)))
 
     @property
     def blueprint(self) -> dict:
@@ -148,13 +144,10 @@ class MTSignalsModel(QAbstractItemModel):
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
             # Set default Datasource
-            empty_row.loc[0, mtBP.get_column_name(
-                self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
+            empty_row.loc[0, mtBP.get_column_name(                self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = pd.concat([self._table.iloc[:new_row],
-                                     empty_row,
-                                     self._table.iloc[new_row:]]).reset_index(drop=True)
+            self._table = pd.concat([self._table.iloc[:new_row],                                     empty_row,                                     self._table.iloc[new_row:]]).reset_index(drop=True)
         self.layoutChanged.emit()
 
         self.endInsertRows()
@@ -195,13 +188,11 @@ class MTSignalsModel(QAbstractItemModel):
             if df_column_name not in columns:
                 if df_column_name == self.ROWUID_COLNAME:
                     # Generate missing UID
-                    df.insert(df.columns.size, self.ROWUID_COLNAME,
-                              [str(uuid.uuid4()) for _ in range(df.index.size)])
+                    df.insert(df.columns.size, self.ROWUID_COLNAME,                              [str(uuid.uuid4()) for _ in range(df.index.size)])
                 else:
                     logger.warning(f"{df_column_name} is not a valid column name.")
                     if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtBP.get_column_name(
-                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+                        df.rename({df_column_name: mtBP.get_column_name(                            self._blueprint, df_column_name)}, axis=1, inplace=True)
                     elif df_column_name.lower() in columns:
                         df.rename({df_column_name: df_column_name.lower()}, axis=1, inplace=True)
                     elif df_column_name.upper() in columns:
@@ -273,8 +264,7 @@ class MTSignalsModel(QAbstractItemModel):
         column_names = list(mtBP.get_column_names(self.blueprint))
         self._entity_attribs = list(mtBP.get_code_names(self.blueprint))
         if input_dict.get('table'):
-            df = pd.DataFrame(input_dict.get('table'),
-                              dtype=str, columns=column_names)
+            df = pd.DataFrame(input_dict.get('table'),                              dtype=str, columns=column_names)
         elif input_dict.get('variables_table'):  # old style.
             df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
             df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)

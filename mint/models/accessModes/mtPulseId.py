@@ -29,8 +29,7 @@ class MTPulseId(MTGenericAccessMode):
     def __init__(self, mappings: dict, parent=None):
         super().__init__(parent)
 
-        self.options = [(1, "Second(s)"), (60, "Minute(s)"),
-                        (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
+        self.options = [(1, "Second(s)"), (60, "Minute(s)"),                        (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
 
         self.values = QStringListModel(self.form)
         self.values.setStringList([e[1] for e in self.options])

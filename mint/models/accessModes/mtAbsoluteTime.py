@@ -19,8 +19,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.toTime = QDateTimeEdit(parent=self.form)
         self.toTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
-        str_list = mappings.get('value') if mappings.get(
-            'mode') == self.mode and mappings.get('value') else ['', '']
+        str_list = mappings.get('value') if mappings.get('mode') == self.mode and mappings.get('value') else ['', '']
         self.model.setStringList(str_list)
 
         self.mapper.setOrientation(Qt.Vertical)
@@ -38,6 +37,5 @@ class MTAbsoluteTime(MTGenericAccessMode):
         }
 
     def from_dict(self, contents: dict):
-        self.mapper.model().setStringList(
-            [contents.get("ts_start"), contents.get("ts_end")])
+        self.mapper.model().setStringList([contents.get("ts_start"), contents.get("ts_end")])
         super().from_dict(contents)
