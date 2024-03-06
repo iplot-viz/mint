@@ -1,0 +1,32 @@
+[run]
+command_line = -m pytest -v --junitxml=result.xml
+source = .
+omit = test/* \
+       ./**/__init__.py \
+       ./**/__main__.py \
+       ./**/__main__.py \
+       ./**/version.py \
+       ./**/_version.py \
+       ./**/setup.py \
+       ./__init__.py \
+       ./__main__.py \
+       ./__main__.py \
+       ./version.py \
+       ./_version.py \
+       ./setup.py
+
+[report]
+skip_empty = true
+omit = test/* \
+       ./**/__init__.py \
+       ./**/__main__.py \
+       ./**/__main__.py \
+       ./**/version.py \
+       ./**/_version.py \
+       ./**/setup.py \
+       ./__init__.py \
+       ./__main__.py \
+       ./__main__.py \
+       ./version.py \
+       ./_version.py \
+       ./setup.py

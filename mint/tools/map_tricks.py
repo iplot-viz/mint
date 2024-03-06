@@ -1,7 +1,7 @@
 # Description: Utility functions for dictionaries.
 # Author: Jaswant Panchumarti
 
-from collections import MutableMapping
+from collections.abc import MutableMapping
 from contextlib import suppress
 
 
