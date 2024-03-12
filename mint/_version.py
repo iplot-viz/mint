@@ -27,6 +27,9 @@ def get_keywords() -> Dict[str, str]:
     # each be defined on a line of their own. _version.py will just call
     # get_keywords().
     git_refnames = "$Format:%d$"
+    command = "grep -oP '(?<=__version__ = \")[^\"]*' _version.txt"
+    output = subprocess.check_output(command, shell=True)
+    git_describe_output = output.decode().strip()
     git_full = "$Format:%H$"
     git_date = "$Format:%ci$"
     mo_tag_in_git_refnames = re.search(r'(\d+\.)(\d+\.)(\d+)', git_refnames)
