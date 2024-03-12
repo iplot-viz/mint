@@ -1,1 +1,1 @@
-$Format:%(describe)$
+__version__ = "$Format:%d$"
