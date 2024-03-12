@@ -19,6 +19,8 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import functools
 
+from mint import version
+
 
 def get_keywords() -> Dict[str, str]:
     """Get the keywords needed to look up the version information."""
@@ -27,7 +29,6 @@ def get_keywords() -> Dict[str, str]:
     # each be defined on a line of their own. _version.py will just call
     # get_keywords().
     git_refnames = "$Format:%d$"
-    import version
     git_describe_output = version.__version__
     git_full = "$Format:%H$"
     git_date = "$Format:%ci$"
