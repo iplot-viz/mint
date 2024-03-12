@@ -27,7 +27,6 @@ def get_keywords() -> Dict[str, str]:
     # each be defined on a line of their own. _version.py will just call
     # get_keywords().
     git_refnames = "$Format:%d$"
-    # git_describe_output = "$Format:%(describe)$"
     git_full = "$Format:%H$"
     git_date = "$Format:%ci$"
     mo_tag_in_git_refnames = re.search(r'(\d+\.)(\d+\.)(\d+)', git_refnames)
