@@ -1,2 +1,2 @@
 mint/_version.py export-subst
-mint/_version.txt export-subst
+mint/version.py export-subst
