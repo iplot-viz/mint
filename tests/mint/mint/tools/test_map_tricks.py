@@ -1,5 +1,5 @@
-from mint.mint.tools.map_tricks import delete_keys_from_dict
-from mint.mint.tools.map_tricks import find_dict_in_list
+from mint.tools.map_tricks import delete_keys_from_dict
+from mint.tools.map_tricks import find_dict_in_list
 
 #
 # Test for find_dict_in_list function.

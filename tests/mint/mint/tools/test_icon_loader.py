@@ -1,5 +1,5 @@
-from mint.mint.tools.icon_loader import create_pxmap
-from mint.mint.tools.icon_loader import create_icon
+from mint.tools.icon_loader import create_pxmap
+from mint.tools.icon_loader import create_icon
 from PySide6.QtGui import QGuiApplication
 import pytest
 
@@ -22,7 +22,7 @@ def test_create_pxmap_existing_icon():
 
     # Given
     icon_name = "append_file"
-    package = "mint.tests.mint.gui"
+    package = "tests.mint.gui"
 
     # When
     qt_icon = create_pxmap(icon_name, package)
@@ -43,7 +43,7 @@ def test_create_icon_existing_icon():
 
     # Given
     icon_name = "append_file"
-    package = "mint.tests.mint.gui"
+    package = "tests.mint.gui"
 
     # When
     qt_icon = create_icon(icon_name, package)

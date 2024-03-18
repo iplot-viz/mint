@@ -1,5 +1,5 @@
-from mint.mint.tools.converters import str_to_arr
-from mint.mint.tools.converters import to_unix_time_stamp
+from mint.tools.converters import str_to_arr
+from mint.tools.converters import to_unix_time_stamp
 import pytest
 
 #
