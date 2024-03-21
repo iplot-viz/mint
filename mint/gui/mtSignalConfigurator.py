@@ -287,12 +287,13 @@ class MTSignalConfigurator(QWidget):
         selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
             .selectedIndexes()  # type: List[QModelIndex()]
 
+        total_rows = set(index.row() for index in selection)
         if selection:
             if above:
                 row_position = selection[0].row()
             else:
                 row_position = selection[-1].row() + 1
-            self._model.insertRows(row_position, len(selection), QModelIndex())
+            self._model.insertRows(row_position, len(total_rows), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
