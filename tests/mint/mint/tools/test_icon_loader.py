@@ -1,21 +1,11 @@
 from mint.tools.icon_loader import create_pxmap
 from mint.tools.icon_loader import create_icon
-from PySide6.QtGui import QGuiApplication
-import pytest
-
-
-@pytest.fixture(scope="session", autouse=True)
-def qt_application():
-    # Initialize a QGuiApplication instance
-    app = QGuiApplication([])
-    yield app
-    # Cleanup after all tests have finished
-    app.quit()
+from pytestqt.qtbot import QtBot
 
 #
 # create_pxmap(...)
 #
-def test_create_pxmap_existing_icon():
+def test_create_pxmap_existing_icon(qtbot: QtBot):
     """
     Test that the function correctly creates a QPixmap from an existing icon.
     """
@@ -36,7 +26,7 @@ def test_create_pxmap_existing_icon():
 #
 # create_pxmap(...)
 #
-def test_create_icon_existing_icon():
+def test_create_icon_existing_icon(qtbot: QtBot):
     """
     Test that the function correctly creates a QPixmap from an existing icon.
     """
