@@ -57,7 +57,7 @@ def runApp(q_app: QApplication, args=None):
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
-    AccessHelper.da = AppDataAccess.getDataAccess()
+    AccessHelper.da = AppDataAccess.get_data_access()
     # da.udahost = os.environ.get('UDA_HOST') or "io-SetupLog-udafe01.iter.org"
     canvas_impl = args.impl
 
