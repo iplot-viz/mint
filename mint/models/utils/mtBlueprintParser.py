@@ -7,7 +7,7 @@ import typing
 
 from iplotProcessing.core import Signal
 
-from  iplotLogging import setupLogger
+from iplotLogging import setupLogger
 
 logger = setupLogger.get_logger(__name__)
 

@@ -129,7 +129,7 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
     p = Parser().set_expression(name)
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        raw_name &= all(            [var not in aliases for var in list(p.var_map.keys())])
+        raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
         return RowAliasType.Simple, name
@@ -562,7 +562,7 @@ class MTSignalConfigurator(QWidget):
                         for alias_idx, alias in enumerate(aliases):
                             if var_name == alias:
                                 conflict_row_ids.append(alias_idx)
-                        sinfo.msg = f"Conflicted row: {idx + 1} , '{var_name}' is defined in row (s): {conflict_row_ids}"
+                        sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
                         self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
                         if idx in graph:
