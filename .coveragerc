@@ -13,7 +13,8 @@ omit = test/* \
        ./__main__.py \
        ./version.py \
        ./_version.py \
-       ./setup.py
+       ./setup.py \
+       ./versioneer.py
 
 [report]
 skip_empty = true
@@ -29,4 +30,5 @@ omit = test/* \
        ./__main__.py \
        ./version.py \
        ./_version.py \
-       ./setup.py
+       ./setup.py \
+       ./versioneer.py
