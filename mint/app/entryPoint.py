@@ -118,6 +118,9 @@ def runApp(q_app: QApplication, args=None):
     if args.scsv_file:
         main_win.sigCfgWidget.import_scsv(args.scsv_file)
 
+    if args.last_dump:
+        main_win.sigCfgWidget.import_last_dump()
+
     if workspace_file:
         main_win.import_json(workspace_file)
 

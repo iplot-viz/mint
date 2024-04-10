@@ -7,6 +7,8 @@
 from collections import defaultdict
 import json
 import os
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import sys
@@ -460,6 +462,22 @@ class MTSignalConfigurator(QWidget):
             box.exec_()
         finally:
             self.ready.emit()
+
+    def import_last_dump(self):
+        path = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/1Dtool"
+        path += "/dumps"
+        files = os.listdir(path)
+
+        # Filter only files, not directories
+        files = [file for file in files if os.path.isfile(os.path.join(path, file))]
+
+        # Get the most recently modified file
+        most_recent_file = max(files, key=lambda file: os.path.getmtime(os.path.join(path, file)))
+
+        # Get the full path of the most recent file
+        full_path_most_recent_file = os.path.join(path, most_recent_file)
+
+        self.import_scsv(full_path_most_recent_file)
 
     def append_scsv(self, file_path):
         try:

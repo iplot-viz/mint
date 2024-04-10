@@ -6,8 +6,8 @@ from PySide6.QtWidgets import QApplication
 import argparse
 from mint._version import get_versions
 
-def createApp(argv: list = []) -> QApplication:
 
+def createApp(argv: list = []) -> QApplication:
     parser = argparse.ArgumentParser(description='MINT application')
     parser.add_argument('-impl', metavar='canvas_impl',
                         help='Use canvas implementation (matplotlib/vtk...)', default="matplotlib")
@@ -16,6 +16,8 @@ def createApp(argv: list = []) -> QApplication:
                         help='Load blueprint from .json file', default=None)
     parser.add_argument('-d', dest='scsv_file', metavar='scsv_file',
                         help='Load variables table from file')
+    parser.add_argument('-ld', dest='last_dump', action='store_true', default=False,
+                        help='Load variables table from last dump file')
     parser.add_argument('-w', dest='json_file', metavar='json_file',
                         help='Load a workspace from json file')
     parser.add_argument('-e', dest='image_file', metavar='image_file',
