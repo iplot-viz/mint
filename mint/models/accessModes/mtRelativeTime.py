@@ -2,9 +2,10 @@
 # Author: Jaswant Sai Panchumarti
 
 from PySide6.QtWidgets import QComboBox, QLabel, QHBoxLayout, QPushButton, QSpinBox, QWidget
-from PySide6.QtCore import QMargins, QStringListModel, Qt, Signal
+from PySide6.QtCore import QMargins, QStringListModel, Qt
 
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+
 
 class MTRelativeTime(MTGenericAccessMode):
 
@@ -16,8 +17,7 @@ class MTRelativeTime(MTGenericAccessMode):
         self.magnitude.setMinimum(0)
         self.magnitude.setValue(1)
 
-        self.options = [(1, "Second(s)"), (60, "Minute(s)"),
-                        (60*60, "Hour(s)"), (24*60*60, "Day(s)")]
+        self.options = [(1, "Second(s)"), (60, "Minute(s)"), (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
 
         self.values = QStringListModel(self.form)
         self.values.setStringList([e[1] for e in self.options])
@@ -30,8 +30,7 @@ class MTRelativeTime(MTGenericAccessMode):
         self.cancelButton.setDisabled(True)
 
         self.model.setStringList(
-            mappings.get('value') if mappings.get('mode') == self.mode and mappings.get(
-                'value') else ['', '', ''])
+            mappings.get('value') if mappings.get('mode') == self.mode and mappings.get('value') else ['', '', ''])
 
         self.refreshInterval = QSpinBox(parent=self.form)
         self.refreshInterval.setMinimum(1)
@@ -46,18 +45,21 @@ class MTRelativeTime(MTGenericAccessMode):
         self.timeInput = QWidget(parent=self.form)
         self.timeInput.setLayout(QHBoxLayout())
         self.timeInput.layout().setContentsMargins(QMargins())
-        self.timeInput.layout().addWidget(self.magnitude, 1)
-        self.timeInput.layout().addWidget(self.units, 2)
+        self.timeInput.layout().addWidget(self.magnitude)
+        self.timeInput.layout().addWidget(self.units)
+        self.timeInput.layout().setStretch(0, 1)
+        self.timeInput.layout().setStretch(1, 2)
 
         self.refreshWidget = QWidget(parent=self.form)
         self.refreshWidget.setLayout(QHBoxLayout())
         self.refreshWidget.layout().setContentsMargins(QMargins())
-        self.refreshWidget.layout().addWidget(self.refreshInterval, 1)
-        self.refreshWidget.layout().addWidget(self.cancelButton, 2)
+        self.refreshWidget.layout().addWidget(self.refreshInterval)
+        self.refreshWidget.layout().addWidget(self.cancelButton)
+        self.refreshWidget.layout().setStretch(0, 1)
+        self.refreshWidget.layout().setStretch(1, 2)
 
         self.form.layout().addRow(QLabel("Last", parent=self.form), self.timeInput)
-        self.form.layout().addRow(
-            QLabel("Refresh (mins)", parent=self.form), self.refreshWidget)
+        self.form.layout().addRow(QLabel("Refresh (mins)", parent=self.form), self.refreshWidget)
 
     def properties(self):
         return {
@@ -66,7 +68,7 @@ class MTRelativeTime(MTGenericAccessMode):
             "auto_refresh": int(self.refreshInterval.value())
         }
 
-    def fromDict(self, contents: dict):
-        self.mapper.model().setStringList([str(contents.get("relative")), str(
-            contents.get("base")), str(contents.get("auto_refresh"))])
-        super().fromDict(contents)
+    def from_dict(self, contents: dict):
+        self.mapper.model().setStringList(
+            [str(contents.get("relative")), str(contents.get("base")), str(contents.get("auto_refresh"))])
+        super().from_dict(contents)
