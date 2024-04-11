@@ -5,6 +5,7 @@
 
 from PySide6.QtWidgets import QStatusBar
 
+
 class MTStatusBar(QStatusBar):
 
     def __init__(self, parent=None):

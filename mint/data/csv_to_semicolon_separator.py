@@ -2,7 +2,6 @@ import os
 import csv
 import sys
 
-
 """
 The script is used as follows 
 python csv_to_semicolon_separator.py <path>
@@ -51,7 +50,7 @@ if __name__ == "__main__":
         print("Usage: python csv_to_semicolon_separator.py <path>")
         sys.exit(1)
 
-    input_path = sys.argv[1]
-    output_path = os.path.join(input_path, "../scsv")
+    in_path = sys.argv[1]
+    out_path = os.path.join(in_path, "../scsv")
 
-    convert_csv(input_path, output_path)
+    convert_csv(in_path, out_path)

@@ -43,10 +43,7 @@ class Waypoint:
         return f"c:{self.col_num}|r:{self.row_num}|sn:{self.stack_num}|si:{self.signal_stack_id}"
 
 
-exp_stack = re.compile(r'(\d+)'
-                       r'(?:[.](\d+))?'
-                       r'(?:[.](\d+))?'
-                       r'$')
+exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -58,16 +55,18 @@ class MTSignalsModel(QAbstractItemModel):
 
         super().__init__(parent)
 
+        self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
 
         self._blueprint = blueprint
-        self._fast_mode = False  # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+
+        # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+        self._fast_mode = False
         mtBP.parse_raw_blueprint(self._blueprint)
 
         self._table = pd.DataFrame(columns=column_names)
         self._signal_class = signal_class
-        self._signal_stack_ids = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(int)))
+        self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
     @property
     def blueprint(self) -> dict:
@@ -79,10 +78,10 @@ class MTSignalsModel(QAbstractItemModel):
     def parent(self, child: QModelIndex) -> QModelIndex:
         return QModelIndex()
 
-    def rowCount(self, parent: QModelIndex):
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.index.size
 
-    def columnCount(self, parent: QModelIndex):
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
@@ -92,7 +91,7 @@ class MTSignalsModel(QAbstractItemModel):
                 return value
         return None
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int):
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             try:
                 return self._table.columns[section]
@@ -106,7 +105,6 @@ class MTSignalsModel(QAbstractItemModel):
             yield None
         finally:
             self._fast_mode = False
-
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -141,18 +139,17 @@ class MTSignalsModel(QAbstractItemModel):
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
 
-        for new_row in range(row, row+count):
+        for new_row in range(row, row + count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
             # Set default Datasource
-            empty_row.loc[0, mtBP.get_column_name(
-                self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
+            empty_row.loc[0, mtBP.get_column_name(self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get(
+                'default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = pd.concat([self._table.iloc[:new_row],
-                                     empty_row,
-                                     self._table.iloc[new_row:]]).reset_index(drop=True)
+            self._table = pd.concat([self._table.iloc[:new_row], empty_row, self._table.iloc[new_row:]]).reset_index(
+                drop=True)
         self.layoutChanged.emit()
 
         self.endInsertRows()
@@ -193,13 +190,12 @@ class MTSignalsModel(QAbstractItemModel):
             if df_column_name not in columns:
                 if df_column_name == self.ROWUID_COLNAME:
                     # Generate missing UID
-                    df.insert(df.columns.size, self.ROWUID_COLNAME,
-                              [str(uuid.uuid4()) for _ in range(df.index.size)])
+                    df.insert(df.columns.size, self.ROWUID_COLNAME, [str(uuid.uuid4()) for _ in range(df.index.size)])
                 else:
                     logger.warning(f"{df_column_name} is not a valid column name.")
                     if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtBP.get_column_name(
-                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+                        df.rename({df_column_name: mtBP.get_column_name(self._blueprint, df_column_name)}, axis=1,
+                                  inplace=True)
                     elif df_column_name.lower() in columns:
                         df.rename({df_column_name: df_column_name.lower()}, axis=1, inplace=True)
                     elif df_column_name.upper() in columns:
@@ -212,7 +208,7 @@ class MTSignalsModel(QAbstractItemModel):
         return df
 
     def set_dataframe(self, df: pd.DataFrame):
-        oldSz = self.rowCount(None)
+        oldSz = self.rowCount()
         self.removeRows(0, oldSz)
         newSz = df.index.size
         self.insertRows(0, newSz)
@@ -243,11 +239,12 @@ class MTSignalsModel(QAbstractItemModel):
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
 
-        self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
-
         # Check if last row is empty
         if self._table.iloc[-1:, 1:-3].any(axis=1).bool():
-            self.insertRows(0, 1, QModelIndex())
+            self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+            self.insertRows(len(self._table), 1, QModelIndex())
+        else:
+            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
 
         self.layoutChanged.emit()
 
@@ -271,8 +268,7 @@ class MTSignalsModel(QAbstractItemModel):
         column_names = list(mtBP.get_column_names(self.blueprint))
         self._entity_attribs = list(mtBP.get_code_names(self.blueprint))
         if input_dict.get('table'):
-            df = pd.DataFrame(input_dict.get('table'),
-                              dtype=str, columns=column_names)
+            df = pd.DataFrame(input_dict.get('table'), dtype=str, columns=column_names)
         elif input_dict.get('variables_table'):  # old style.
             df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
             df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)
@@ -311,8 +307,7 @@ class MTSignalsModel(QAbstractItemModel):
         signal_params = dict()
 
         for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx])):
-            signal_params.update(
-                mtBP.construct_params_from_series(self.blueprint, parsed_row))
+            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row))
 
             if i == 0:  # grab these from the first row we encounter.
                 stack_val = signal_params.get('stack_val')

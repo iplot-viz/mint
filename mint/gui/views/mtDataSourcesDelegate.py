@@ -11,7 +11,7 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
     def __init__(self, data_sources: list, parent: typing.Optional[QObject] = None):
         super().__init__(parent=parent)
         self._data_sources = data_sources
-    
+
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         combobox = QComboBox(parent)
         combobox.addItems(self._data_sources)
@@ -19,8 +19,7 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
             combobox.setCurrentIndex(0)
         return combobox
 
-    
-    def setEditorData(self, editor: QWidget, index: QModelIndex):
+    def setEditorData(self, editor: QComboBox, index: QModelIndex):
         value = index.data(Qt.EditRole)
         loc = editor.findText(value)
         if loc >= 0:
@@ -28,11 +27,10 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
         else:
             editor.setCurrentIndex(0)
 
-    
-    def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex):
+    def setModelData(self, editor: QComboBox, model: QAbstractItemModel, index: QModelIndex):
         model.setData(index, editor.currentText(), Qt.EditRole)
 
-    def updateEditorGeometry(self, editor: QWidget, option: QStyleOptionViewItem, index: QModelIndex):
+    def updateEditorGeometry(self, editor: QComboBox, option: QStyleOptionViewItem, index: QModelIndex):
         editor.setGeometry(option.rect)
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:

@@ -82,11 +82,9 @@ class FindReplaceDialog(QDialog):
             item_data = model.data(new_index, Qt.ItemDataRole.DisplayRole)
             if item_data and text_to_find in item_data:
                 with model.activate_fast_mode():
-                    model.setData(new_index,
-                                  item_data.replace(text_to_find, text_to_replace),
+                    model.setData(new_index, item_data.replace(text_to_find, text_to_replace),
                                   Qt.ItemDataRole.EditRole)
 
-        model.dataChanged.emit(model.index(min(rows), min(cols)),
-                               model.index(max(rows), max(cols)))
+        model.dataChanged.emit(model.index(min(rows), min(cols)), model.index(max(rows), max(cols)))
 
         self.find_text(find_one=True)

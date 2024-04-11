@@ -2,11 +2,16 @@
 # Author: Jaswant Sai Panchumarti
 
 import numpy as np
-from iplotLogging import setupLogger as sl
+from pandas import Series
 
-logger = sl.get_logger(__name__, level="INFO")
+from iplotLogging import setupLogger
 
-is_non_empty_string = lambda var: (isinstance(var, str) and not var.isspace()) and len(var)
+logger = setupLogger.get_logger(__name__, level="INFO")
+
+
+def is_non_empty_string(var):
+    return isinstance(var, str) and not var.isspace() and len(var)
+
 
 def str_to_arr(value: str):
     if value is None:
@@ -18,7 +23,8 @@ def str_to_arr(value: str):
                 str_list.pop(str_list.index(v))
         return str_list if len(str_list) else None
 
-def get_value(row, col_name: str, type_func=str):
+
+def get_value(row: Series, col_name: str, type_func=str):
     v = row[col_name]
     if type_func == bool and v not in ['1', 1, 'True', 'true']:
         v = ''
@@ -29,17 +35,19 @@ def get_value(row, col_name: str, type_func=str):
     except ValueError:
         return type_func()
 
+
 # str.isnumeric() does not work for negative numbers
-def is_numeric(val):
+def is_numeric(val: any) -> bool:
+    if val is None:
+        return False
     try:
         float(val)
-    except:
-        return False
-    else:
         return True
+    except ValueError:
+        return False
 
 
-# TODO: Check for 0 and pass it as number (it is prbably cheked fot true/false)
+# TODO: Check for 0 and pass it as number (it is probably checked fot true/false)
 # TODO: Is pulse number is overrider we discard start_time and end_time
 # TODO: Check if overriding any value at row level resets all values from timerangeselector
 # TODO: Use min/max from all plots when sharing x axis
@@ -47,13 +55,12 @@ def parse_timestamp(value):
     if isinstance(value, str):
         try:
             if is_numeric(value):
-                return int(value) if float(value) > 10**15 else float(value)
+                return int(value) if float(value) > 10 ** 15 else float(value)
             else:
                 return int(np.datetime64(value, 'ns'))
-        except:
+        except (Exception,):
             if len(value) > 0:
-                logger.error(
-                    f"Unable to parse string '{value}' as timestamp")
+                logger.error(f"Unable to parse string '{value}' as timestamp")
             pass
 
     return None

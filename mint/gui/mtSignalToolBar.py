@@ -19,14 +19,11 @@ class MTSignalsToolBar(QWidget):
         self.layout().setContentsMargins(QMargins())
 
         open_pxmap = QPixmap()
-        open_pxmap.loadFromData(pkgutil.get_data(
-            'mint.gui', 'icons/open_file.png'))
+        open_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/open_file.png'))
         append_pxmap = QPixmap()
-        append_pxmap.loadFromData(pkgutil.get_data(
-            'mint.gui', 'icons/append_file.png'))
+        append_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/append_file.png'))
         save_pxmap = QPixmap()
-        save_pxmap.loadFromData(pkgutil.get_data(
-            'mint.gui', 'icons/save_as.png'))
+        save_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/save_as.png'))
 
         self.openAction = QAction(QIcon(open_pxmap), "&Open Signal Sets")
         self.appendAction = QAction(QIcon(append_pxmap), "&Append Signal Sets")
