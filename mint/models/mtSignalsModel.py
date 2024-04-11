@@ -240,7 +240,7 @@ class MTSignalsModel(QAbstractItemModel):
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
 
         # Check if last row is empty
-        if self._table.iloc[-1:, 1:-3].any(axis=1).bool():
+        if self._table.empty or self._table.iloc[-1:, 1:-3].any(axis=1).bool():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
             self.insertRows(len(self._table), 1, QModelIndex())
         else:
