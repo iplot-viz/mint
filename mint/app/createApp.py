@@ -3,12 +3,14 @@
 
 from PySide6.QtWidgets import QApplication
 
-import argparse
+from argparse import ArgumentParser, Namespace
 from mint._version import get_versions
 
 
-def createApp(argv: list = []) -> QApplication:
-    parser = argparse.ArgumentParser(description='MINT application')
+def create_app(argv=None) -> (QApplication, Namespace):
+    if argv is None:
+        argv = []
+    parser = ArgumentParser(description='MINT application')
     parser.add_argument('-impl', metavar='canvas_impl',
                         help='Use canvas implementation (matplotlib/vtk...)', default="matplotlib")
     parser.add_argument('-use-fallback-samples', dest='use_fallback_samples', action='store_true', default=False)
