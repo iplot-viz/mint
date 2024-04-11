@@ -18,6 +18,8 @@ def create_app(argv=None) -> (QApplication, Namespace):
                         help='Load blueprint from .json file', default=None)
     parser.add_argument('-d', dest='scsv_file', metavar='scsv_file',
                         help='Load variables table from file')
+    parser.add_argument('-ld', dest='last_dump', action='store_true', default=False,
+                        help='Load variables table from last dump file')
     parser.add_argument('-w', dest='json_file', metavar='json_file',
                         help='Load a workspace from json file')
     parser.add_argument('-e', dest='image_file', metavar='image_file',
