@@ -612,7 +612,7 @@ class MTMainWindow(IplotQtMainWindow):
                             for signal in signals:
                                 try:
                                     x_data = signal.get_data()[0]
-                                    signal_x_is_date |= bool(max(x_data) > (1 << 53))
+                                    signal_x_is_date |= bool(min(x_data) > (1 << 53))
                                 except (IndexError, ValueError) as _:
                                     signal_x_is_date = True
                     else:
@@ -622,9 +622,14 @@ class MTMainWindow(IplotQtMainWindow):
 
                     x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                         window=x_axis_window)
-
-                    if x_axis_date and signal_x_is_date \
-                            and rows[row + 1][3][0] is not None and rows[row + 1][3][1] is not None:
+                    x_axis_transformed = False
+                    for signals in rows[row + 1][2].values():
+                        for signal in signals:
+                            if signal.x_expr != '${self}.time':
+                                x_axis_transformed = True
+                                break
+                    if (x_axis_date and signal_x_is_date and rows[row + 1][3][0] is not None and
+                            rows[row + 1][3][1] is not None and not x_axis_transformed):
                         x_axis.begin = rows[row + 1][3][0]
                         x_axis.end = rows[row + 1][3][1]
                         x_axis.original_begin = x_axis.begin
