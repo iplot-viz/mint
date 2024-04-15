@@ -646,7 +646,7 @@ class MTMainWindow(IplotQtMainWindow):
                 x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                     window=x_axis_window)
                 x_axis_transformed = False
-                for signals in rows[row + 1][2].values():
+                for signals in rows[row][2].values():
                     for signal in signals:
                         if signal.x_expr != '${self}.time':
                             x_axis_transformed = True
