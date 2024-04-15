@@ -9,7 +9,7 @@ import sys
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('file', nargs='+', help='Filenames to fix. backup files are generated. '
-                    'Shell parameter expansion can be used (*.json)')
+                                            'Shell parameter expansion can be used (*.json)')
 args = parser.parse_args()
 
 for fn in args.file:
@@ -25,7 +25,7 @@ for fn in args.file:
     text = text.replace('"${self}.data"', '"${self}.data_store[1]"')
     text = text.replace('"${self}.data_secondary"', '"${self}.data_store[2]"')
     # IDV-407 "step": "None"
-    text = re.sub('"step":\s*"none"', '"step": "linear"', text, 0, re.I)
+    text = re.sub(r'"step":\s*"none"', '"step": "linear"', text, 0, re.I)
 
     if text == start_text:
         print(f'Nothing was changed for {fn}.\n')

@@ -5,23 +5,21 @@ from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
 
-
 test_table_1 = {
     "table": [
         ["ds", "Signal:A", "1.1", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", ""],
         ["ds", "Signal:B", "1.2", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", ""],
         ["ds", "Signal:C", "2.1", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", ""],
         ["ds", "Signal:D", "2.2", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", ""],
         ["ds", "Signal:E", "3.1", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""],
+         "", "", "", "", "", "", "", "", "", ""],
         ["ds", "Signal:F", "3.2", "", "", "",
-            "", "", "", "", "", "", "", "", "", ""]]
+         "", "", "", "", "", "", "", "", "", ""]]
 }
-
 
 test_table_2 = {
     "table": [

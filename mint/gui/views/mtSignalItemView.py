@@ -2,59 +2,62 @@
 # Author: Jaswant Panchumarti
 
 import json
-import typing
+from typing import Optional, Type, Union
 from functools import partial
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
-from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QVBoxLayout, QTableView, QTreeView, QVBoxLayout, QWidget, QWidgetAction
-from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QTableView, QTreeView, QVBoxLayout, QWidget, \
+    QWidgetAction
 
 from mint.models.mtSignalsModel import MTSignalsModel
-    
+
+
 class MTSignalItemView(QWidget):
-    def __init__(self, title='SignalView', view_type: typing.Union[QTableView, QTreeView]=QTableView, parent: typing.Optional[QWidget] = None, f: Qt.WindowFlags = Qt.Widget):
+    def __init__(self, title='SignalView',
+                 view_type: Union[Type[QTableView], Type[QTreeView]] = QTableView,
+                 parent: Optional[QWidget] = None, f: Qt.WindowFlags = Qt.Widget):
         super().__init__(parent=parent, f=f)
         self.setWindowTitle(title)
         self.setLayout(QVBoxLayout())
-        
-        self._view = view_type(parent=self) # type: QAbstractItemView
+
+        self._view = view_type(parent=self)
         self._menu = QMenu('', self)
-        self._actions = [] # to avoid unexpected deletion of c++ actions
-        
+        self._actions = []  # to avoid unexpected deletion of c++ actions
+
         self.layout().addWidget(self._view)
 
     def view(self) -> QAbstractItemView:
         return self._view
 
-    def headerMenu(self) -> QMenu:
+    def header_menu(self) -> QMenu:
         return self._menu
 
-    def setModel(self, model: QAbstractItemModel):
+    def set_model(self, model: QAbstractItemModel):
         self._view.setModel(model)
 
         # remove old actions.
         for act in self._actions:
             self._menu.removeAction(act)
         self._actions.clear()
-        
+
         # add new actions and keep a reference on python side.
         for column in range(model.columnCount(QModelIndex())):
             column_name = model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
             if column_name == MTSignalsModel.ROWUID_COLNAME:
-                self.toggleColumn(column, False)
+                self.toggle_column(column, False)
             else:
                 cbox = QCheckBox(column_name, self._menu)
                 cbox.setChecked(True)
                 act = QWidgetAction(self._menu)
                 act.setDefaultWidget(cbox)
-                cbox.toggled.connect(partial(self.toggleColumn, column))
+                cbox.toggled.connect(partial(self.toggle_column, column))
                 self._actions.append(act)
 
         # fill menu with actions.
         self._menu.addActions(self._actions)
         self._menu.setContentsMargins(5, 0, 0, 0)
 
-    def toggleColumn(self, column: int, state: bool):
+    def toggle_column(self, column: int, state: bool):
         if state:
             self._view.showColumn(column)
         else:
@@ -86,4 +89,3 @@ class MTSignalItemView(QWidget):
 
     def import_json(self, input_file):
         self.import_dict(json.loads(input_file))
-        
