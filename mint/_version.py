@@ -1,4 +1,3 @@
-
 # This file helps to compute a version number in source trees obtained from
 # git-archive tarball (such as those provided by githubs download-from-tag
 # feature). Distribution tarballs (built by setup.py sdist) and build
@@ -35,7 +34,7 @@ def get_keywords():
     if not mo_tag_in_git_refnames:
         mo_tag_in_git_describe = re.search(r'(\d+\.)(\d+\.)(\d+)', git_describe_output)
         if mo_tag_in_git_describe:
-            mo_describe = '(, tag: '+ git_describe_output +',,'+ git_refnames + ')'
+            mo_describe = '(, tag: ' + git_describe_output + ',,' + git_refnames + ')'
             git_refnames = mo_describe
     keywords = {"refnames": git_refnames, "full": git_full, "date": git_date}
     return keywords
@@ -69,20 +68,27 @@ HANDLERS: Dict[str, Dict[str, Callable]] = {}
 
 def register_vcs_handler(vcs, method):  # decorator
     """Create decorator to mark a method as the handler of a VCS."""
-    def decorate(f):
+
+    def decorate(f: Callable) -> Callable:
         """Store f in HANDLERS[vcs][method]."""
         if vcs not in HANDLERS:
             HANDLERS[vcs] = {}
         HANDLERS[vcs][method] = f
         return f
+
     return decorate
 
 
-def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False,
-                env=None):
+def run_command(
+        commands: List[str],
+        args: List[str],
+        cwd: Optional[str] = None,
+        verbose: bool = False,
+        hide_stderr: bool = False,
+        env: Optional[Dict[str, str]] = None,
+) -> Tuple[Optional[str], Optional[int]]:
     """Call the given command(s)."""
     assert isinstance(commands, list)
-    process = None
 
     popen_kwargs = {}
     if sys.platform == "win32":
@@ -92,8 +98,8 @@ def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False,
         popen_kwargs["startupinfo"] = startupinfo
 
     for command in commands:
+        dispcmd = str([command] + args)
         try:
-            dispcmd = str([command] + args)
             # remember shell=False, so use git.cmd on windows, not just git
             process = subprocess.Popen([command] + args, cwd=cwd, env=env,
                                        stdout=subprocess.PIPE,
@@ -121,7 +127,11 @@ def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False,
     return stdout, process.returncode
 
 
-def versions_from_parentdir(parentdir_prefix, root, verbose):
+def versions_from_parentdir(
+        parentdir_prefix: str,
+        root: str,
+        verbose: bool,
+) -> Dict[str, Any]:
     """Try to determine the version from the parent directory name.
 
     Source tarballs conventionally unpack into a directory that includes both
@@ -174,7 +184,11 @@ def git_get_keywords(versionfile_abs):
 
 
 @register_vcs_handler("git", "keywords")
-def git_versions_from_keywords(keywords, tag_prefix, verbose):
+def git_versions_from_keywords(
+        keywords: Dict[str, str],
+        tag_prefix: str,
+        verbose: bool,
+) -> Dict[str, Any]:
     """Get version information from git keywords."""
     if "refnames" not in keywords:
         raise NotThisMethod("Short version file found")
@@ -185,7 +199,7 @@ def git_versions_from_keywords(keywords, tag_prefix, verbose):
         date = date.splitlines()[-1]
 
         # git-2.2.0 added "%cI", which expands to an ISO-8601 -compliant
-        # datestamp. However we prefer "%ci" (which expands to an "ISO-8601
+        # datestamp. However, we prefer "%ci" (which expands to an "ISO-8601
         # -like" string, which we must then edit to make compliant), because
         # it's been around since git-1.5.3, and it's too difficult to
         # discover which version we're using, or to work around using an
@@ -238,7 +252,12 @@ def git_versions_from_keywords(keywords, tag_prefix, verbose):
 
 
 @register_vcs_handler("git", "pieces_from_vcs")
-def git_pieces_from_vcs(tag_prefix, root, verbose, runner=run_command):
+def git_pieces_from_vcs(
+        tag_prefix: str,
+        root: str,
+        verbose: bool,
+        runner: Callable = run_command
+) -> Dict[str, Any]:
     """Get version from 'git describe' in the root of the source tree.
 
     This only gets called if the git-archive 'subst' keywords were *not*
@@ -278,10 +297,7 @@ def git_pieces_from_vcs(tag_prefix, root, verbose, runner=run_command):
         raise NotThisMethod("'git rev-parse' failed")
     full_out = full_out.strip()
 
-    pieces = {}
-    pieces["long"] = full_out
-    pieces["short"] = full_out[:7]  # maybe improved later
-    pieces["error"] = None
+    pieces: Dict[str, Any] = {"long": full_out, "short": full_out[:7], "error": None}
 
     branch_name, rc = runner(GITS, ["rev-parse", "--abbrev-ref", "HEAD"],
                              cwd=root)
@@ -471,7 +487,7 @@ def render_pep440_post(pieces):
 
     The ".dev0" means dirty. Note that .dev0 sorts backwards
     (a dirty tree will appear "older" than the corresponding clean one),
-    but you shouldn't be releasing software with -dirty anyways.
+    but you shouldn't be releasing software with -dirty anyway.
 
     Exceptions:
     1: no tags. 0.postDISTANCE[.dev0]

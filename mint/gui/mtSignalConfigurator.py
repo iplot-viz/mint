@@ -7,6 +7,8 @@
 from collections import defaultdict
 import json
 import os
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import sys
@@ -28,12 +30,12 @@ from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
-from mint.models.utils import mtBlueprintParser as mtbp
+from mint.models.utils import mtBlueprintParser as mtBp
 from mint.tools.table_parser import is_non_empty_string
 
-import iplotLogging.setupLogger as ls
+from iplotLogging import setupLogger
 
-logger = ls.get_logger(__name__)
+logger = setupLogger.get_logger(__name__)
 
 # These variables act as a signle point reference to define the title of the tabs.
 ALL_VIEW_NAME = "All"
@@ -121,16 +123,15 @@ class RowAliasType:
 
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
-    alias = row[mtbp.get_column_name(blueprint, 'Alias')]
-    name = row[mtbp.get_column_name(blueprint, 'Variable')]
+    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
+    name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
     alias_valid = is_non_empty_string(alias)
 
     p = Parser().set_expression(name)
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        raw_name &= all(
-            [var not in aliases for var in list(p.var_map.keys())])
+        raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
         return RowAliasType.Simple, name
@@ -151,28 +152,28 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtbp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources: list = [],
+    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None,
                  signal_class: type = IplotSignalAdapter, parent=None):
         super().__init__(parent)
 
+        if data_sources is None:
+            data_sources = []
         self._signal_class = signal_class
 
-        self._model = MTSignalsModel(
-            blueprint=blueprint, signal_class=self._signal_class)
+        self._model = MTSignalsModel(blueprint=blueprint, signal_class=self._signal_class)
 
         self._scsv_dir = scsv_dir
         self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
-        self._toolbar.openAction.triggered.connect(self.onImport)
-        self._toolbar.appendAction.triggered.connect(self.onAppend)
-        self._toolbar.saveAction.triggered.connect(self.onExport)
+        self._toolbar.openAction.triggered.connect(self.on_import)
+        self._toolbar.appendAction.triggered.connect(self.on_append)
+        self._toolbar.saveAction.triggered.connect(self.on_export)
         self._toolbar.searchVarsBtn.clicked.connect(self.on_tree_view)
-        self._toolbar.loadModules.clicked.connect(self.onLoad)
+        self._toolbar.loadModules.clicked.connect(self.on_load)
 
-        self._signal_item_widgets = [MTSignalItemView(ALL_VIEW_NAME, parent=self),
-                                     MTSignalItemView(DA_VIEW_NAME, parent=self),
-                                     MTSignalItemView(
-                                         PLAYOUT_VIEW_NAME, parent=self)]  # ,
+        self._signal_item_widgets = [MTSignalItemView(title=ALL_VIEW_NAME, parent=self),
+                                     MTSignalItemView(title=DA_VIEW_NAME, parent=self),
+                                     MTSignalItemView(title=PLAYOUT_VIEW_NAME, parent=self)]  # ,
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
@@ -180,17 +181,17 @@ class MTSignalConfigurator(QWidget):
         self._tabs.setMovable(True)
 
         self.parseBtn = QPushButton("Parse", self)
-        self.parseBtn.clicked.connect(self.onParseButtonPressed)
+        self.parseBtn.clicked.connect(self.on_parse_button_pressed)
 
-        for wdgt in self._signal_item_widgets:
-            wdgt.setModel(self._model)
-            wdgt.import_dict(NEAT_VIEW.get(wdgt.windowTitle()))
-            self._tabs.addTab(wdgt, wdgt.windowTitle())
-            wdgt.view().setItemDelegateForColumn(0, self._ds_delegate)
+        for widget in self._signal_item_widgets:
+            widget.set_model(self._model)
+            widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
+            self._tabs.addTab(widget, widget.windowTitle())
+            widget.view().setItemDelegateForColumn(0, self._ds_delegate)
 
-        self._tabs.currentChanged.connect(self.onCurrentViewChanged)
+        self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
-        self._toolbar.configureColsBtn.setMenu(self._signal_item_widgets[0].headerMenu())
+        self._toolbar.configureColsBtn.setMenu(self._signal_item_widgets[0].header_menu())
 
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(QMargins())
@@ -198,7 +199,7 @@ class MTSignalConfigurator(QWidget):
         self.layout().addWidget(self._tabs)
         self.layout().addWidget(self.parseBtn)
 
-        self.model.dataChanged.connect(self.resizeViewToColumns)
+        self.model.dataChanged.connect(self.resize_view_to_columns)
 
         self.selectVarDialog = VariableBrowser()
 
@@ -210,21 +211,21 @@ class MTSignalConfigurator(QWidget):
         self._find_replace_dialog = None
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
-        shortcut.activated.connect(self.copyContentsToClipboard)
+        shortcut.activated.connect(self.copy_contents_to_clipboard)
         shortcut2 = QShortcut(QKeySequence("Ctrl+V"), self)
-        shortcut2.activated.connect(self.pasteContentsFromClipboard)
+        shortcut2.activated.connect(self.paste_contents_from_clipboard)
 
-    def onCurrentViewChanged(self, index: int):
-        currentView = self.itemWidgets[index]
-        self._toolbar.configureColsBtn.setMenu(currentView.headerMenu())
+    def on_current_view_changed(self, index: int):
+        currentView = self.item_widgets[index]
+        self._toolbar.configureColsBtn.setMenu(currentView.header_menu())
 
-    def onParseButtonPressed(self, val: bool):
+    def on_parse_button_pressed(self):
         logger.debug('Build order:')
         for waypt in self.build():
             logger.debug(f'Row: {waypt.idx}')
-        self.resizeViewsToContents()
+        self.resize_views_to_contents()
 
-    def toolBar(self) -> MTSignalsToolBar:
+    def tool_bar(self) -> MTSignalsToolBar:
         return self._toolbar
 
     @property
@@ -232,24 +233,24 @@ class MTSignalConfigurator(QWidget):
         return self._model
 
     @property
-    def itemWidgets(self) -> typing.List[MTSignalItemView]:
+    def item_widgets(self) -> typing.List[MTSignalItemView]:
         return self._signal_item_widgets
 
-    def resizeViewToColumns(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles):
-        columns = range(topLeft.column(), bottomRight.column() + 1)
-        for wdgt in self.itemWidgets:
-            view = wdgt.view()
+    def resize_view_to_columns(self, top_left: QModelIndex, bottom_right: QModelIndex):
+        columns = range(top_left.column(), bottom_right.column() + 1)
+        for widget in self.item_widgets:
+            view = widget.view()
             if isinstance(view, QTableView):
                 for col in columns:
                     view.resizeColumnToContents(col)
 
-    def resizeViewsToContents(self):
-        for wdgt in self.itemWidgets:
-            view = wdgt.view()
+    def resize_views_to_contents(self):
+        for widget in self.item_widgets:
+            view = widget.view()
             if isinstance(view, QTableView):
                 view.resizeColumnsToContents()
 
-    def onExport(self):
+    def on_export(self):
         file = QFileDialog.getSaveFileName(self, "Save SCSV", filter='*.scsv', dir=self._scsv_dir)
         if file and file[0]:
             if not file[0].endswith('.scsv'):
@@ -259,13 +260,13 @@ class MTSignalConfigurator(QWidget):
             self._scsv_dir = os.path.dirname(file_name)
             self.export_scsv(file_name)
 
-    def onImport(self):
+    def on_import(self):
         file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
             self._scsv_dir = os.path.dirname(file[0])
             self.import_scsv(file[0])
 
-    def onAppend(self):
+    def on_append(self):
         file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
             self.append_scsv(file[0])
@@ -274,7 +275,7 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.show()
         self.selectVarDialog.activateWindow()
 
-    def onLoad(self):
+    def on_load(self):
         self.selectModuleDialog.show()
         self.selectModuleDialog.activateWindow()
 
@@ -284,19 +285,20 @@ class MTSignalConfigurator(QWidget):
 
     def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
-        selection = self._signal_item_widgets[currentTabId].view().selectionModel()\
+        selection = self._signal_item_widgets[currentTabId].view().selectionModel() \
             .selectedIndexes()  # type: List[QModelIndex()]
 
+        total_rows = set(index.row() for index in selection)
         if selection:
             if above:
                 row_position = selection[0].row()
             else:
                 row_position = selection[-1].row() + 1
-            self._model.insertRows(row_position, len(selection), QModelIndex())
+            self._model.insertRows(row_position, len(total_rows), QModelIndex())
         else:
             self._model.insertRow(self._model.rowCount(QModelIndex()))
 
-    def removeRow(self):
+    def remove_row(self):
         selected_rows = set()
         current_tab_id = self._tabs.currentIndex()
         for idx in self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes():
@@ -305,7 +307,7 @@ class MTSignalConfigurator(QWidget):
         for row in sorted(selected_rows, reverse=True):
             self._model.removeRow(row)
 
-    def setBulkContents(self, text: str, indices: typing.List[QModelIndex]):
+    def set_bulk_contents(self, text: str, indices: typing.List[QModelIndex]):
         self.busy.emit()
         left = 1 << 32
         right = 0
@@ -321,21 +323,17 @@ class MTSignalConfigurator(QWidget):
             self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
-    def deleteContents(self):
+    def delete_contents(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-        self.setBulkContents('', selected_ids)
+        self.set_bulk_contents('', selected_ids)
 
-    def pasteContentsFromClipboard(self):
+    def paste_contents_from_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
 
         if not len(selected_ids):
-            if not self._model.rowCount(None):
-                self.insertRow()
-                selected_ids = [self._model.createIndex(0, 0)]
-            else:
-                return
+            return
 
         text = QCoreApplication.instance().clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
@@ -345,7 +343,7 @@ class MTSignalConfigurator(QWidget):
             data = [line.split(';') for line in text.splitlines()]
 
         if len(data) == 1 and len(data[0]) == 1:
-            self.setBulkContents(text, selected_ids)
+            self.set_bulk_contents(text, selected_ids)
             return
 
         self.busy.emit()
@@ -373,7 +371,7 @@ class MTSignalConfigurator(QWidget):
         self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
-    def copyContentsToClipboard(self):
+    def copy_contents_to_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
 
@@ -399,7 +397,7 @@ class MTSignalConfigurator(QWidget):
 
         QCoreApplication.instance().clipboard().setText(text)
 
-    def findReplace(self):
+    def find_replace(self):
         current_tab_id = self._tabs.currentIndex()
         table_view = self._signal_item_widgets[current_tab_id].view()
 
@@ -421,13 +419,13 @@ class MTSignalConfigurator(QWidget):
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Insert below", lambda: self.insert_empty_rows(False))
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_TrashIcon")), "Remove", self.removeRow)
-        context_menu.addAction("Copy", self.copyContentsToClipboard)
-        context_menu.addAction("Paste", self.pasteContentsFromClipboard)
+            getattr(QStyle, "SP_TrashIcon")), "Remove", self.remove_row)
+        context_menu.addAction("Copy", self.copy_contents_to_clipboard)
+        context_menu.addAction("Paste", self.paste_contents_from_clipboard)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.deleteContents)
+            getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.delete_contents)
         context_menu.addAction(self.style().standardIcon(
-            getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.findReplace)
+            getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.find_replace)
         context_menu.popup(event.globalPos())
 
     def export_scsv(self, file_path=None):
@@ -451,7 +449,7 @@ class MTSignalConfigurator(QWidget):
             df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.set_dataframe(df)
-            self.resizeViewsToContents()
+            self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
@@ -461,13 +459,29 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
+    def import_last_dump(self):
+        path = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/1Dtool"
+        path += "/dumps"
+        files = os.listdir(path)
+
+        # Filter only files, not directories
+        files = [file for file in files if os.path.isfile(os.path.join(path, file))]
+
+        # Get the most recently modified file
+        most_recent_file = max(files, key=lambda file: os.path.getmtime(os.path.join(path, file)))
+
+        # Get the full path of the most recent file
+        full_path_most_recent_file = os.path.join(path, most_recent_file)
+
+        self.import_scsv(full_path_most_recent_file)
+
     def append_scsv(self, file_path):
         try:
             self.busy.emit()
             df = pd.read_csv(file_path, dtype=str, sep=';', keep_default_na=False)
             if not df.empty:
                 self._model.append_dataframe(df)
-            self.resizeViewsToContents()
+            self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Critical)
@@ -495,9 +509,9 @@ class MTSignalConfigurator(QWidget):
             key = view.windowTitle()
             options = view_options.get(key) or NEAT_VIEW.get(key)
             for k, v in options.copy().items():
-                if k not in mtbp.get_column_names(self._model.blueprint):
+                if k not in mtBp.get_column_names(self._model.blueprint):
                     options.pop(k)
-                    col_name = mtbp.get_column_name(self._model.blueprint, k)
+                    col_name = mtBp.get_column_name(self._model.blueprint, k)
                     if col_name:
                         options.update({col_name: v})
             view.import_dict(options)
@@ -506,7 +520,7 @@ class MTSignalConfigurator(QWidget):
 
         # 2. Model
         self._model.import_dict(input_dict.get('model') or input_dict)
-        self.resizeViewsToContents()
+        self.resize_views_to_contents()
 
     def export_json(self):
         return json.dumps(self.export_dict())
@@ -515,25 +529,25 @@ class MTSignalConfigurator(QWidget):
         self.import_dict(json.loads(input_file))
 
     def _abort_build(self, message):
-        self.setStatusMessage("Failed")
+        self.set_status_message("Failed")
         self.buildAborted.emit(message)
         self.hideProgress.emit()
 
     def build(self, **kwargs) -> typing.Iterator[Waypoint]:
-        self.beginBuild()
-        self.setProgress(0.0)
-        self.setStatusMessage("Parsing table ..")
+        self.begin_build()
+        self.set_progress(0)
+        self.set_status_message("Parsing table ..")
         QCoreApplication.instance().processEvents()
 
         # Load defaults from keyword args
-        for key in mtbp.get_keys_with_override(self._model.blueprint):
+        for key in mtBp.get_keys_with_override(self._model.blueprint):
             v = self._model.blueprint.get(key)
             code_name = v.get('code_name')
             v.update({'default': kwargs.get(code_name) if not isinstance(kwargs.get(code_name), np.int64) else int(
                 kwargs.get(code_name))})
         # Initialize pre-requisites
         df = self._model.get_dataframe()
-        aliases = df.loc[:, mtbp.get_column_name(
+        aliases = df.loc[:, mtBp.get_column_name(
             self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1])
         try:
@@ -542,9 +556,9 @@ class MTSignalConfigurator(QWidget):
             pass
 
         if len(duplicates):
-            invalid_rows = [aliases.index(dup)+1 for dup in duplicates]
+            invalid_rows = [aliases.index(dup) + 1 for dup in duplicates]
             self._abort_build(
-            f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
+                f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
             return
 
         error_msgs = []
@@ -567,7 +581,7 @@ class MTSignalConfigurator(QWidget):
                         for alias_idx, alias in enumerate(aliases):
                             if var_name == alias:
                                 conflict_row_ids.append(alias_idx)
-                        sinfo.msg = f"Conflicted row: {idx + 1} , '{var_name}' is defined in row (s): {conflict_row_ids}"
+                        sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
                         self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
                         if idx in graph:
@@ -609,16 +623,18 @@ class MTSignalConfigurator(QWidget):
         with self._model.init_create_signals():
             num_keys = len(graph.keys())
             for i, k in enumerate(graph.keys()):
-                self.setStatusMessage(f"Creating signals | row: {k}")
-                self.setProgress(int(i * 100 / num_keys))
+                self.set_status_message(f"Creating signals | row: {k}")
+                self.set_progress(int(i * 100 / num_keys))
                 yield from self._traverse(graph, k)
 
-        self.setProgress(100)
+        self.set_progress(100)
         self.ready.emit()
-        self.endBuild()
+        self.end_build()
 
-    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed: set = set()) -> \
+    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed=None) -> \
             typing.Iterator[Waypoint]:
+        if processed is None:
+            processed = set()
         for idx in graph[row_idx]:
             if idx in processed:
                 continue
@@ -628,19 +644,19 @@ class MTSignalConfigurator(QWidget):
             processed.add(row_idx)
             yield from self._model.create_signals(row_idx)
 
-    def beginBuild(self):
+    def begin_build(self):
         self.showProgress.emit()
         QCoreApplication.instance().processEvents()
 
-    def endBuild(self):
+    def end_build(self):
         self.hideProgress.emit()
         QCoreApplication.instance().processEvents()
 
-    def setStatusMessage(self, msg):
+    def set_status_message(self, msg):
         self.statusChanged.emit(msg)
         QCoreApplication.instance().processEvents()
 
-    def setProgress(self, value: int):
+    def set_progress(self, value: int):
         self.progressChanged.emit(value)
         QCoreApplication.instance().processEvents()
 
@@ -659,8 +675,7 @@ def main():
     if args.blueprint:
         blueprint = json.load(args.blueprint)
     else:
-        blueprint = mtbp.DEFAULT_BLUEPRINT
-        blueprint = mtbp.DEFAULT_BLUEPRINT
+        blueprint = mtBp.DEFAULT_BLUEPRINT
 
     main_win = QMainWindow()
     progress_bar = QProgressBar(main_win)

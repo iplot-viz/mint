@@ -11,7 +11,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 
-def runApp(q_app: QApplication, args=None):
+def run_app(q_app: QApplication, args=None):
     if args is None:
         return
 
@@ -46,18 +46,16 @@ def runApp(q_app: QApplication, args=None):
                 from iplotlib.impl.matplotlib.matplotlibCanvas import MatplotlibParser
 
                 mpl_canvas = MatplotlibParser()
-                mpl_canvas.export_image(
-                    canvas_filename, canvas=canvas_exported, **kwargs)
+                mpl_canvas.export_image(canvas_filename, canvas=canvas_exported, **kwargs)
         except FileNotFoundError:
             logger.error(f"Unable to open file: {canvas_filename}")
 
-    logger.info("Running version {} iplotlib version {}".format(
-        q_app.applicationVersion(), iplotlib_version))
+    logger.info("Running version {} iplotlib version {}".format(q_app.applicationVersion(), iplotlib_version))
     if not AppDataAccess.initialize():
         logger.error("no data sources found, exiting")
         sys.exit(-1)
 
-    AccessHelper.da = AppDataAccess.getDataAccess()
+    AccessHelper.da = AppDataAccess.get_data_access()
     # da.udahost = os.environ.get('UDA_HOST') or "io-SetupLog-udafe01.iter.org"
     canvas_impl = args.impl
 
@@ -82,8 +80,7 @@ def runApp(q_app: QApplication, args=None):
         try:
             blueprint = json.load(args.blueprint_file)
         except Exception as e:
-            logger.warning(
-                f"Exception {e} occurred for blueprint file: {args.blueprint_file}")
+            logger.warning(f"Exception {e} occurred for blueprint file: {args.blueprint_file}")
             blueprint = mtBlueprintParser.DEFAULT_BLUEPRINT
     else:
         blueprint = mtBlueprintParser.DEFAULT_BLUEPRINT
@@ -109,14 +106,16 @@ def runApp(q_app: QApplication, args=None):
                             impl=canvas_impl,
                             signal_class=IplotSignalAdapter)
 
-    main_win.setWindowTitle(
-        f"{q_app.applicationName()}: {q_app.applicationPid()}")
+    main_win.setWindowTitle(f"{q_app.applicationName()}: {q_app.applicationPid()}")
     main_win.statusBar().addPermanentWidget(
         QLabel("MINT version {} iplotlib {} |".format(q_app.applicationVersion(), iplotlib_version)))
 
     # Preload the table from a SCSV file, if provided
     if args.scsv_file:
         main_win.sigCfgWidget.import_scsv(args.scsv_file)
+
+    if args.last_dump:
+        main_win.sigCfgWidget.import_last_dump()
 
     if workspace_file:
         main_win.import_json(workspace_file)
