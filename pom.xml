@@ -68,7 +68,7 @@
 				<copy source="requirements.txt" target="mint/requirements.txt"/>
 				<copy source="default_proto_env" target="mint/default_proto_env"/>
 				<copy source="mint.sh" target="mint/mint.sh"/>
-				<expand source="mint/version.py" file="mint/mint/version.py" rpmeval="true" mvneval="true" />
+				<expand source="mint/_version.py" file="mint/mint/_version.py" rpmeval="true" mvneval="true" />
                             </init>
                         <packaging>
                         <package>
