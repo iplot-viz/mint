@@ -459,14 +459,15 @@ class MTSignalConfigurator(QWidget):
         finally:
             self.ready.emit()
 
-    def import_last_dump(self):
+    def import_last_dump(self) -> None:
         path = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/1Dtool"
         path += "/dumps"
         files = os.listdir(path)
 
         # Filter only files, not directories
         files = [file for file in files if os.path.isfile(os.path.join(path, file))]
-
+        if not files:
+            return
         # Get the most recently modified file
         most_recent_file = max(files, key=lambda file: os.path.getmtime(os.path.join(path, file)))
 
