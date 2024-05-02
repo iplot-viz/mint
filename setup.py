@@ -39,6 +39,9 @@ setuptools.setup(
         "iplotProcessing >= 0.4.0",
         "psutil >= 5.8.0",
     ],
+    extras_require={
+        'test': ['pytest', 'coverage'],  # Test dependencies
+    },
     entry_points={
         "console_scripts": [
             "mint = mint.__main__:main",
@@ -49,5 +52,6 @@ setuptools.setup(
         "mint.data": ["scsv/*", "workspaces/*", "data_signals/*", "blueprint.json"],
         "mint.gui": ["icons/*.png", "res/*.ui"],
         "mint": ["mydatasources.cfg"],
+        "mint.tests": [],  # Exclude everything from the tests package
     },
 )

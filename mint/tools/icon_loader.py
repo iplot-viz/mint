@@ -6,11 +6,11 @@ import pkgutil
 from PySide6.QtGui import QPixmap, QIcon
 
 
-def create_pxmap(name, ext: str = 'png') -> QPixmap:
+def create_pxmap(name, package: str = 'mint.gui', ext: str = 'png') -> QPixmap:
     pxmap = QPixmap()
-    pxmap.loadFromData(pkgutil.get_data("mint.gui", f"icons/{name}.{ext}"))
+    pxmap.loadFromData(pkgutil.get_data(package, f"icons/{name}.{ext}"))
     return pxmap
 
 
-def create_icon(name, ext: str = 'png') -> QIcon:
-    return QIcon(create_pxmap(name, ext))
+def create_icon(name, package: str = 'mint.gui', ext: str = 'png') -> QIcon:
+    return QIcon(create_pxmap(name, package, ext))
