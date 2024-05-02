@@ -60,7 +60,11 @@ cython_debug/
 # Coverage/Test reports
 *.xml
 *.html
-*.coverage
+.coverage
+*.coverage.*
 
 # Archives
 *.tar.gz
+.mutmut-cache
+*.bak
+*.bck
