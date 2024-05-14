@@ -635,8 +635,6 @@ class MTMainWindow(IplotQtMainWindow):
                             rows[row + 1][3][1] is not None and not x_axis_transformed):
                         x_axis.begin = rows[row + 1][3][0]
                         x_axis.end = rows[row + 1][3][1]
-                        x_axis.original_begin = x_axis.begin
-                        x_axis.original_end = x_axis.end
 
                     plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
