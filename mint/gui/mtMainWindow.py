@@ -529,7 +529,7 @@ class MTMainWindow(IplotQtMainWindow):
             if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
-                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, False)
                 continue
 
             signal = waypt.func(*waypt.args, **waypt.kwargs)
