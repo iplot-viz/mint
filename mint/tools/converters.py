@@ -2,7 +2,6 @@
 # Author: Piotr Mazur
 
 import numpy as np
-from typing import List
 
 
 def str_to_arr(value):

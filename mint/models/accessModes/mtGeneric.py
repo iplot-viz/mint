@@ -21,7 +21,7 @@ class MTGenericAccessMode(QObject):
         self.mapper.setModel(self.model)
 
     @staticmethod
-    def getSupportedModes():
+    def get_supported_modes():
         return [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER, MTGenericAccessMode.PULSE_NUMBER]
 
     def properties(self):
@@ -35,8 +35,8 @@ class MTGenericAccessMode(QObject):
         elif self.mode == MTGenericAccessMode.TIME_RANGE:
             return "Time range"
 
-    def toDict(self) -> dict:
+    def to_dict(self) -> dict:
         return dict(mode=self.mode, **self.properties())
 
-    def fromDict(self, contents: dict):
+    def from_dict(self, contents: dict):
         self.mapper.toFirst()
