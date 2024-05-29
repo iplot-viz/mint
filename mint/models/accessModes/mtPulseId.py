@@ -1,12 +1,13 @@
 # Description: Implements a data access mode with pulse id's.
 # Author: Jaswant Sai Panchumarti
 
-from PySide6.QtWidgets import QComboBox, QLabel, QLineEdit, QPushButton
+from PySide6.QtWidgets import QComboBox, QLabel, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout, QFormLayout
 from PySide6.QtCore import QStringListModel, Qt
 from PySide6.QtGui import QDoubleValidator
 
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+
 
 # Validator that checks if a string is a float and if it is not, it returns the value before the one entered.
 # It also allows the empty character, the dot and the minus.
@@ -33,13 +34,10 @@ class MTPulseId(MTGenericAccessMode):
 
         self.values = QStringListModel(self.form)
         self.values.setStringList([e[1] for e in self.options])
-
         self.mode = MTGenericAccessMode.PULSE_NUMBER
-        self.pulseNumber = QLineEdit(parent=self.form)
 
-        self.searchPulses = QPushButton("Search Pulses", parent=self.pulseNumber)
-        self.searchPulses.setMinimumWidth(100)
-        self.searchPulses.setMaximumWidth(150)
+        self.pulseNumber = QLineEdit(parent=self.form)
+        self.searchPulses = QPushButton("Search", parent=self.form)
         self.searchPulses.clicked.connect(self.on_search_pulse)
 
         self.units = QComboBox(parent=self.form)
@@ -50,6 +48,7 @@ class MTPulseId(MTGenericAccessMode):
 
         self.endTime = QLineEdit(parent=self.form)
         self.endTime.setValidator(MyValidator())
+
         self.mapper.setOrientation(Qt.Vertical)
         if mappings.get('mode') == self.mode and mappings.get('value'):
             map_as_list = mappings.get('value')
@@ -64,8 +63,12 @@ class MTPulseId(MTGenericAccessMode):
         self.mapper.addMapping(self.endTime, 3)
         self.mapper.toFirst()
 
-        self.form.layout().addRow(QLabel("Pulse id", parent=self.form), self.pulseNumber)
-        self.form.layout().addRow(QLabel("Search Pulses", parent=self.pulseNumber), self.searchPulses)
+        # Layouts
+        pulses_layout = QHBoxLayout()
+        pulses_layout.addWidget(self.pulseNumber)
+        pulses_layout.addWidget(self.searchPulses)
+
+        self.form.layout().addRow(QLabel("Pulse id", parent=self.form), pulses_layout)
         self.form.layout().addRow(self.units)
         self.form.layout().addRow(QLabel("Start time", parent=self.form), self.startTime)
         self.form.layout().addRow(QLabel("End time", parent=self.form), self.endTime)
