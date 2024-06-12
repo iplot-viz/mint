@@ -293,29 +293,18 @@ class MTSignalConfigurator(QWidget):
         if not len(selected_ids):
             return
 
-        cur_pulses_list = self._model.data(selected_ids[0], Qt.DisplayRole)
-        valid_pulses = []
+        for idx in selected_ids:
+            new_idx = self._model.index(idx.row(), 7)
+            cur_pulses = self._model.data(new_idx, Qt.DisplayRole)
+            pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
+            # Check that the pulse is not already added
+            for pulse in pulses:
+                pulse_set.add(pulse)
 
-        # Check that the pulse is not already added
-        for pulse in pulses:
-            if pulse not in cur_pulses_list:
-                valid_pulses.append(pulse)
+            final_text = ", ".join(pulse_set)
 
-        pulses_text = ', '.join(valid_pulses)
-
-        if cur_pulses_list:
-            if pulses_text:
-                final_text = cur_pulses_list + ', ' + pulses_text
-            else:
-                final_text = cur_pulses_list
-        else:
-            if pulses_text:
-                final_text = pulses_text
-            else:
-                final_text = ''
-
-        # Add the pulse in the corresponding cells
-        self.set_bulk_contents(final_text, selected_ids)
+            # Add the pulse in the corresponding cells
+            self.set_bulk_contents(final_text, [new_idx])
 
     def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()

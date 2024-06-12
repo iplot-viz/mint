@@ -99,26 +99,14 @@ class MTPulseId(MTGenericAccessMode):
         self.selectPulseDialog.activateWindow()
 
     def append_pulse(self, pulses):
-        valid_pulses = []
-        cur_pulses_list = self.pulseNumber.text()
+        cur_pulses = self.pulseNumber.text()
+        pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
 
         # Check that the pulse is not already added
         for pulse in pulses:
-            if pulse not in cur_pulses_list:
-                valid_pulses.append(pulse)
+            pulse_set.add(pulse)
 
-        pulses_text = ', '.join(valid_pulses)
+        final_pulses = ", ".join(pulse_set)
 
-        if cur_pulses_list:
-            if pulses_text:
-                final_text = cur_pulses_list + ', ' + pulses_text
-            else:
-                final_text = cur_pulses_list
-        else:
-            if pulses_text:
-                final_text = pulses_text
-            else:
-                final_text = ''
-
-        self.pulseNumber.setText(final_text)
+        self.pulseNumber.setText(final_pulses)
         self.pulseNumber.setFocus()
