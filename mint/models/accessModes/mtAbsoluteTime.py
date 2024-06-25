@@ -56,7 +56,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         fromTimeLayout.addWidget(self.fromTime)
         fromTimeLayout.addWidget(QLabel(".", parent=self.form))
         fromTimeLayout.addWidget(self.fromTimeNs)
-        fromTimeLayout.addWidget(QLabel("nanoseconds", parent=self.form))
+        fromTimeLayout.addWidget(QLabel("ns", parent=self.form))
         fromTimeLayout.setAlignment(Qt.AlignLeft)
 
         # Create layout for the "To time" row
@@ -64,7 +64,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         toTimeLayout.addWidget(self.toTime)
         toTimeLayout.addWidget(QLabel(".", parent=self.form))
         toTimeLayout.addWidget(self.toTimeNs)
-        toTimeLayout.addWidget(QLabel("nanoseconds", parent=self.form))
+        toTimeLayout.addWidget(QLabel("ns", parent=self.form))
         toTimeLayout.setAlignment(Qt.AlignLeft)  # Align items to the left
 
         # Add the rows to the form layout
