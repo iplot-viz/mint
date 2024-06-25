@@ -22,11 +22,11 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.model.setStringList(str_list)
 
         self.fromTime = QDateTimeEdit(parent=self.form)
-        self.fromTime.setFixedWidth(19 * self.fromTime.fontMetrics().averageCharWidth())
+        self.fromTime.setFixedWidth(21 * self.fromTime.fontMetrics().averageCharWidth())
         self.fromTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         self.toTime = QDateTimeEdit(parent=self.form)
-        self.toTime.setFixedWidth(19 * self.toTime.fontMetrics().averageCharWidth())
+        self.toTime.setFixedWidth(21 * self.toTime.fontMetrics().averageCharWidth())
         self.toTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         regex = QRegularExpression("[0-9]{1,9}")  # Regular expression for 0 to 9 digits
