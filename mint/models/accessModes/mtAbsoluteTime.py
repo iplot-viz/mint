@@ -22,24 +22,24 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.model.setStringList(str_list)
 
         self.fromTime = QDateTimeEdit(parent=self.form)
-        self.fromTime.setFixedWidth(21 * self.fromTime.fontMetrics().averageCharWidth())
+        self.fromTime.setFixedWidth(22 * self.fromTime.fontMetrics().averageCharWidth())
         self.fromTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         self.toTime = QDateTimeEdit(parent=self.form)
-        self.toTime.setFixedWidth(21 * self.toTime.fontMetrics().averageCharWidth())
+        self.toTime.setFixedWidth(22 * self.toTime.fontMetrics().averageCharWidth())
         self.toTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         regex = QRegularExpression("[0-9]{1,9}")  # Regular expression for 0 to 9 digits
         regex_validator = QRegularExpressionValidator(regex, self)
 
         self.fromTimeNs = QLineEdit(parent=self.form)
-        self.fromTimeNs.setFixedWidth(10 * self.fromTimeNs.fontMetrics().averageCharWidth())
+        self.fromTimeNs.setFixedWidth(11 * self.fromTimeNs.fontMetrics().averageCharWidth())
         self.fromTimeNs.setValidator(regex_validator)
         self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         self.fromTimeNs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.toTimeNs = QLineEdit(parent=self.form)
-        self.toTimeNs.setFixedWidth(10 * self.toTimeNs.fontMetrics().averageCharWidth())
+        self.toTimeNs.setFixedWidth(11 * self.toTimeNs.fontMetrics().averageCharWidth())
         self.toTimeNs.setValidator(regex_validator)
         self.toTimeNs.editingFinished.connect(self.handle_time_validation)
         self.toTimeNs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
