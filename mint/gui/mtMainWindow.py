@@ -633,6 +633,8 @@ class MTMainWindow(IplotQtMainWindow):
                                 break
                     if (x_axis_date and signal_x_is_date and rows[row + 1][3][0] is not None and
                             rows[row + 1][3][1] is not None and not x_axis_transformed):
+                        x_axis.original_begin = rows[row + 1][3][0]
+                        x_axis.original_end = rows[row + 1][3][1]
                         x_axis.begin = rows[row + 1][3][0]
                         x_axis.end = rows[row + 1][3][1]
 
