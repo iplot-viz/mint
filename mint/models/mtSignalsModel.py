@@ -386,7 +386,7 @@ class MTSignalsModel(QAbstractItemModel):
                             # Lists to store the elements corresponding to every pattern
                             elements = [[], [], []]
 
-                            # Iterar sobre la lista y clasificar los elementos
+                            # Iterate over the list and classify the elements
                             for element in value:
                                 match_plus = plus_pattern.match(element)
                                 match_minus = minus_pattern.match(element)
