@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 import sys
 import typing
-from typing import List
+from typing import List, Tuple
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
@@ -122,7 +122,7 @@ class RowAliasType:
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> Tuple[Parser, str, str]:
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
@@ -134,11 +134,11 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
-        return RowAliasType.Simple, name
+        return p, RowAliasType.Simple, name
     elif alias_valid and not raw_name:
-        return RowAliasType.Mixed, name
+        return p, RowAliasType.Mixed, name
     else:
-        return RowAliasType.NoAlias, name
+        return p, RowAliasType.NoAlias, name
 
 
 class MTSignalConfigurator(QWidget):
@@ -548,19 +548,12 @@ class MTSignalConfigurator(QWidget):
                 kwargs.get(code_name))})
         # Initialize pre-requisites
         df = self._model.get_dataframe()
-        aliases = df.loc[:, mtBp.get_column_name(
-            self._model.blueprint, 'Alias')].tolist()
-        duplicates = set([a for a in aliases if aliases.count(a) > 1])
-        try:
-            duplicates.remove('')
-        except KeyError:
-            pass
+        aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
+        duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
         if len(duplicates):
             invalid_rows = [aliases.index(dup) + 1 for dup in duplicates]
-            self._abort_build(
-                f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-            return
+            self._abort_build(f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
 
         error_msgs = []
         graph = defaultdict(list)
@@ -569,10 +562,7 @@ class MTSignalConfigurator(QWidget):
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
                 modelIdx = self.model.createIndex(idx, statusColIdx)
-                row_type, name = _row_predicate(
-                    row, aliases, self._model.blueprint)
-
-                p = Parser().set_expression(name)
+                p, row_type, name = _row_predicate(row, aliases, self._model.blueprint)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
