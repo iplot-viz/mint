@@ -559,6 +559,10 @@ class MTMainWindow(IplotQtMainWindow):
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            # Set end time to avoid None values for EndTime in case of pulses
+            if plan[waypt.col_num][waypt.row_num][3][1] is None:
+                plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
+
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
@@ -609,15 +613,27 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
+                    x_axis_transformed = False
+                    for signals in rows[row + 1][2].values():
+                        for signal in signals:
+                            if signal.x_expr != '${self}.time':
+                                x_axis_transformed = True
+                                break
+
                     if not canvas.streaming:
                         signal_x_is_date = False
                         for stack, signals in rows[row + 1][2].items():
                             for signal in signals:
                                 try:
                                     x_data = signal.get_data()[0]
-                                    signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                    if x_axis_transformed:
+                                        if len(x_data) > 0:
+                                            signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                    else:
+                                        if rows[row + 1][3][0] is not None:
+                                            signal_x_is_date |= bool(rows[row + 1][3][0] > (1 << 53))
                                 except (IndexError, ValueError) as _:
-                                    signal_x_is_date = True
+                                    signal_x_is_date = False
                     else:
                         signal_x_is_date = True
 
@@ -625,14 +641,10 @@ class MTMainWindow(IplotQtMainWindow):
 
                     x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                         window=x_axis_window)
-                    x_axis_transformed = False
-                    for signals in rows[row + 1][2].values():
-                        for signal in signals:
-                            if signal.x_expr != '${self}.time':
-                                x_axis_transformed = True
-                                break
-                    if (x_axis_date and signal_x_is_date and rows[row + 1][3][0] is not None and
-                            rows[row + 1][3][1] is not None and not x_axis_transformed):
+
+                    # In case of processed signals, the limits are not set until the drawn_fn occurs
+                    # In the other hand, for no processed signals and for pulses the limits are set as follows:
+                    if not x_axis_transformed:
                         x_axis.original_begin = rows[row + 1][3][0]
                         x_axis.original_end = rows[row + 1][3][1]
                         x_axis.begin = rows[row + 1][3][0]
