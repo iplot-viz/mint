@@ -409,6 +409,10 @@ class MTSignalsModel(QAbstractItemModel):
                     value = get_value(inp, column_name, type_func)
                     if not value and not override_global:
                         value = default_value
+                    else:
+                        # Instead of setting the start time to None, it is set to 0
+                        if column_name == 'StartTime' and out['PulseId'] and value is None:
+                            value = 0
             else:
                 if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
                     value = get_value(inp, column_name, type_func)
