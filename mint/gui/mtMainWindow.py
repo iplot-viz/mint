@@ -558,6 +558,18 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            else:
+                # In the case of streaming, only simple variables are kept
+                conditions = (
+                    ts != signal.ts_start,
+                    te != signal.ts_end,
+                    signal.envelope != "",
+                    signal.x_expr != '${self}.time',
+                    signal.y_expr != '${self}.data_store[1]',
+                    signal.z_expr != '${self}.data_store[2]'
+                )
+                if any(conditions):
+                    signal.stream_valid = False
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
@@ -609,17 +621,14 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
-                    if not canvas.streaming:
-                        signal_x_is_date = False
-                        for stack, signals in rows[row + 1][2].items():
-                            for signal in signals:
-                                try:
-                                    x_data = signal.get_data()[0]
-                                    signal_x_is_date |= bool(min(x_data) > (1 << 53))
-                                except (IndexError, ValueError) as _:
-                                    signal_x_is_date = True
-                    else:
-                        signal_x_is_date = True
+                    signal_x_is_date = False
+                    for stack, signals in rows[row + 1][2].items():
+                        for signal in signals:
+                            try:
+                                x_data = signal.get_data()[0]
+                                signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                            except (IndexError, ValueError) as _:
+                                signal_x_is_date = True
 
                     y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row + 1][2].items()))]
 
