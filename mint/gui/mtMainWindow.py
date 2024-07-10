@@ -621,14 +621,17 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
-                    signal_x_is_date = False
-                    for stack, signals in rows[row + 1][2].items():
-                        for signal in signals:
-                            try:
-                                x_data = signal.get_data()[0]
-                                signal_x_is_date |= bool(min(x_data) > (1 << 53))
-                            except (IndexError, ValueError) as _:
-                                signal_x_is_date = True
+                    if not canvas.streaming:
+                        signal_x_is_date = False
+                        for stack, signals in rows[row + 1][2].items():
+                            for signal in signals:
+                                try:
+                                    x_data = signal.get_data()[0]
+                                    signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                except (IndexError, ValueError) as _:
+                                    signal_x_is_date = True
+                    else:
+                        signal_x_is_date = True
 
                     y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row + 1][2].items()))]
 
@@ -648,7 +651,14 @@ class MTMainWindow(IplotQtMainWindow):
                     plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
                         for signal in signals:
-                            plot.add_signal(signal, stack=stack)
+                            if signal.stream_valid:
+                                plot.add_signal(signal, stack=stack)
+
+                    # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
+                    # is not added to the Canvas and None is added instead.
+                    if canvas.streaming and not plot.signals:
+                        plot = None
+
                 self.canvas.add_plot(plot, col=colnum - 1)
 
     def on_timeout(self):
