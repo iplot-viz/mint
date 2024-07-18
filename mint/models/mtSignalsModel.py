@@ -410,9 +410,8 @@ class MTSignalsModel(QAbstractItemModel):
                     if not value and not override_global:
                         if default_value != "":
                             value = default_value
-                        else:
-                            if column_name == 'StartTime':
-                                value = 0
+                        elif default_value == '' and column_name == 'StartTime':
+                            value = 0
                     else:
                         # Instead of setting the start time to None, it is set to 0
                         if column_name == 'StartTime' and out['PulseId'] and value is None:
