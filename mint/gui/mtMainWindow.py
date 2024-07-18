@@ -558,6 +558,18 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            else:
+                # In the case of streaming, only simple variables are kept
+                conditions = (
+                    ts != signal.ts_start,
+                    te != signal.ts_end,
+                    signal.envelope != "",
+                    signal.x_expr != '${self}.time',
+                    signal.y_expr != '${self}.data_store[1]',
+                    signal.z_expr != '${self}.data_store[2]'
+                )
+                if any(conditions):
+                    signal.stream_valid = False
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
@@ -653,7 +665,14 @@ class MTMainWindow(IplotQtMainWindow):
                     plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
                         for signal in signals:
-                            plot.add_signal(signal, stack=stack)
+                            if signal.stream_valid:
+                                plot.add_signal(signal, stack=stack)
+
+                    # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
+                    # is not added to the Canvas and None is added instead.
+                    if canvas.streaming and not plot.signals:
+                        plot = None
+
                 self.canvas.add_plot(plot, col=colnum - 1)
 
     def on_timeout(self):
