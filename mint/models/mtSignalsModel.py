@@ -416,12 +416,6 @@ class MTSignalsModel(QAbstractItemModel):
                         # Instead of setting the start time to None, it is set to 0
                         if column_name == 'StartTime' and out['PulseId'] and value is None:
                             value = 0
-
-                    # In the case of pulses, if the start time is negative, the corresponding values of the start and
-                    # end time are updated so that no data is displayed, as the time is not correct.
-                    if column_name == 'EndTime' and out['StartTime'] < 0:
-                        out.update({'StartTime': -0.05})
-                        value = 0.05
             else:
                 if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
                     value = get_value(inp, column_name, type_func)
