@@ -75,6 +75,11 @@
         "type_name": "str",
         "default": "${self}.data_store[2]"
     },
+    "Extremities": {
+        "code_name": "extremities",
+        "type_name": "bool",
+        "default": ""
+    },
     "PlotType": {
         "label": "Plot type",
         "code_name": "plot_type",

@@ -59,6 +59,7 @@ NEAT_VIEW = {
         "x": True,
         "y": True,
         "z": True,
+        "Extremities": True,
         "Plot type": True,
         "Status": True
     },
@@ -76,6 +77,7 @@ NEAT_VIEW = {
         "x": False,
         "y": False,
         "z": False,
+        "Extremities": False,
         "Plot type": False,
         "Status": True
     },
@@ -93,6 +95,7 @@ NEAT_VIEW = {
         "x": False,
         "y": False,
         "z": False,
+        "Extremities": False,
         "Plot type": True,
         "Status": True
     },
@@ -110,6 +113,7 @@ NEAT_VIEW = {
         "x": True,
         "y": True,
         "z": True,
+        "Extremities": False,
         "Plot type": False,
         "Status": True
     }
