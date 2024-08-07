@@ -2,7 +2,7 @@
 # Author: Jaswant Sai Panchumarti
 
 
-from PySide6.QtGui import QRegularExpressionValidator
+from PySide6.QtGui import QRegularExpressionValidator, QFontMetrics
 from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy
 from PySide6.QtCore import Qt, QRegularExpression
 
@@ -22,27 +22,30 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.model.setStringList(str_list)
 
         self.fromTime = QDateTimeEdit(parent=self.form)
-        self.fromTime.setFixedWidth(22 * self.fromTime.fontMetrics().averageCharWidth())
         self.fromTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         self.toTime = QDateTimeEdit(parent=self.form)
-        self.toTime.setFixedWidth(22 * self.toTime.fontMetrics().averageCharWidth())
         self.toTime.setDisplayFormat(MTAbsoluteTime.TIME_FORMAT)
 
         regex = QRegularExpression("[0-9]{1,9}")  # Regular expression for 0 to 9 digits
         regex_validator = QRegularExpressionValidator(regex, self)
 
         self.fromTimeNs = QLineEdit(parent=self.form)
-        self.fromTimeNs.setFixedWidth(11 * self.fromTimeNs.fontMetrics().averageCharWidth())
+        self.fromTimeNs.setFixedWidth(11 * QFontMetrics(self.fromTimeNs.font()).horizontalAdvance("0"))
         self.fromTimeNs.setValidator(regex_validator)
         self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         self.fromTimeNs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.toTimeNs = QLineEdit(parent=self.form)
-        self.toTimeNs.setFixedWidth(11 * self.toTimeNs.fontMetrics().averageCharWidth())
+        self.toTimeNs.setFixedWidth(11 * QFontMetrics(self.toTimeNs.font()).horizontalAdvance("0"))
         self.toTimeNs.setValidator(regex_validator)
         self.toTimeNs.editingFinished.connect(self.handle_time_validation)
         self.toTimeNs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        self.fromTime.adjustSize()
+        self.fromTime.setFixedWidth(self.fromTime.width() + 2)
+        self.toTime.adjustSize()
+        self.toTime.setFixedWidth(self.toTime.width() + 2)
 
         self.mapper.setOrientation(Qt.Vertical)
         self.mapper.addMapping(self.fromTime, 0)

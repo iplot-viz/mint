@@ -24,6 +24,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
@@ -207,6 +208,9 @@ class MTSignalConfigurator(QWidget):
 
         self.selectModuleDialog = ModuleImporter()
 
+        self.selectPulseDialog = PulseBrowser()
+        self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
+
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
 
@@ -282,6 +286,25 @@ class MTSignalConfigurator(QWidget):
     def append_dataframe(self, df):
         if not df.empty:
             self._model.append_dataframe(df)
+
+    def append_pulse(self, pulses):
+        current_tab_id = self._tabs.currentIndex()
+        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        if not len(selected_ids):
+            return
+
+        for idx in selected_ids:
+            new_idx = self._model.index(idx.row(), 7)
+            cur_pulses = self._model.data(new_idx, Qt.DisplayRole)
+            pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
+            # Check that the pulse is not already added
+            for pulse in pulses:
+                pulse_set.add(pulse)
+
+            final_text = ", ".join(pulse_set)
+
+            # Add the pulse in the corresponding cells
+            self.set_bulk_contents(final_text, [new_idx])
 
     def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
@@ -412,8 +435,14 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def on_search_pulse(self):
+        self.selectPulseDialog.flag = "table"
+        self.selectPulseDialog.show()
+        self.selectPulseDialog.activateWindow()
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
+        context_menu.addAction("Add pulse", self.on_search_pulse)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
         context_menu.addAction(self.style().standardIcon(

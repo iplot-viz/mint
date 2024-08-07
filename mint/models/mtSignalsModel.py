@@ -380,35 +380,42 @@ class MTSignalsModel(QAbstractItemModel):
                     value = get_value(inp, column_name, type_func)
                     override_global = value is not None
                     if override_global:
-                            plus_pattern = re.compile(r"\+\((.*)\)")
-                            minus_pattern = re.compile(r"-\((.*)\)")
+                        plus_pattern = re.compile(r"\+\((.*)\)")
+                        minus_pattern = re.compile(r"-\((.*)\)")
 
-                            # Lists to store the elements corresponding to every pattern
-                            elements = [[], [], []]
+                        # Lists to store the elements corresponding to every pattern
+                        elements = [[], [], []]
 
-                            # Iterate over the list and classify the elements
-                            for element in value:
-                                match_plus = plus_pattern.match(element)
-                                match_minus = minus_pattern.match(element)
-                                if match_plus:
-                                    elements[0].append(match_plus.group(1))
-                                elif match_minus:
-                                    elements[1].append(match_minus.group(1))
-                                else:
-                                    elements[2].append(element)
+                        # Iterate over the list and classify the elements
+                        for element in value:
+                            match_plus = plus_pattern.match(element)
+                            match_minus = minus_pattern.match(element)
+                            if match_plus:
+                                elements[0].append(match_plus.group(1))
+                            elif match_minus:
+                                elements[1].append(match_minus.group(1))
+                            else:
+                                elements[2].append(element)
 
-                            if len(elements[2]) == 0:
-                                # Remove pulses from global
-                                value = [i for i in default_value if i not in elements[1]]
-                                # Add pulses from global
-                                value.extend([i for i in elements[0] if i not in default_value])
+                        if len(elements[2]) == 0:
+                            # Remove pulses from global
+                            value = [i for i in default_value if i not in elements[1]]
+                            # Add pulses from global
+                            value.extend([i for i in elements[0] if i not in default_value])
                     else:
                         value = default_value
 
                 else:
                     value = get_value(inp, column_name, type_func)
                     if not value and not override_global:
-                        value = default_value
+                        if default_value != "":
+                            value = default_value
+                        elif default_value == '' and column_name == 'StartTime':
+                            value = 0
+                    else:
+                        # Instead of setting the start time to None, it is set to 0
+                        if column_name == 'StartTime' and out['PulseId'] and value is None:
+                            value = 0
             else:
                 if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
                     value = get_value(inp, column_name, type_func)
