@@ -658,6 +658,7 @@ class MTSignalConfigurator(QWidget):
                 self.set_progress(int(i * 100 / num_keys))
                 yield from self._traverse(graph, k)
 
+        self._model.layoutChanged.emit()
         self._model.aliases = []
         self.set_progress(100)
         self.ready.emit()
