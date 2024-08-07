@@ -29,7 +29,7 @@ class MTGenericAccessMode(QObject):
 
     def label(self) -> str:
         if self.mode == MTGenericAccessMode.PULSE_NUMBER:
-            return "Pulse Id"
+            return "Pulse Id or URI"
         elif self.mode == MTGenericAccessMode.RELATIVE_TIME:
             return "Relative"
         elif self.mode == MTGenericAccessMode.TIME_RANGE:

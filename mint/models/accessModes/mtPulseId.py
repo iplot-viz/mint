@@ -59,7 +59,7 @@ class MTPulseId(MTGenericAccessMode):
         self.mapper.addMapping(self.endTime, 3)
         self.mapper.toFirst()
 
-        self.form.layout().addRow(QLabel("Pulse id", parent=self.form), self.pulseNumber)
+        self.form.layout().addRow(QLabel("Pulse Id or URI", parent=self.form), self.pulseNumber)
         self.form.layout().addRow(self.units)
         self.form.layout().addRow(QLabel("Start time", parent=self.form), self.startTime)
         self.form.layout().addRow(QLabel("End time", parent=self.form), self.endTime)
