@@ -12,12 +12,13 @@ def is_screen_4k():
         process = subprocess.run(["xrandr"], stdout=subprocess.PIPE, check=True)
         lines = process.stdout.decode('utf-8').splitlines()
         # We need to look at the first line
-        currents = lines[0].split(",")[1].strip()
-        resol = currents.split(" ")
-        screen_width = int(resol[1])
-        screen_height = int(resol[3])
+        screen_resolution = []
+        for line in lines:
+            if "*" in line:
+                screen_resolution.append(line.split()[0])
 
-        return screen_width % 3840 == 0 and screen_height % 2160 == 0
+        return all(res == "3840x2160" for res in screen_resolution)
+
     except subprocess.CalledProcessError as cpe:
         print("Error with xrandr ", cpe)
         return False
@@ -51,9 +52,9 @@ def main():
     else:
         print("It is not a 4K screen")
 
-    qApp, args = create_app(sys.argv)
+    q_app, args = create_app(sys.argv)
     dirs.update(__file__)
-    sys.exit(run_app(qApp, args))
+    sys.exit(run_app(q_app, args))
 
 
 if __name__ == "__main__":
