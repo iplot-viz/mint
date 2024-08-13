@@ -100,10 +100,15 @@ class MTSignalsModel(QAbstractItemModel):
                 return value
             if role == Qt.BackgroundRole:
                 fail_value = self._table_fails.iloc[index.row(), index.column()]
-                if not fail_value:
+                # Value 0 corresponds to a correct cell.
+                # Value 1 corresponds to a main error.
+                # Value 2 corresponds to a secondary error resulting from a main error.
+                if fail_value == 0:
                     return QBrush(QColor('white'))
-                else:
+                elif fail_value == 1:
                     return QBrush(QColor('red'))
+                else:
+                    return QBrush(QColor('orange'))
         return None
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
@@ -157,7 +162,7 @@ class MTSignalsModel(QAbstractItemModel):
         for new_row in range(row, row + count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
-            data_fails = [[False for _ in range(self._table.columns.size)]]
+            data_fails = [[0 for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
             empty_row_fails = pd.DataFrame(data=data_fails, columns=self._table.columns)
             # Set default Datasource
@@ -261,7 +266,7 @@ class MTSignalsModel(QAbstractItemModel):
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
 
         # Create False for fails table
-        df_fails = pd.DataFrame(data=False, index=range(df.shape[0]), columns=self._table_fails.columns)
+        df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
 
         # Check if last row is empty
         if self._table.empty or self._table.iloc[-1:, 1:-3].any(axis=1).bool():
@@ -338,7 +343,7 @@ class MTSignalsModel(QAbstractItemModel):
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
             if i == 0:  # grab these from the first row we encounter.
-                if any(parsed_row[1]):  # Do not draw Plots containing errors
+                if any(parsed_row[1] > 0):  # Do not draw Plots containing errors
                     stack_val = ''
                 else:
                     stack_val = signal_params.get('stack_val')
@@ -418,7 +423,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     correct = False
                                     break
                             if correct:
-                                fls[column_name] = False
+                                fls[column_name] = 0
                                 plus_pattern = re.compile(r"\+\((.*)\)")
                                 minus_pattern = re.compile(r"-\((.*)\)")
 
@@ -443,10 +448,10 @@ class MTSignalsModel(QAbstractItemModel):
                                     value.extend([i for i in elements[0] if i not in default_value])
                             else:
                                 # Pulse invalid
-                                fls[column_name] = True
+                                fls[column_name] = 1
                         else:
                             value = default_value
-                            fls[column_name] = False
+                            fls[column_name] = 0
 
                     else:
                         # Dates case
@@ -457,17 +462,17 @@ class MTSignalsModel(QAbstractItemModel):
                         if not value and not out['PulseId']:
                             # Check if None is caused by empty cell or invalid cell
                             if inp[column_name] == '':
-                                fls[column_name] = False
+                                fls[column_name] = 0
                             else:
-                                fls[column_name] = True
+                                fls[column_name] = 1
                             value = default_value
 
                         # None value but there are pulses
                         elif not value and out['PulseId']:
                             if inp[column_name] == '':
-                                fls[column_name] = False
+                                fls[column_name] = 0
                             else:
-                                fls[column_name] = True
+                                fls[column_name] = 1
                             if column_name == 'StartTime':
                                 value = 0
                             # In case of EndTime keep None
@@ -477,10 +482,10 @@ class MTSignalsModel(QAbstractItemModel):
                             is_date |= bool(value > (1 << 53))
                             if is_date:
                                 # Keep value
-                                fls[column_name] = False
+                                fls[column_name] = 0
                             else:
                                 value = default_value
-                                fls[column_name] = True
+                                fls[column_name] = 1
 
                         # There is a value and pulses
                         elif value and out['PulseId']:
@@ -490,29 +495,30 @@ class MTSignalsModel(QAbstractItemModel):
                                     value = 0
                                 else:
                                     value = None
-                                fls[column_name] = True
+                                fls[column_name] = 1
                             else:
                                 # keep value
-                                fls[column_name] = False
+                                fls[column_name] = 0
 
                         # Check chronology of dates
                         if column_name == 'EndTime' and value:
-                            if value <= out['StartTime']:
-                                fls[column_name] = True
-                                fls['StartTime'] = True
+                            # Check if there are no errors in the cells corresponding to the dates
+                            if value <= out['StartTime'] or fls['StartTime'] == 1 or fls[column_name] == 1:
+                                fls[column_name] = 1
+                                fls['StartTime'] = 1
                             else:
-                                fls[column_name] = False
-                                fls['StartTime'] = False
+                                fls[column_name] = 0
+                                fls['StartTime'] = 0
                 else:
                     if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
                         value = get_value(inp, column_name, type_func)
                         if value == '':
-                            fls[column_name] = True
+                            fls[column_name] = 1
                         else:
                             if value in self.data_sources:
-                                fls[column_name] = False
+                                fls[column_name] = 0
                             else:
-                                fls[column_name] = True
+                                fls[column_name] = 1
                     else:
                         value = get_value(inp, column_name, type_func) or default_value
 
@@ -526,7 +532,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     # Check variable or expression with variable
                                     if AppDataAccess.da.get_var_list(data_source_name=inp['DS'], pattern=value):
                                         # Correct variable
-                                        fls[column_name] = False
+                                        fls[column_name] = 0
                                     elif value.find(Parser.marker_in) != -1 or value.find(Parser.marker_out) != -1:
                                         correct = True
                                         try:
@@ -539,81 +545,88 @@ class MTSignalsModel(QAbstractItemModel):
                                                         correct = False
                                                         break
                                                 if correct:
-                                                    fls[column_name] = False
+                                                    fls[column_name] = 0
                                                 else:
-                                                    fls[column_name] = True
+                                                    fls[column_name] = 1
                                             else:
-                                                fls[column_name] = True
+                                                fls[column_name] = 1
                                         except InvalidExpression:
-                                            fls[column_name] = True
+                                            fls[column_name] = 1
                                     else:
                                         # Incorrect variable
-                                        fls[column_name] = True
+                                        fls[column_name] = 1
                                 else:
-                                    fls[column_name] = True  # Variable with incorrect DataSource
+                                    fls[column_name] = 1  # Variable with incorrect DataSource
                             else:
-                                fls[column_name] = False
+                                fls[column_name] = 0
 
                         # Stack
                         elif column_name == 'Stack':
                             if value == '':
-                                fls[column_name] = False
+                                fls[column_name] = 0
                             else:
                                 if exp_stack.match(value):
-                                    fls[column_name] = False
+                                    fls[column_name] = 0
                                 else:
-                                    fls[column_name] = True
+                                    fls[column_name] = 1
 
                         # Row Span - Col Span
                         elif column_name == 'Row span' or column_name == 'Col span':
                             if value <= 0:
-                                fls[column_name] = True
+                                fls[column_name] = 1
                                 value = 1
                             elif value == 1:
                                 if inp[column_name] == '1' or inp[column_name] == '':
-                                    fls[column_name] = False
+                                    fls[column_name] = 0
                                 else:
-                                    fls[column_name] = True
+                                    fls[column_name] = 1
                             elif value > 10:
-                                fls[column_name] = True
+                                fls[column_name] = 1
                                 value = 1
                             else:
                                 # Keep value
-                                fls[column_name] = False
+                                fls[column_name] = 0
 
                         # Envelope
                         elif column_name == 'Envelope':
-                            pass
+                            if value and inp[column_name] == '1':
+                                fls[column_name] = 0
+                            else:
+                                # In case of no envelope, just 0 or '' is considered valid
+                                if inp[column_name] == '0' or inp[column_name] == '':
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
 
                         # Alias
                         elif column_name == 'Alias':
                             if value != '':
                                 if value not in self.aliases:
                                     self.aliases.append(value)
-                                    fls[column_name] = False
+                                    fls[column_name] = 0
                                 else:
                                     # Repeated alias
-                                    fls[column_name] = True
+                                    fls[column_name] = 1
                             else:
-                                fls[column_name] = False
+                                fls[column_name] = 0
 
                         # X - Y - Z
                         elif column_name == 'x' or column_name == 'y' or column_name == 'z':
                             try:
                                 p.set_expression(value)
                                 if p.is_valid:
-                                    fls[column_name] = False
+                                    fls[column_name] = 0
                                 else:
-                                    fls[column_name] = True
+                                    fls[column_name] = 1
                             except InvalidExpression:
-                                fls[column_name] = True
+                                fls[column_name] = 1
 
                         # Plot Type
                         elif column_name == 'Plot type':
                             if value != 'PlotXY':
-                                fls[column_name] = True
+                                fls[column_name] = 1
                             else:
-                                fls[column_name] = False
+                                fls[column_name] = 0
 
                 out.update({column_name: value})
 
@@ -624,13 +637,13 @@ class MTSignalsModel(QAbstractItemModel):
                 if val != out['Alias'] and val in s.values:  # Only variables that are defined with an alias
                     index = s[s == val].index[0]
                     # Search if there is an error in the corresponding row of the fails table
-                    if any(self._table_fails.loc[index].values):
+                    if any(self._table_fails.loc[index].values > 0):
                         for expr in ['x', 'y', 'z']:
                             marker_in_pos = out[expr].find(Parser.marker_in)
                             marker_out_pos = out[expr].find(Parser.marker_out)
                             var = out[expr][marker_in_pos + len(Parser.marker_in):marker_out_pos]
                             if var == val:
-                                fls[expr] = True
+                                fls[expr] = 2  # Secondary error
 
             for k, v in out.items():
                 if isinstance(v, list) and len(v) > 0:
