@@ -24,6 +24,7 @@ from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, St
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
@@ -122,7 +123,7 @@ class RowAliasType:
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> Tuple[Parser, str, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[str, str, Parser]:
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
@@ -134,11 +135,11 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> Tuple[Pars
         raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
-        return p, RowAliasType.Simple, name
+        return RowAliasType.Simple, name, p
     elif alias_valid and not raw_name:
-        return p, RowAliasType.Mixed, name
+        return RowAliasType.Mixed, name, p
     else:
-        return p, RowAliasType.NoAlias, name
+        return RowAliasType.NoAlias, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -206,6 +207,9 @@ class MTSignalConfigurator(QWidget):
         self.selectVarDialog.cmd_finish.connect(self.append_dataframe)
 
         self.selectModuleDialog = ModuleImporter()
+
+        self.selectPulseDialog = PulseBrowser()
+        self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -283,6 +287,25 @@ class MTSignalConfigurator(QWidget):
         if not df.empty:
             self._model.append_dataframe(df)
 
+    def append_pulse(self, pulses):
+        current_tab_id = self._tabs.currentIndex()
+        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        if not len(selected_ids):
+            return
+
+        for idx in selected_ids:
+            new_idx = self._model.index(idx.row(), 7)
+            cur_pulses = self._model.data(new_idx, Qt.ItemDataRole.DisplayRole)
+            pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
+            # Check that the pulse is not already added
+            for pulse in pulses:
+                pulse_set.add(pulse)
+
+            final_text = ", ".join(pulse_set)
+
+            # Add the pulse in the corresponding cells
+            self.set_bulk_contents(final_text, [new_idx])
+
     def insert_empty_rows(self, above: bool):
         currentTabId = self._tabs.currentIndex()
         selection = self._signal_item_widgets[currentTabId].view().selectionModel() \
@@ -319,7 +342,7 @@ class MTSignalConfigurator(QWidget):
                 right = max(right, idx.column())
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
-                self._model.setData(idx, text, Qt.EditRole)
+                self._model.setData(idx, text, Qt.ItemDataRole.EditRole)
             self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
@@ -364,7 +387,7 @@ class MTSignalConfigurator(QWidget):
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
                 with self._model.activate_fast_mode():
-                    self._model.setData(idx, value, Qt.EditRole)
+                    self._model.setData(idx, value, Qt.ItemDataRole.EditRole)
                 col += 1
             row += 1
 
@@ -379,7 +402,7 @@ class MTSignalConfigurator(QWidget):
         rows = set()
         columns = set()
         for idx in selected_ids:
-            value = self._model.data(idx, Qt.DisplayRole)
+            value = self._model.data(idx, Qt.ItemDataRole.DisplayRole)
             column = idx.column()
             row = idx.row()
             contents[row][column] = value
@@ -412,8 +435,14 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def on_search_pulse(self):
+        self.selectPulseDialog.flag = "table"
+        self.selectPulseDialog.show()
+        self.selectPulseDialog.activateWindow()
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
+        context_menu.addAction("Add pulse", self.on_search_pulse)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
         context_menu.addAction(self.style().standardIcon(
@@ -557,12 +586,12 @@ class MTSignalConfigurator(QWidget):
 
         error_msgs = []
         graph = defaultdict(list)
-        statusColIdx = self.model.columnCount(QModelIndex()) - 1
+        status_col_idx = self.model.columnCount(QModelIndex()) - 1
         with self._model.activate_fast_mode():
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
-                modelIdx = self.model.createIndex(idx, statusColIdx)
-                p, row_type, name = _row_predicate(row, aliases, self._model.blueprint)
+                model_idx = self.model.createIndex(idx, status_col_idx)
+                row_type, name, p = _row_predicate(row, aliases, self._model.blueprint)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
@@ -574,7 +603,7 @@ class MTSignalConfigurator(QWidget):
                                 conflict_row_ids.append(alias_idx)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
-                        self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                        self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
                 else:
@@ -591,7 +620,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                             elif idx not in graph[alias_idx]:
                                 graph[idx].append(aliases.index(k))
@@ -600,7 +629,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                         except ValueError:
                             continue
@@ -691,7 +720,7 @@ def main():
 
 def show_msg(message):
     box = QMessageBox()
-    box.setIcon(QMessageBox.Critical)
+    box.setIcon(QMessageBox.Icon.Critical)
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
