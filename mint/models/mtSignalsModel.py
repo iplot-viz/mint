@@ -414,41 +414,45 @@ class MTSignalsModel(QAbstractItemModel):
                 if v.get('override'):
                     if column_name == 'PulseId':
                         value = get_value(inp, column_name, type_func)
-                        correct = True
                         override_global = value is not None
                         if override_global:
-                            # Check if pulses are correct
-                            for pulse in value:
-                                if not AppDataAccess.da.get_pulse_list(data_source_name=inp['DS'], pattern=pulse):
-                                    correct = False
+                            plus_pattern = re.compile(r"\+\((.*)\)")
+                            minus_pattern = re.compile(r"-\((.*)\)")
+
+                            # Lists to store the elements corresponding to every pattern
+                            elements = [[], [], []]
+
+                            # Iterate over the list and classify the elements
+                            for element in value:
+                                match_plus = plus_pattern.match(element)
+                                match_minus = minus_pattern.match(element)
+                                if match_plus:
+                                    pulse = match_plus.group(1)
+                                    idx = 0
+                                elif match_minus:
+                                    pulse = match_minus.group(1)
+                                    idx = 1
+                                else:
+                                    pulse = element
+                                    idx = 2
+
+                                # Check each pulse
+                                if AppDataAccess.da.get_pulse_list(data_source_name=inp['DS'], pattern=pulse):
+                                    elements[idx].append(pulse)
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
                                     break
-                            if correct:
-                                fls[column_name] = 0
-                                plus_pattern = re.compile(r"\+\((.*)\)")
-                                minus_pattern = re.compile(r"-\((.*)\)")
 
-                                # Lists to store the elements corresponding to every pattern
-                                elements = [[], [], []]
+                            if len(elements[2]) == 0:
+                                # Remove pulses from global
+                                value = [i for i in default_value if i not in elements[1]]
+                                # Add pulses from global
+                                value.extend([i for i in elements[0] if i not in default_value])
+                                # If there are no pulses set default list
+                                if len(value) == 0:
+                                    value = ['']
 
-                                # Iterate over the list and classify the elements
-                                for element in value:
-                                    match_plus = plus_pattern.match(element)
-                                    match_minus = minus_pattern.match(element)
-                                    if match_plus:
-                                        elements[0].append(match_plus.group(1))
-                                    elif match_minus:
-                                        elements[1].append(match_minus.group(1))
-                                    else:
-                                        elements[2].append(element)
-
-                                if len(elements[2]) == 0:
-                                    # Remove pulses from global
-                                    value = [i for i in default_value if i not in elements[1]]
-                                    # Add pulses from global
-                                    value.extend([i for i in elements[0] if i not in default_value])
-                            else:
-                                # Pulse invalid
-                                fls[column_name] = 1
                         else:
                             value = default_value
                             fls[column_name] = 0
