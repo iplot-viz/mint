@@ -463,7 +463,7 @@ class MTSignalsModel(QAbstractItemModel):
                         value = get_value(inp, column_name, type_func)
 
                         # None value and not pulses
-                        if not value and not out['PulseId']:
+                        if value is None and not out['PulseId']:
                             # Check if None is caused by empty cell or invalid cell
                             if inp[column_name] == '':
                                 fls[column_name] = 0
@@ -472,7 +472,7 @@ class MTSignalsModel(QAbstractItemModel):
                             value = default_value
 
                         # None value but there are pulses
-                        elif not value and out['PulseId']:
+                        elif value is None and out['PulseId']:
                             if inp[column_name] == '':
                                 fls[column_name] = 0
                             else:
@@ -482,7 +482,7 @@ class MTSignalsModel(QAbstractItemModel):
                             # In case of EndTime keep None
 
                         # There is a value but not pulses
-                        elif value and not out['PulseId']:
+                        elif value is not None and not out['PulseId']:
                             is_date |= bool(value > (1 << 53))
                             if is_date:
                                 # Keep value
@@ -492,7 +492,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 1
 
                         # There is a value and pulses
-                        elif value and out['PulseId']:
+                        elif value is not None and out['PulseId']:
                             is_date |= bool(value > (1 << 53))
                             if is_date:
                                 if column_name == 'StartTime':
