@@ -4,9 +4,25 @@
 
 from PySide6.QtGui import QRegularExpressionValidator, QFontMetrics
 from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy
-from PySide6.QtCore import Qt, QRegularExpression
+from PySide6.QtCore import Qt, QRegularExpression, Signal
 
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+
+
+class CustomQLineEdit(QLineEdit):
+    # Reimplements the editingFinished signal to handle the special case.
+    editingFinished = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Connect the loss of focus event to the customEditingFinished method.
+        self.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        # Detect the loss of focus event and if it is on this QLineEdit
+        if event.type() == event.Type.FocusOut and obj is self:
+            self.editingFinished.emit()
+        return super().eventFilter(obj, event)
 
 
 class MTAbsoluteTime(MTGenericAccessMode):
@@ -30,13 +46,13 @@ class MTAbsoluteTime(MTGenericAccessMode):
         regex = QRegularExpression("[0-9]{1,9}")  # Regular expression for 0 to 9 digits
         regex_validator = QRegularExpressionValidator(regex, self)
 
-        self.fromTimeNs = QLineEdit(parent=self.form)
+        self.fromTimeNs = CustomQLineEdit(parent=self.form)
         self.fromTimeNs.setFixedWidth(11 * QFontMetrics(self.fromTimeNs.font()).horizontalAdvance("0"))
         self.fromTimeNs.setValidator(regex_validator)
         self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         self.fromTimeNs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
-        self.toTimeNs = QLineEdit(parent=self.form)
+        self.toTimeNs = CustomQLineEdit(parent=self.form)
         self.toTimeNs.setFixedWidth(11 * QFontMetrics(self.toTimeNs.font()).horizontalAdvance("0"))
         self.toTimeNs.setValidator(regex_validator)
         self.toTimeNs.editingFinished.connect(self.handle_time_validation)
@@ -76,16 +92,27 @@ class MTAbsoluteTime(MTGenericAccessMode):
 
     def properties(self):
         return {
-            "ts_start": self.model.stringList()[0].split(".")[0] + "." + self.model.stringList()[2],
-            "ts_end": self.model.stringList()[1].split(".")[0] + "." + self.model.stringList()[3]
+            "ts_start": self.model.stringList()[0].split(".")[0],
+            "ts_end": self.model.stringList()[1].split(".")[0],
+            "ts_ns_start": self.model.stringList()[2],
+            "ts_ns_end": self.model.stringList()[3]
         }
 
     def from_dict(self, contents: dict):
-        self.mapper.model().setStringList([contents.get("ts_start"), contents.get("ts_end")])
+        self.mapper.model().setStringList([contents.get("ts_start"),
+                                           contents.get("ts_end"),
+                                           contents.get("ts_ns_start", "000000000"),
+                                           contents.get("ts_ns_end", "000000000")])
         super().from_dict(contents)
 
     def handle_time_validation(self):
         if self.sender() == self.fromTimeNs:
+            self.fromTimeNs.editingFinished.disconnect()
             self.fromTimeNs.setText(self.fromTimeNs.text().ljust(9, '0'))
+            self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         elif self.sender() == self.toTimeNs:
             self.toTimeNs.setText(self.toTimeNs.text().ljust(9, '0'))
+        self.mapper.model().setStringList([self.fromTime.text(),
+                                           self.toTime.text(),
+                                           self.fromTimeNs.text(),
+                                           self.toTimeNs.text()])
