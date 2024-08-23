@@ -534,7 +534,9 @@ class MTSignalsModel(QAbstractItemModel):
                             if value != '':
                                 if not fls['DS']:
                                     # Check variable or expression with variable
-                                    if AppDataAccess.da.get_var_list(data_source_name=inp['DS'], pattern=value):
+                                    # Check necessary to obtain the valid name of each variable
+                                    variable_name = value.split('/')[0]
+                                    if AppDataAccess.da.get_var_list(data_source_name=inp['DS'], pattern=variable_name):
                                         # Correct variable
                                         fls[column_name] = 0
                                     elif value.find(Parser.marker_in) != -1 or value.find(Parser.marker_out) != -1:
@@ -544,8 +546,9 @@ class MTSignalsModel(QAbstractItemModel):
                                             if p.is_valid:
                                                 variable = p.get_var_expression(value)
                                                 for var in variable:
+                                                    variable_name = var.split('/')[0]
                                                     if not AppDataAccess.da.get_var_list(data_source_name=inp['DS'],
-                                                                                         pattern=var):
+                                                                                         pattern=variable_name):
                                                         correct = False
                                                         break
                                                 if correct:
