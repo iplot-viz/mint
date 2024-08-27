@@ -20,6 +20,7 @@ from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
+from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
@@ -129,7 +130,11 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
 
     alias_valid = is_non_empty_string(alias)
 
-    p = Parser().set_expression(name)
+    try:
+        p = Parser().set_expression(name)
+    except InvalidExpression:
+        p = Parser().set_expression("")
+
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
@@ -580,10 +585,6 @@ class MTSignalConfigurator(QWidget):
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
-        if len(duplicates):
-            invalid_rows = [aliases.index(dup) + 1 for dup in duplicates]
-            self._abort_build(f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-
         error_msgs = []
         graph = defaultdict(list)
         status_col_idx = self.model.columnCount(QModelIndex()) - 1
@@ -647,6 +648,8 @@ class MTSignalConfigurator(QWidget):
                 self.set_progress(int(i * 100 / num_keys))
                 yield from self._traverse(graph, k)
 
+        self._model.layoutChanged.emit()
+        self._model.aliases = []
         self.set_progress(100)
         self.ready.emit()
         self.end_build()

@@ -558,7 +558,23 @@ class MTMainWindow(IplotQtMainWindow):
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            else:
+                # In the case of streaming, only simple variables are kept
+                conditions = (
+                    ts != signal.ts_start,
+                    te != signal.ts_end,
+                    signal.envelope != "",
+                    signal.x_expr != '${self}.time',
+                    signal.y_expr != '${self}.data_store[1]',
+                    signal.z_expr != '${self}.data_store[2]'
+                )
+                if any(conditions):
+                    signal.stream_valid = False
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            # Set end time to avoid None values for EndTime in case of pulses
+            if plan[waypt.col_num][waypt.row_num][3][1] is None:
+                plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
+
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))
         # new_plan = {}
@@ -609,37 +625,54 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
-                    if not canvas.streaming:
-                        signal_x_is_date = False
-                        for stack, signals in rows[row + 1][2].items():
-                            for signal in signals:
-                                try:
-                                    x_data = signal.get_data()[0]
-                                    signal_x_is_date |= bool(min(x_data) > (1 << 53))
-                                except (IndexError, ValueError) as _:
-                                    signal_x_is_date = True
-                    else:
-                        signal_x_is_date = True
-
-                    y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
-
-                    x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
-                                        window=x_axis_window)
                     x_axis_transformed = False
                     for signals in rows[row + 1][2].values():
                         for signal in signals:
                             if signal.x_expr != '${self}.time':
                                 x_axis_transformed = True
                                 break
-                    if (x_axis_date and signal_x_is_date and rows[row + 1][3][0] is not None and
-                            rows[row + 1][3][1] is not None and not x_axis_transformed):
+
+                    if not canvas.streaming:
+                        signal_x_is_date = False
+                        for stack, signals in rows[row + 1][2].items():
+                            for signal in signals:
+                                try:
+                                    x_data = signal.get_data()[0]
+                                    if x_axis_transformed:
+                                        if len(x_data) > 0:
+                                            signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                    else:
+                                        if rows[row + 1][3][0] is not None:
+                                            signal_x_is_date |= bool(rows[row + 1][3][0] > (1 << 53))
+                                except (IndexError, ValueError) as _:
+                                    signal_x_is_date = False
+                    else:
+                        signal_x_is_date = True
+
+                    y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row + 1][2].items()))]
+
+                    x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
+                                        window=x_axis_window)
+
+                    # In case of processed signals, the limits are not set until the drawn_fn occurs
+                    # In the other hand, for no processed signals and for pulses the limits are set as follows:
+                    if not x_axis_transformed:
+                        x_axis.original_begin = rows[row + 1][3][0]
+                        x_axis.original_end = rows[row + 1][3][1]
                         x_axis.begin = rows[row + 1][3][0]
                         x_axis.end = rows[row + 1][3][1]
 
                     plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
                         for signal in signals:
-                            plot.add_signal(signal, stack=stack)
+                            if signal.stream_valid:
+                                plot.add_signal(signal, stack=stack)
+
+                    # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
+                    # is not added to the Canvas and None is added instead.
+                    if canvas.streaming and not plot.signals:
+                        plot = None
+
                 self.canvas.add_plot(plot, col=colnum - 1)
 
     def on_timeout(self):
