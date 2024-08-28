@@ -30,6 +30,7 @@ from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
+from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
