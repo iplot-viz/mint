@@ -1,0 +1,4 @@
+graft mint
+recursive-exclude * *.py[co]
+include versioneer.py
+include mint/_version.py

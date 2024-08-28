@@ -13,11 +13,16 @@ import re
 import uuid
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtGui import QBrush, QColor
 
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result
+from iplotProcessing.common import InvalidExpression
+from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, ParserHelper
+from iplotProcessing.tools import Parser
 
 from mint.models.utils import mtBlueprintParser as mtBP
 from mint.tools.table_parser import get_value
+
+from iplotDataAccess.appDataAccess import AppDataAccess
 
 import iplotLogging.setupLogger as setupLog
 
@@ -43,10 +48,7 @@ class Waypoint:
         return f"c:{self.col_num}|r:{self.row_num}|sn:{self.stack_num}|si:{self.signal_stack_id}"
 
 
-exp_stack = re.compile(r'(\d+)'
-                       r'(?:[.](\d+))?'
-                       r'(?:[.](\d+))?'
-                       r'$')
+exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -58,16 +60,22 @@ class MTSignalsModel(QAbstractItemModel):
 
         super().__init__(parent)
 
+        self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
 
         self._blueprint = blueprint
-        self._fast_mode = False  # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+
+        # When true, do not emit `dataChanged` in `setData`. That signal brings `setData` to its knees.
+        self._fast_mode = False
         mtBP.parse_raw_blueprint(self._blueprint)
 
         self._table = pd.DataFrame(columns=column_names)
+        self._table_fails = pd.DataFrame(columns=column_names)
         self._signal_class = signal_class
-        self._signal_stack_ids = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(int)))
+        self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+
+        self.data_sources = AppDataAccess.da.get_connected_data_sources()
+        self.aliases = []
 
     @property
     def blueprint(self) -> dict:
@@ -79,10 +87,10 @@ class MTSignalsModel(QAbstractItemModel):
     def parent(self, child: QModelIndex) -> QModelIndex:
         return QModelIndex()
 
-    def rowCount(self, parent: QModelIndex):
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.index.size
 
-    def columnCount(self, parent: QModelIndex):
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
@@ -90,9 +98,20 @@ class MTSignalsModel(QAbstractItemModel):
             value = self._table.iloc[index.row()][index.column()]
             if role == Qt.DisplayRole or role == Qt.EditRole:
                 return value
+            if role == Qt.BackgroundRole:
+                fail_value = self._table_fails.iloc[index.row(), index.column()]
+                # Value 0 corresponds to a correct cell.
+                # Value 1 corresponds to a main error.
+                # Value 2 corresponds to a secondary error resulting from a main error.
+                if fail_value == 0:
+                    return QBrush(QColor('white'))
+                elif fail_value == 1:
+                    return QBrush(QColor('red'))
+                else:
+                    return QBrush(QColor('orange'))
         return None
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int):
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             try:
                 return self._table.columns[section]
@@ -106,10 +125,6 @@ class MTSignalsModel(QAbstractItemModel):
             yield None
         finally:
             self._fast_mode = False
-
-    def _check_resize(self, row: int):
-        if row >= self._table.index.size - 1:
-            self.insertRows(row + 1, 1, QModelIndex())
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
         if not index.isValid():
@@ -125,7 +140,8 @@ class MTSignalsModel(QAbstractItemModel):
                 # replaces " with ' if value has , in it.
                 value = value.replace('"', "'")
 
-        self._check_resize(row)
+        if row + 1 >= self._table.index.size:
+            self.insertRows(row + 1, 1, QModelIndex())
         self._table.iloc[row, column] = value
 
         if not self._fast_mode:
@@ -143,16 +159,22 @@ class MTSignalsModel(QAbstractItemModel):
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
 
-        for _ in range(count):
+        for new_row in range(row, row + count):
             # Create empty row
             data = [["" for _ in range(self._table.columns.size)]]
+            data_fails = [[0 for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
+            empty_row_fails = pd.DataFrame(data=data_fails, columns=self._table.columns)
             # Set default Datasource
-            empty_row.loc[0, mtBP.get_column_name(
-                self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get('default')
+            empty_row.loc[0, mtBP.get_column_name(self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get(
+                'default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
-            self._table = self._table.append(empty_row).reset_index(drop=True)
+            self._table = pd.concat([self._table.iloc[:new_row], empty_row, self._table.iloc[new_row:]]).reset_index(
+                drop=True)
+            self._table_fails = pd.concat(
+                [self._table_fails.iloc[:new_row], empty_row_fails, self._table_fails.iloc[new_row:]]).reset_index(
+                drop=True)
         self.layoutChanged.emit()
 
         self.endInsertRows()
@@ -164,6 +186,7 @@ class MTSignalsModel(QAbstractItemModel):
 
         try:
             self._table = self._table.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
+            self._table_fails = self._table_fails.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
             self.layoutChanged.emit()
             success = True
         except KeyError:
@@ -174,7 +197,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-1].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-3].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -193,13 +216,12 @@ class MTSignalsModel(QAbstractItemModel):
             if df_column_name not in columns:
                 if df_column_name == self.ROWUID_COLNAME:
                     # Generate missing UID
-                    df.insert(df.columns.size, self.ROWUID_COLNAME,
-                              [str(uuid.uuid4()) for _ in range(df.index.size)])
+                    df.insert(df.columns.size, self.ROWUID_COLNAME, [str(uuid.uuid4()) for _ in range(df.index.size)])
                 else:
                     logger.warning(f"{df_column_name} is not a valid column name.")
                     if df_column_name in self._blueprint.keys():
-                        df.rename({df_column_name: mtBP.get_column_name(
-                            self._blueprint, df_column_name)}, axis=1, inplace=True)
+                        df.rename({df_column_name: mtBP.get_column_name(self._blueprint, df_column_name)}, axis=1,
+                                  inplace=True)
                     elif df_column_name.lower() in columns:
                         df.rename({df_column_name: df_column_name.lower()}, axis=1, inplace=True)
                     elif df_column_name.upper() in columns:
@@ -212,7 +234,7 @@ class MTSignalsModel(QAbstractItemModel):
         return df
 
     def set_dataframe(self, df: pd.DataFrame):
-        oldSz = self.rowCount(None)
+        oldSz = self.rowCount()
         self.removeRows(0, oldSz)
         newSz = df.index.size
         self.insertRows(0, newSz)
@@ -238,12 +260,24 @@ class MTSignalsModel(QAbstractItemModel):
                 continue
 
     def append_dataframe(self, df: pd.DataFrame):
+        if df.empty:
+            return
         df = self.accommodate(df)
         df['uid'] = [str(uuid.uuid4()) for _ in range(len(df.index))]
-        if len(self._table.columns[(self._table.iloc[[-1]] != '').all()]) < 3:
-            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
-        else:
+
+        # Create False for fails table
+        df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
+
+        # Check if last row is empty
+        if self._table.empty or self._table.iloc[-1:, 1:-3].any(axis=1).bool():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
+            self.insertRows(len(self._table), 1, QModelIndex())
+            self._table_fails = pd.concat([self._table_fails, df_fails], ignore_index=True)
+            self.insertRows(len(self._table_fails), 1, QModelIndex())
+        else:
+            self._table = pd.concat([self._table[:-1], df, self._table[-1:]], ignore_index=True).fillna('')
+            self._table_fails = pd.concat([self._table_fails[:-1], df_fails, self._table_fails[-1:]],
+                                          ignore_index=True)
 
         self.layoutChanged.emit()
 
@@ -267,8 +301,7 @@ class MTSignalsModel(QAbstractItemModel):
         column_names = list(mtBP.get_column_names(self.blueprint))
         self._entity_attribs = list(mtBP.get_code_names(self.blueprint))
         if input_dict.get('table'):
-            df = pd.DataFrame(input_dict.get('table'),
-                              dtype=str, columns=column_names)
+            df = pd.DataFrame(input_dict.get('table'), dtype=str, columns=column_names)
         elif input_dict.get('variables_table'):  # old style.
             df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
             df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)
@@ -306,12 +339,14 @@ class MTSignalsModel(QAbstractItemModel):
     def create_signals(self, row_idx: int) -> typing.Iterator[Waypoint]:
         signal_params = dict()
 
-        for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx])):
-            signal_params.update(
-                mtBP.construct_params_from_series(self.blueprint, parsed_row))
+        for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx])):
+            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
             if i == 0:  # grab these from the first row we encounter.
-                stack_val = signal_params.get('stack_val')
+                if any(parsed_row[1] > 0):  # Do not draw Plots containing errors
+                    stack_val = ''
+                else:
+                    stack_val = signal_params.get('stack_val')
                 stack_m = exp_stack.match(stack_val)
 
                 if stack_m:
@@ -353,53 +388,280 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 
-    def _parse_series(self, inp: pd.Series) -> typing.Iterator[pd.Series]:
+    def _parse_series(self, inp: pd.Series, fls: pd.Series) -> typing.Iterator[pd.Series]:
+        with self.activate_fast_mode():
+            out = dict()
+            override_global = False
 
-        out = dict()
-        override_global = False
+            for k, v in self._blueprint.items():
+                if k.startswith('$'):
+                    continue
 
-        for k, v in self._blueprint.items():
-            if k.startswith('$'):
-                continue
+                column_name = mtBP.get_column_name(self._blueprint, k)
+                default_value = v.get('default')
+                if not default_value:
+                    if column_name == 'uid':
+                        default_value = str(uuid.uuid4())
+                    elif default_value is None:
+                        default_value = ""
+                out.update({column_name: default_value})
 
-            column_name = mtBP.get_column_name(self._blueprint, k)
-            default_value = v.get('default')
-            if not default_value:
-                if column_name == 'uid':
-                    default_value = str(uuid.uuid4())
-                elif default_value is None:
-                    default_value = ""
-            out.update({column_name: default_value})
+                type_func = v.get('type')
+                if not callable(type_func):
+                    continue
 
-            type_func = v.get('type')
-            if not callable(type_func):
-                continue
+                # Override global values with locals for fields with 'override' attribute
+                if v.get('override'):
+                    if column_name == 'PulseId':
+                        value = get_value(inp, column_name, type_func)
+                        override_global = value is not None
+                        if override_global:
+                            plus_pattern = re.compile(r"\+\((.*)\)")
+                            minus_pattern = re.compile(r"-\((.*)\)")
 
-            # Override global values with locals for fields with 'override' attribute
-            if v.get('override'):
-                override_global |= (
-                        get_value(inp, column_name, type_func) is not None)
-                if override_global:
-                    value = get_value(inp, column_name, type_func)
+                            # Lists to store the elements corresponding to every pattern
+                            elements = [[], [], []]
+
+                            # Iterate over the list and classify the elements
+                            for element in value:
+                                match_plus = plus_pattern.match(element)
+                                match_minus = minus_pattern.match(element)
+                                if match_plus:
+                                    pulse = match_plus.group(1)
+                                    idx = 0
+                                elif match_minus:
+                                    pulse = match_minus.group(1)
+                                    idx = 1
+                                else:
+                                    pulse = element
+                                    idx = 2
+
+                                # Check each pulse
+                                if AppDataAccess.da.get_pulse_list(data_source_name=inp['DS'], pattern=pulse):
+                                    elements[idx].append(pulse)
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
+                                    break
+
+                            if len(elements[2]) == 0:
+                                # Remove pulses from global
+                                value = [i for i in default_value if i not in elements[1]]
+                                # Add pulses from global
+                                value.extend([i for i in elements[0] if i not in default_value])
+                                # If there are no pulses set default list
+                                if len(value) == 0:
+                                    value = ['']
+
+                        else:
+                            value = default_value
+                            fls[column_name] = 0
+
+                    else:
+                        # Dates case
+                        is_date = False
+                        value = get_value(inp, column_name, type_func)
+
+                        # None value and not pulses
+                        if value is None and not out['PulseId']:
+                            # Check if None is caused by empty cell or invalid cell
+                            if inp[column_name] == '':
+                                fls[column_name] = 0
+                            else:
+                                fls[column_name] = 1
+                            value = default_value
+
+                        # None value but there are pulses
+                        elif value is None and out['PulseId']:
+                            if inp[column_name] == '':
+                                fls[column_name] = 0
+                            else:
+                                fls[column_name] = 1
+                            if column_name == 'StartTime':
+                                value = 0
+                            # In case of EndTime keep None
+
+                        # There is a value but not pulses
+                        elif value is not None and not out['PulseId']:
+                            is_date |= bool(value > (1 << 53))
+                            if is_date:
+                                # Keep value
+                                fls[column_name] = 0
+                            else:
+                                value = default_value
+                                fls[column_name] = 1
+
+                        # There is a value and pulses
+                        elif value is not None and out['PulseId']:
+                            is_date |= bool(value > (1 << 53))
+                            if is_date:
+                                if column_name == 'StartTime':
+                                    value = 0
+                                else:
+                                    value = None
+                                fls[column_name] = 1
+                            else:
+                                # keep value
+                                fls[column_name] = 0
+
+                        # Check chronology of dates
+                        if column_name == 'EndTime' and value:
+                            # Check if there are no errors in the cells corresponding to the dates
+                            if value <= out['StartTime'] or fls['StartTime'] == 1 or fls[column_name] == 1:
+                                fls[column_name] = 1
+                                fls['StartTime'] = 1
+                            else:
+                                fls[column_name] = 0
+                                fls['StartTime'] = 0
                 else:
-                    value = default_value
+                    if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
+                        value = get_value(inp, column_name, type_func)
+                        if value == '':
+                            fls[column_name] = 1
+                        else:
+                            if value in self.data_sources:
+                                fls[column_name] = 0
+                            else:
+                                fls[column_name] = 1
+                    else:
+                        value = get_value(inp, column_name, type_func) or default_value
+
+                        # Checks of the different cases
+                        p = Parser()
+
+                        # Variable
+                        if column_name == 'Variable':
+                            if value != '':
+                                if not fls['DS']:
+                                    # Check variable or expression with variable
+                                    # Check necessary to obtain the valid name of each variable
+                                    variable_name = value.split('/')[0]
+                                    if AppDataAccess.da.get_var_list(data_source_name=inp['DS'], pattern=variable_name):
+                                        # Correct variable
+                                        fls[column_name] = 0
+                                    elif value.find(Parser.marker_in) != -1 or value.find(Parser.marker_out) != -1:
+                                        correct = True
+                                        try:
+                                            p.set_expression(value)
+                                            if p.is_valid:
+                                                variable = p.get_var_expression(value)
+                                                for var in variable:
+                                                    variable_name = var.split('/')[0]
+                                                    if not AppDataAccess.da.get_var_list(data_source_name=inp['DS'],
+                                                                                         pattern=variable_name):
+                                                        correct = False
+                                                        break
+                                                if correct:
+                                                    fls[column_name] = 0
+                                                else:
+                                                    fls[column_name] = 1
+                                            else:
+                                                fls[column_name] = 1
+                                        except InvalidExpression:
+                                            fls[column_name] = 1
+                                    else:
+                                        # Incorrect variable
+                                        fls[column_name] = 1
+                                else:
+                                    fls[column_name] = 1  # Variable with incorrect DataSource
+                            else:
+                                fls[column_name] = 0
+
+                        # Stack
+                        elif column_name == 'Stack':
+                            if value == '':
+                                fls[column_name] = 0
+                            else:
+                                if exp_stack.match(value):
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
+
+                        # Row Span - Col Span
+                        elif column_name == 'Row span' or column_name == 'Col span':
+                            if value <= 0:
+                                fls[column_name] = 1
+                                value = 1
+                            elif value == 1:
+                                if inp[column_name] == '1' or inp[column_name] == '':
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
+                            elif value > 10:
+                                fls[column_name] = 1
+                                value = 1
+                            else:
+                                # Keep value
+                                fls[column_name] = 0
+
+                        # Envelope
+                        elif column_name == 'Envelope':
+                            if value and inp[column_name] == '1':
+                                fls[column_name] = 0
+                            else:
+                                # In case of no envelope, just 0 or '' is considered valid
+                                if inp[column_name] == '0' or inp[column_name] == '':
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
+
+                        # Alias
+                        elif column_name == 'Alias':
+                            if value != '':
+                                if value not in self.aliases:
+                                    self.aliases.append(value)
+                                    fls[column_name] = 0
+                                else:
+                                    # Repeated alias
+                                    fls[column_name] = 1
+                            else:
+                                fls[column_name] = 0
+
+                        # X - Y - Z
+                        elif column_name == 'x' or column_name == 'y' or column_name == 'z':
+                            try:
+                                p.set_expression(value)
+                                if p.is_valid:
+                                    fls[column_name] = 0
+                                else:
+                                    fls[column_name] = 1
+                            except InvalidExpression:
+                                fls[column_name] = 1
+
+                        # Plot Type
+                        elif column_name == 'Plot type':
+                            if value != 'PlotXY':
+                                fls[column_name] = 1
+                            else:
+                                fls[column_name] = 0
+
+                out.update({column_name: value})
+
+            # Check dependencies
+            dependencies = ParserHelper.get_dependencies([inp['x'], inp['y'], inp['z']])
+            s = self._table['Alias']
+            for val in dependencies:
+                if val != out['Alias'] and val in s.values:  # Only variables that are defined with an alias
+                    index = s[s == val].index[0]
+                    # Search if there is an error in the corresponding row of the fails table
+                    if any(self._table_fails.loc[index].values > 0):
+                        for expr in ['x', 'y', 'z']:
+                            marker_in_pos = out[expr].find(Parser.marker_in)
+                            marker_out_pos = out[expr].find(Parser.marker_out)
+                            var = out[expr][marker_in_pos + len(Parser.marker_in):marker_out_pos]
+                            if var == val:
+                                fls[expr] = 2  # Secondary error
+
+            for k, v in out.items():
+                if isinstance(v, list) and len(v) > 0:
+                    for member in v:
+                        serie = out.copy()
+                        serie.update({k: member})
+                        # Checks if there is more than one pulseId to change de uid of the signal
+                        if "uid" in out and len(v) > 1:
+                            # append pulse nb to uid to make it unique
+                            serie['uid'] = str(uuid.uuid5(uuid.UUID(serie['uid']), member))
+                        yield pd.Series(serie), fls
+                    break
             else:
-                if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
-                    value = get_value(inp, column_name, type_func)
-                else:
-                    value = get_value(inp, column_name, type_func) or default_value
-
-            out.update({column_name: value})
-
-        for k, v in out.items():
-            if isinstance(v, list) and len(v) > 0:
-                for member in v:
-                    serie = out.copy()
-                    serie.update({k: member})
-                    if "uid" in out:
-                        # append pulse nb to uid to make it unique
-                        serie['uid'] = str(uuid.uuid5(uuid.UUID(serie['uid']), member))
-                    yield pd.Series(serie)
-                break
-        else:
-            yield pd.Series(out)
+                yield pd.Series(out), fls

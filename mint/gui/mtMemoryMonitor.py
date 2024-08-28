@@ -17,10 +17,10 @@ class MTMemoryMonitor(QLabel):
 
     def update(self):
         try:
-            value = self.getValueAsMbytes()
+            value = self.get_value_as_mbytes()
             self.setText("{:.1f} MB".format(value))
         except (KeyboardInterrupt, Exception) as _:
             self._timer.stop()
 
-    def getValueAsMbytes(self):
+    def get_value_as_mbytes(self):
         return self._process.memory_info().rss / (1024.0 ** 2)

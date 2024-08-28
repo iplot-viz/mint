@@ -1,5 +1,0 @@
-DS,Variable,Stack,Row span,Col span,Envelope,Alias
-imasuda,summary/heating_current_drive/ec[0]/power/value,1.1.1,,,,$P_{EC}$
-imasuda,summary/heating_current_drive/ic[0]/power/value,1.1.2,,,,$P_{IC}$
-imasuda,summary/heating_current_drive/nbi[0]/power/value,1.1.3,,,,$P_{NBI}$
-imasuda,summary/fusion/power/value,1.1.4,,,,$P_{FUS}$
