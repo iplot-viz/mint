@@ -4,51 +4,42 @@
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
+from iplotDataAccess.dataAccess import DataAccess
+from unittest.mock import patch
 
 test_table_1 = {
     "table": [
-        ["ds", "Signal:A", "1.1", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:B", "1.2", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:C", "2.1", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:D", "2.2", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:E", "3.1", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:F", "3.2", "", "", "",
-         "", "", "", "", "", "", "", "", "", ""]]
+        ["codacuda", "Signal:A", "1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:B", "1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:C", "2.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:D", "2.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:E", "3.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:F", "3.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
 }
 
 test_table_2 = {
     "table": [
-        ["ds", "Signal:A", "1.1.1", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:B", "1.1.2", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:C", "2.1.1", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:D", "2.1.2", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:E", "3.1.1", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:F", "3.1.2", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:G", "4.1", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""],
-        ["ds", "Signal:H", "4.1", "", "",
-         "", "", "", "", "", "", "", "", "", "", ""]]
+        ["codacuda", "Signal:A", "1.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:B", "1.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:C", "2.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:D", "2.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:E", "3.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:F", "3.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:G", "4.1",   "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:H", "4.1",   "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
 }
 
 
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     def setUp(self) -> None:
         super().setUp()
-        AppDataAccess.initialize()
+        if not AppDataAccess.initialize():
+            return
         self.sigCfgWidget = MTSignalConfigurator()
 
-    def test_create_simple(self) -> None:
+    @patch.object(DataAccess, 'get_var_list')
+    def test_create_simple(self, mock_get_var_list) -> None:
+        mock_get_var_list.return_value = ["correct_values"]
         self.sigCfgWidget.import_dict(test_table_1)
         path = list(self.sigCfgWidget.build())
 
