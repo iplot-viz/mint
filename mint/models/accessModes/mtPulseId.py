@@ -1,11 +1,10 @@
 # Description: Implements a data access mode with pulse id's.
 # Author: Jaswant Sai Panchumarti
 
-from PySide6.QtWidgets import QComboBox, QLabel, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout, QFormLayout
+from PySide6.QtWidgets import QComboBox, QLabel, QLineEdit
 from PySide6.QtCore import QStringListModel, Qt
 from PySide6.QtGui import QDoubleValidator
 
-from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
@@ -30,15 +29,13 @@ class MTPulseId(MTGenericAccessMode):
     def __init__(self, mappings: dict, parent=None):
         super().__init__(parent)
 
-        self.options = [(1, "Second(s)"), (60, "Minute(s)"), (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
+        self.options = [(1, "Second(s)"), (60, "Minute(s)"),                        (60 * 60, "Hour(s)"), (24 * 60 * 60, "Day(s)")]
 
         self.values = QStringListModel(self.form)
         self.values.setStringList([e[1] for e in self.options])
-        self.mode = MTGenericAccessMode.PULSE_NUMBER
 
+        self.mode = MTGenericAccessMode.PULSE_NUMBER
         self.pulseNumber = QLineEdit(parent=self.form)
-        self.searchPulses = QPushButton("Search", parent=self.form)
-        self.searchPulses.clicked.connect(self.on_search_pulse)
 
         self.units = QComboBox(parent=self.form)
         self.units.setModel(self.values)
@@ -48,7 +45,6 @@ class MTPulseId(MTGenericAccessMode):
 
         self.endTime = QLineEdit(parent=self.form)
         self.endTime.setValidator(MyValidator())
-
         self.mapper.setOrientation(Qt.Vertical)
         if mappings.get('mode') == self.mode and mappings.get('value'):
             map_as_list = mappings.get('value')
@@ -63,18 +59,10 @@ class MTPulseId(MTGenericAccessMode):
         self.mapper.addMapping(self.endTime, 3)
         self.mapper.toFirst()
 
-        # Layouts
-        pulses_layout = QHBoxLayout()
-        pulses_layout.addWidget(self.pulseNumber)
-        pulses_layout.addWidget(self.searchPulses)
-
-        self.form.layout().addRow(QLabel("Pulse Id or URI", parent=self.form), pulses_layout)
+        self.form.layout().addRow(QLabel("Pulse Id", parent=self.form), self.pulseNumber)
         self.form.layout().addRow(self.units)
         self.form.layout().addRow(QLabel("Start time", parent=self.form), self.startTime)
         self.form.layout().addRow(QLabel("End time", parent=self.form), self.endTime)
-
-        self.selectPulseDialog = PulseBrowser()
-        self.selectPulseDialog.srch_finish.connect(self.append_pulse)
 
     def properties(self):
         return {
@@ -92,21 +80,3 @@ class MTPulseId(MTGenericAccessMode):
              contents.get("t_end") or '']
         )
         super().from_dict(contents)
-
-    def on_search_pulse(self):
-        self.selectPulseDialog.flag = "button"
-        self.selectPulseDialog.show()
-        self.selectPulseDialog.activateWindow()
-
-    def append_pulse(self, pulses):
-        cur_pulses = self.pulseNumber.text()
-        pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
-
-        # Check that the pulse is not already added
-        for pulse in pulses:
-            pulse_set.add(pulse)
-
-        final_pulses = ", ".join(pulse_set)
-
-        self.pulseNumber.setText(final_pulses)
-        self.pulseNumber.setFocus()
