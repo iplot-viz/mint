@@ -1,12 +1,10 @@
 # Description: Small code snippets to test the code that creates signals from the table.
 # Author: Jaswant Sai Panchumarti
-from iplotDataAccess import udaAccess
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotDataAccess.dataAccess import DataAccess
-from unittest.mock import patch
-from uda_client_reader import uda_client_reader_python
+from unittest.mock import patch, PropertyMock
 
 test_table_1 = {
     "table": [
@@ -32,12 +30,13 @@ test_table_2 = {
 
 
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
-    @patch("uda_client_reader.uda_client_reader_python.UdaClientReaderPython.isConnected")
+    @patch("iplotDataAccess.dataAccess.DataSource.connected", new_callable=PropertyMock)
     @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
-    def setUp(self, cbs_list, mock_connect) -> None:
+    def setUp(self, cbs_list, obj) -> None:
         super().setUp()
-        mock_connect.return_value = True
+        obj.return_value = True
         cbs_list.return_value = {"Variables"}
+
         if not AppDataAccess.initialize():
             return
         self.sigCfgWidget = MTSignalConfigurator()
