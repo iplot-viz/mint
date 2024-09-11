@@ -1,11 +1,12 @@
 # Description: Small code snippets to test the code that creates signals from the table.
 # Author: Jaswant Sai Panchumarti
-
+from iplotDataAccess import udaAccess
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotDataAccess.dataAccess import DataAccess
 from unittest.mock import patch
+from uda_client_reader import uda_client_reader_python
 
 test_table_1 = {
     "table": [
@@ -25,22 +26,26 @@ test_table_2 = {
         ["codacuda", "Signal:D", "2.1.2", "", "", "", "", "", "", "", "", "", "", "", "", ""],
         ["codacuda", "Signal:E", "3.1.1", "", "", "", "", "", "", "", "", "", "", "", "", ""],
         ["codacuda", "Signal:F", "3.1.2", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:G", "4.1",   "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:H", "4.1",   "", "", "", "", "", "", "", "", "", "", "", "", ""]]
+        ["codacuda", "Signal:G", "4.1", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+        ["codacuda", "Signal:H", "4.1", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
 }
 
 
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
-    def setUp(self) -> None:
+    @patch("uda_client_reader.uda_client_reader_python.UdaClientReaderPython.isConnected")
+    @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
+    def setUp(self, cbs_list, mock_connect) -> None:
         super().setUp()
+        mock_connect.return_value = True
+        cbs_list.return_value = {"Variables"}
         if not AppDataAccess.initialize():
             return
         self.sigCfgWidget = MTSignalConfigurator()
 
     @patch.object(DataAccess, 'get_var_list')
     def test_create_simple(self, mock_get_var_list) -> None:
-        mock_get_var_list.return_value = ["correct_values"]
         self.sigCfgWidget.import_dict(test_table_1)
+        mock_get_var_list.return_value = ["correct_values"]
         path = list(self.sigCfgWidget.build())
 
         self.assertEqual(len(path), 6)
