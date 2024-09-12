@@ -32,10 +32,15 @@ test_table_2 = {
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     @patch("iplotDataAccess.dataAccess.DataSource.connected", new_callable=PropertyMock)
     @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
-    def setUp(self, cbs_list, obj) -> None:
+    @patch("iplotDataAccess.dataAccess.DataAccess.get_var_fields")
+    @patch("iplotDataAccess.dataAccess.DataAccess.get_pulse_list")
+    @patch("iplotDataAccess.dataAccess.DataSource.connect")
+    def setUp(self, data_connect, pulse_list, var_fields, cbs_list, source_connected) -> None:
         super().setUp()
-        obj.return_value = True
-        cbs_list.return_value = {"Variables"}
+        source_connected.return_value = True
+        var_fields.return_value = {}
+        pulse_list.return_value = []
+        cbs_list.return_value = {}
 
         if not AppDataAccess.initialize():
             return
