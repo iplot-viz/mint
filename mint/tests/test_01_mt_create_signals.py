@@ -30,13 +30,18 @@ test_table_2 = {
 
 
 class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
+
+    def setUp(self) -> None:
+        super().setUp()
+
     @patch("iplotDataAccess.dataAccess.DataSource.connected", new_callable=PropertyMock)
     @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
     @patch("iplotDataAccess.dataAccess.DataAccess.get_var_fields")
     @patch("iplotDataAccess.dataAccess.DataAccess.get_pulse_list")
     @patch("iplotDataAccess.dataAccess.DataSource.connect")
-    def setUp(self, data_connect, pulse_list, var_fields, cbs_list, source_connected) -> None:
-        super().setUp()
+    @patch.object(DataAccess, 'get_var_list')
+    def test_create_simple(self, mock_get_var_list, data_connect, pulse_list, var_fields, cbs_list,
+                           source_connected) -> None:
         source_connected.return_value = True
         var_fields.return_value = {}
         pulse_list.return_value = []
@@ -45,9 +50,6 @@ class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
         if not AppDataAccess.initialize():
             return
         self.sigCfgWidget = MTSignalConfigurator()
-
-    @patch.object(DataAccess, 'get_var_list')
-    def test_create_simple(self, mock_get_var_list) -> None:
         self.sigCfgWidget.import_dict(test_table_1)
         mock_get_var_list.return_value = ["correct_values"]
         path = list(self.sigCfgWidget.build())
