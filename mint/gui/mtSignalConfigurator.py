@@ -219,6 +219,8 @@ class MTSignalConfigurator(QWidget):
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
 
+        self._processed = set()  # Set used to store the different rows processed
+
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
         shortcut2 = QShortcut(QKeySequence("Ctrl+V"), self)
@@ -664,17 +666,16 @@ class MTSignalConfigurator(QWidget):
         self.ready.emit()
         self.end_build()
 
-    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed=None) -> \
+    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int) -> \
             typing.Iterator[Waypoint]:
-        if processed is None:
-            processed = set()
+
         for idx in graph[row_idx]:
-            if idx in processed:
+            if idx in self._processed:
                 continue
             else:
-                yield from self._traverse(graph, idx, processed)
+                yield from self._traverse(graph, idx)
         else:
-            processed.add(row_idx)
+            self._processed.add(row_idx)
             yield from self._model.create_signals(row_idx)
 
     def begin_build(self):
