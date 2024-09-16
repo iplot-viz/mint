@@ -548,7 +548,8 @@ class MTSignalsModel(QAbstractItemModel):
                                                 for var in variable:
                                                     variable_name = var.split('/')[0]
                                                     if not AppDataAccess.da.get_var_list(data_source_name=inp['DS'],
-                                                                                         pattern=variable_name):
+                                                                                         pattern=variable_name) and \
+                                                            variable_name not in self.aliases:
                                                         correct = False
                                                         break
                                                 if correct:

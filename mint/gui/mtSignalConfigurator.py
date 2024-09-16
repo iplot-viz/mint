@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 import sys
 import typing
-from typing import List
+from typing import List, Tuple
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
@@ -124,7 +124,7 @@ class RowAliasType:
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[str, str, Parser]:
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
@@ -140,11 +140,11 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
-        return RowAliasType.Simple, name
+        return RowAliasType.Simple, name, p
     elif alias_valid and not raw_name:
-        return RowAliasType.Mixed, name
+        return RowAliasType.Mixed, name, p
     else:
-        return RowAliasType.NoAlias, name
+        return RowAliasType.NoAlias, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -218,6 +218,8 @@ class MTSignalConfigurator(QWidget):
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
+
+        self._processed = set()  # Set used to store the different rows processed
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
@@ -300,7 +302,7 @@ class MTSignalConfigurator(QWidget):
 
         for idx in selected_ids:
             new_idx = self._model.index(idx.row(), 7)
-            cur_pulses = self._model.data(new_idx, Qt.DisplayRole)
+            cur_pulses = self._model.data(new_idx, Qt.ItemDataRole.DisplayRole)
             pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
             # Check that the pulse is not already added
             for pulse in pulses:
@@ -347,7 +349,7 @@ class MTSignalConfigurator(QWidget):
                 right = max(right, idx.column())
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
-                self._model.setData(idx, text, Qt.EditRole)
+                self._model.setData(idx, text, Qt.ItemDataRole.EditRole)
             self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
@@ -392,7 +394,7 @@ class MTSignalConfigurator(QWidget):
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
                 with self._model.activate_fast_mode():
-                    self._model.setData(idx, value, Qt.EditRole)
+                    self._model.setData(idx, value, Qt.ItemDataRole.EditRole)
                 col += 1
             row += 1
 
@@ -407,7 +409,7 @@ class MTSignalConfigurator(QWidget):
         rows = set()
         columns = set()
         for idx in selected_ids:
-            value = self._model.data(idx, Qt.DisplayRole)
+            value = self._model.data(idx, Qt.ItemDataRole.DisplayRole)
             column = idx.column()
             row = idx.row()
             contents[row][column] = value
@@ -583,26 +585,16 @@ class MTSignalConfigurator(QWidget):
         # Initialize pre-requisites
         df = self._model.get_dataframe()
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
-        duplicates = set([a for a in aliases if aliases.count(a) > 1])
-        try:
-            duplicates.remove('')
-        except KeyError:
-            pass
+        duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
         error_msgs = []
         graph = defaultdict(list)
-        statusColIdx = self.model.columnCount(QModelIndex()) - 1
+        status_col_idx = self.model.columnCount(QModelIndex()) - 1
         with self._model.activate_fast_mode():
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
-                modelIdx = self.model.createIndex(idx, statusColIdx)
-                row_type, name = _row_predicate(
-                    row, aliases, self._model.blueprint)
-
-                try:
-                    p = Parser().set_expression(name)
-                except InvalidExpression:
-                    p = Parser().set_expression("")
+                model_idx = self.model.createIndex(idx, status_col_idx)
+                row_type, name, p = _row_predicate(row, aliases, self._model.blueprint)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
@@ -614,7 +606,7 @@ class MTSignalConfigurator(QWidget):
                                 conflict_row_ids.append(alias_idx)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
-                        self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                        self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
                 else:
@@ -631,7 +623,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                             elif idx not in graph[alias_idx]:
                                 graph[idx].append(aliases.index(k))
@@ -640,7 +632,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                         except ValueError:
                             continue
@@ -664,17 +656,16 @@ class MTSignalConfigurator(QWidget):
         self.ready.emit()
         self.end_build()
 
-    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed=None) -> \
+    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int) -> \
             typing.Iterator[Waypoint]:
-        if processed is None:
-            processed = set()
+
         for idx in graph[row_idx]:
-            if idx in processed:
+            if idx in self._processed:
                 continue
             else:
-                yield from self._traverse(graph, idx, processed)
+                yield from self._traverse(graph, idx)
         else:
-            processed.add(row_idx)
+            self._processed.add(row_idx)
             yield from self._model.create_signals(row_idx)
 
     def begin_build(self):
@@ -733,7 +724,7 @@ def main():
 
 def show_msg(message):
     box = QMessageBox()
-    box.setIcon(QMessageBox.Critical)
+    box.setIcon(QMessageBox.Icon.Critical)
     box.setWindowTitle("Table parse failed")
     box.setText(message)
     box.exec_()
