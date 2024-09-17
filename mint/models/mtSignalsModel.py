@@ -445,11 +445,10 @@ class MTSignalsModel(QAbstractItemModel):
                                     break
 
                             if len(elements[2]) == 0:
-                                # Remove pulses from global
-                                value = [i for i in default_value if i.strip() not in elements[1]]
-                                value = [pulse for pulse in value if pulse.strip()]
+                                # Remove pulses from global - Filtered
+                                value = [i.strip() for i in default_value if i.strip() and i.strip() not in elements[1]]
                                 # Add pulses from global
-                                value.extend([i for i in elements[0] if i not in default_value])
+                                value.extend([i for i in elements[0] if i not in value])
                                 # If there are no pulses set default list
                                 if len(value) == 0:
                                     if default_value == '':
