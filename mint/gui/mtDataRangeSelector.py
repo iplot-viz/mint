@@ -49,7 +49,6 @@ class MTDataRangeSelector(QWidget):
             self.stack.addWidget(item.form)
             button = QRadioButton(parent=self.radioGroup)
             button.setText(item.label())
-            button.setToolTip(item.tooltip())
             button.clicked.connect(partial(self.select_page, idx))
             self.radioGroup.layout().addWidget(button)
 

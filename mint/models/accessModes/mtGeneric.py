@@ -35,15 +35,6 @@ class MTGenericAccessMode(QObject):
         elif self.mode == MTGenericAccessMode.TIME_RANGE:
             return "Time range"
 
-    def tooltip(self) -> str:
-        if self.mode == MTGenericAccessMode.PULSE_NUMBER:
-            return "Select data by pulse/run (ITER:PCS/123) or IMAS URI (imas:hdf5?path=/path/to/data/entry). In " \
-                   "case of multiple pulse id, the separator used is coma"
-        elif self.mode == MTGenericAccessMode.RELATIVE_TIME:
-            return "Select data by relative time to now"
-        elif self.mode == MTGenericAccessMode.TIME_RANGE:
-            return "Select data by time range"
-
     def to_dict(self) -> dict:
         return dict(mode=self.mode, **self.properties())
 
