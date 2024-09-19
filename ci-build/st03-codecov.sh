@@ -8,7 +8,7 @@
 # Unzip artifact
 tar -xvzf ${PREFIX_DIR}.tar.gz ./${PREFIX_DIR}
 
-export PYTHONPATH=${PYTHONPATH}:$(get_abs_filename "./${PREFIX_DIR}/lib/python3.8/site-packages")
+export PYTHONPATH=${PYTHONPATH}:$(get_abs_filename "./${PREFIX_DIR}/lib/python3.11/site-packages")
 # run tests
 coverage run --source=mint -m pytest mint
 
