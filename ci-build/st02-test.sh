@@ -3,7 +3,7 @@
 # Stage 2 : Unit tests
 
 # Set up environment
-. ci/st00-header.sh $* || exit 1
+. ci-build/st00-header.sh $* || exit 1
 
 # Unzip artifact
 try tar -xvzf ${PREFIX_DIR}.tar.gz ./${PREFIX_DIR}

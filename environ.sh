@@ -55,7 +55,7 @@ try module load PySide6/6.6.2-GCCcore-13.2.0
 # Testing/Coverage requirements
 try module load coverage/7.4.4-GCCcore-13.2.0
 
-try module -t list 2>&1
+#try module -t list 2>&1
 
 export HOME=$PWD
 echo "HOME was set to $HOME"
