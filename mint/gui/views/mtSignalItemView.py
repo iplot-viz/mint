@@ -15,7 +15,7 @@ from mint.models.mtSignalsModel import MTSignalsModel
 class MTSignalItemView(QWidget):
     def __init__(self, title='SignalView',
                  view_type: Union[Type[QTableView], Type[QTreeView]] = QTableView,
-                 parent: Optional[QWidget] = None, f: Qt.WindowFlags = Qt.Widget):
+                 parent: Optional[QWidget] = None, f: Qt.WindowFlags = Qt.WindowType.Widget):
         super().__init__(parent=parent, f=f)
         self.setWindowTitle(title)
         self.setLayout(QVBoxLayout())
@@ -42,7 +42,7 @@ class MTSignalItemView(QWidget):
 
         # add new actions and keep a reference on python side.
         for column in range(model.columnCount(QModelIndex())):
-            column_name = model.headerData(column, Qt.Horizontal, Qt.DisplayRole)
+            column_name = model.headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
             if column_name == MTSignalsModel.ROWUID_COLNAME:
                 self.toggle_column(column, False)
             else:
@@ -69,7 +69,7 @@ class MTSignalItemView(QWidget):
     def export_dict(self) -> dict:
         options = dict()
         for column in range(self.model().columnCount(QModelIndex())):
-            column_name = self.model().headerData(column, Qt.Horizontal, Qt.DisplayRole)
+            column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
             if column_name != MTSignalsModel.ROWUID_COLNAME:
                 act = self._actions[column]
                 if isinstance(act, QWidgetAction):
@@ -78,11 +78,11 @@ class MTSignalItemView(QWidget):
 
     def import_dict(self, options: dict):
         for column in range(self.model().columnCount(QModelIndex())):
-            column_name = self.model().headerData(column, Qt.Horizontal, Qt.DisplayRole)
+            column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
             if column_name != MTSignalsModel.ROWUID_COLNAME:
                 act = self._actions[column]
                 if isinstance(act, QWidgetAction):
-                    act.defaultWidget().setChecked(options.get(column_name))
+                    act.defaultWidget().setChecked(options.get(column_name, True))
 
     def export_json(self):
         return json.dumps(self.export_dict())
