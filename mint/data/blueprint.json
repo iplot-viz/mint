@@ -34,7 +34,7 @@
     "Envelope": {
         "code_name": "envelope",
         "type_name": "bool",
-        "default": ""
+        "default": false
     },
     "Alias": {
         "code_name": "alias",
@@ -74,6 +74,11 @@
         "code_name": "z_expr",
         "type_name": "str",
         "default": "${self}.data_store[2]"
+    },
+    "Extremities": {
+        "code_name": "extremities",
+        "type_name": "bool",
+        "default": false
     },
     "PlotType": {
         "label": "Plot type",
