@@ -52,7 +52,7 @@ exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
 
 
 class MTSignalsModel(QAbstractItemModel):
-    SignalRole = Qt.UserRole + 10
+    SignalRole = Qt.ItemDataRole.UserRole + 10
 
     ROWUID_COLNAME = 'uid'
 
@@ -96,9 +96,9 @@ class MTSignalsModel(QAbstractItemModel):
     def data(self, index: QModelIndex, role: int = ...):
         if index.isValid():
             value = self._table.iloc[index.row()][index.column()]
-            if role == Qt.DisplayRole or role == Qt.EditRole:
+            if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
                 return value
-            if role == Qt.BackgroundRole:
+            if role == Qt.ItemDataRole.BackgroundRole:
                 fail_value = self._table_fails.iloc[index.row(), index.column()]
                 # Value 0 corresponds to a correct cell.
                 # Value 1 corresponds to a main error.
@@ -111,8 +111,8 @@ class MTSignalsModel(QAbstractItemModel):
                     return QBrush(QColor('orange'))
         return None
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
-        if role == Qt.DisplayRole and orientation == Qt.Horizontal:
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
             try:
                 return self._table.columns[section]
             except IndexError:
@@ -131,13 +131,13 @@ class MTSignalsModel(QAbstractItemModel):
             return False
         row = index.row()
         column = index.column()
-        if role != Qt.EditRole and role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.EditRole and role != Qt.ItemDataRole.DisplayRole:
             return False
 
         if isinstance(value, str):
             value = value.strip()
             if ',' in value:
-                # replaces " with ' if value has , in it.
+                # replaces "" with '' if value has , in it.
                 value = value.replace('"', "'")
 
         if row + 1 >= self._table.index.size:
@@ -149,12 +149,12 @@ class MTSignalsModel(QAbstractItemModel):
 
         return True
 
-    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
             if index.column() != self._table.columns.size - 1:
-                return Qt.ItemIsEditable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
+                return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
-                return Qt.ItemIsEnabled
+                return Qt.ItemFlag.ItemIsEnabled
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
@@ -234,10 +234,10 @@ class MTSignalsModel(QAbstractItemModel):
         return df
 
     def set_dataframe(self, df: pd.DataFrame):
-        oldSz = self.rowCount()
-        self.removeRows(0, oldSz)
-        newSz = df.index.size
-        self.insertRows(0, newSz)
+        old_size = self.rowCount()
+        self.removeRows(0, old_size)
+        new_size = df.index.size
+        self.insertRows(0, new_size)
 
         df = self.accommodate(df)
 
@@ -292,14 +292,14 @@ class MTSignalsModel(QAbstractItemModel):
     def import_dict(self, input_dict: dict):
         # 1. blueprint defines columns..
         try:
-            self._blueprint = mtBP.parse_raw_blueprint(input_dict['blueprint'])
-            if not self._blueprint.get("PulseNumber").get("label"):
-                self._blueprint.get("PulseNumber").update({"label": "PulseId"})
+            temp_blueprint = mtBP.parse_raw_blueprint(input_dict['blueprint'])
+            if not temp_blueprint.get("PulseNumber").get("label"):
+                temp_blueprint.get("PulseNumber").update({"label": "PulseId"})
         except KeyError:
-            pass
+            temp_blueprint = self.blueprint
         # 2. table
-        column_names = list(mtBP.get_column_names(self.blueprint))
-        self._entity_attribs = list(mtBP.get_code_names(self.blueprint))
+        column_names = list(mtBP.get_column_names(temp_blueprint))
+        self._entity_attribs = list(mtBP.get_code_names(temp_blueprint))
         if input_dict.get('table'):
             df = pd.DataFrame(input_dict.get('table'), dtype=str, columns=column_names)
         elif input_dict.get('variables_table'):  # old style.
@@ -320,13 +320,13 @@ class MTSignalsModel(QAbstractItemModel):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
             signal.status_info.reset()
-            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
             if fetch_data:
-                self.setData(model_idx, Result.BUSY, Qt.DisplayRole)
+                self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
                 signal.get_data()
 
-            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
     @contextmanager
     def init_create_signals(self):
@@ -391,7 +391,6 @@ class MTSignalsModel(QAbstractItemModel):
     def _parse_series(self, inp: pd.Series, fls: pd.Series) -> typing.Iterator[pd.Series]:
         with self.activate_fast_mode():
             out = dict()
-            override_global = False
 
             for k, v in self._blueprint.items():
                 if k.startswith('$'):
