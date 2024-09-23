@@ -126,7 +126,7 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._fast_mode = False
 
-    def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
+    def setData(self, index: QModelIndex, value: typing.Any, role: int = ..., is_downsampled: bool = False) -> bool:
         if not index.isValid():
             return False
         row = index.row()
@@ -142,7 +142,11 @@ class MTSignalsModel(QAbstractItemModel):
 
         if row + 1 >= self._table.index.size:
             self.insertRows(row + 1, 1, QModelIndex())
-        self._table.iloc[row, column] = value
+
+        if is_downsampled:
+            self._table.iloc[row, column] = value + '|Downsampled'
+        else:
+            self._table.iloc[row, column] = value
 
         if not self._fast_mode:
             self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
@@ -326,7 +330,7 @@ class MTSignalsModel(QAbstractItemModel):
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
                 signal.get_data()
 
-            self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
     @contextmanager
     def init_create_signals(self):
