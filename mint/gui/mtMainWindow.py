@@ -563,10 +563,11 @@ class MTMainWindow(IplotQtMainWindow):
                 conditions = (
                     ts != signal.ts_start,
                     te != signal.ts_end,
-                    signal.envelope != "",
+                    signal.envelope,
                     signal.x_expr != '${self}.time',
                     signal.y_expr != '${self}.data_store[1]',
-                    signal.z_expr != '${self}.data_store[2]'
+                    signal.z_expr != '${self}.data_store[2]',
+                    len(signal.children) > 1  # Only support one level processing
                 )
                 if any(conditions):
                     signal.stream_valid = False
