@@ -143,6 +143,7 @@ class MTSignalsModel(QAbstractItemModel):
         if row + 1 >= self._table.index.size:
             self.insertRows(row + 1, 1, QModelIndex())
 
+        # Indicate if the signal is downsampled or not
         if is_downsampled:
             self._table.iloc[row, column] = value + '|Downsampled'
         else:
