@@ -7,16 +7,17 @@
 from collections import defaultdict
 import json
 import os
+from enum import Enum
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
 import sys
 import typing
-from typing import List, Tuple
+from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
+from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
@@ -39,7 +40,7 @@ from iplotLogging import setupLogger
 
 logger = setupLogger.get_logger(__name__)
 
-# These variables act as a signle point reference to define the title of the tabs.
+# These variables act as a single point reference to define the title of the tabs.
 ALL_VIEW_NAME = "All"
 DA_VIEW_NAME = "Data-Access"
 PLAYOUT_VIEW_NAME = "Plot-Layout"
@@ -122,13 +123,13 @@ NEAT_VIEW = {
 }
 
 
-class RowAliasType:
+class RowAliasType(Enum):
     Simple = 'SIMPLE'
     Mixed = 'MIXED'
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[str, str, Parser]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
@@ -231,8 +232,8 @@ class MTSignalConfigurator(QWidget):
         shortcut2.activated.connect(self.paste_contents_from_clipboard)
 
     def on_current_view_changed(self, index: int):
-        currentView = self.item_widgets[index]
-        self._toolbar.configureColsBtn.setMenu(currentView.header_menu())
+        current_view = self.item_widgets[index]
+        self._toolbar.configureColsBtn.setMenu(current_view.header_menu())
 
     def on_parse_button_pressed(self):
         logger.debug('Build order:')
@@ -318,8 +319,8 @@ class MTSignalConfigurator(QWidget):
             self.set_bulk_contents(final_text, [new_idx])
 
     def insert_empty_rows(self, above: bool):
-        currentTabId = self._tabs.currentIndex()
-        selection = self._signal_item_widgets[currentTabId].view().selectionModel() \
+        current_tab_id = self._tabs.currentIndex()
+        selection = self._signal_item_widgets[current_tab_id].view().selectionModel() \
             .selectedIndexes()  # type: List[QModelIndex()]
 
         total_rows = set(index.row() for index in selection)
@@ -365,42 +366,59 @@ class MTSignalConfigurator(QWidget):
     def paste_contents_from_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-
         if not len(selected_ids):
             return
 
-        text = QCoreApplication.instance().clipboard().text()  # type: str
+        text = QGuiApplication.clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
         if not text:
             data = [['']]
         else:
             data = [line.split(';') for line in text.splitlines()]
-
+        copy_rows = len(data)
+        copy_cols = len(data[0])
+        self.busy.emit()
         if len(data) == 1 and len(data[0]) == 1:
             self.set_bulk_contents(text, selected_ids)
             return
 
-        self.busy.emit()
+        rows = set()
+        columns = set()
+        for idx in selected_ids:
+            rows.add(idx.row())
+            columns.add(idx.column())
+        if len(columns) == 1:
+            columns = set(range(min(columns), min(columns) + copy_cols))
+        if len(rows) == 1:
+            rows = set(range(min(rows), min(rows) + copy_rows))
 
+        total_columns = max(columns) - min(columns) + 1
+        total_rows = max(rows) - min(rows) + 1
+        if total_columns != len(columns) or total_rows != len(rows):
+            show_popup_msg("Can't paste data", "Only rectangular selection is available")
+            self.ready.emit()
+            return
+        if total_rows % copy_rows != 0 or total_columns % copy_cols != 0:
+            self.ready.emit()
+            show_popup_msg("Can't paste data", f"Copied data {copy_rows}x{copy_cols} and "
+                                               f"selection cells {total_rows}x{total_columns} are not proportional")
+            return
         left = 1 << 32
         right = 0
         top = 1 << 32
         bottom = 0
 
-        row = selected_ids[0].row()
-        for line in data:
-
-            col = selected_ids[0].column()
-            for value in line:
-                idx = self._model.createIndex(row, col)
-                left = min(left, idx.column())
-                right = max(right, idx.column())
-                top = min(top, idx.row())
-                bottom = max(bottom, idx.row())
-                with self._model.activate_fast_mode():
-                    self._model.setData(idx, value, Qt.ItemDataRole.EditRole)
-                col += 1
-            row += 1
+        for col in range(min(columns), max(columns) + 1, copy_cols):
+            for row in range(min(rows), max(rows) + 1, copy_rows):
+                for i, line in enumerate(data):
+                    for j, value in enumerate(line):
+                        idx = self._model.createIndex(row + i, col + j)
+                        left = min(left, idx.column())
+                        right = max(right, idx.column())
+                        top = min(top, idx.row())
+                        bottom = max(bottom, idx.row())
+                        with self._model.activate_fast_mode():
+                            self._model.setData(idx, value, Qt.ItemDataRole.EditRole)
 
         self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
@@ -408,7 +426,6 @@ class MTSignalConfigurator(QWidget):
     def copy_contents_to_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-
         contents = defaultdict(lambda: defaultdict(str))
         rows = set()
         columns = set()
@@ -419,17 +436,22 @@ class MTSignalConfigurator(QWidget):
             contents[row][column] = value
             columns.add(column)
             rows.add(row)
-
+        total_columns = max(columns) - min(columns) + 1
+        total_rows = max(rows) - min(rows) + 1
+        if total_columns != len(columns) or total_rows != len(rows):
+            show_popup_msg("Can't copy data", "Only rectangular selection is available")
+            self.ready.emit()
+            return
         result = []
-        for key, row in contents.items():
+        for row in range(min(rows), max(rows) + 1):
             row_text = []
-            for intern_key, value in row.items():
-                row_text.append(str(value))
+            for col in range(min(columns), max(columns) + 1):
+                row_text.append(contents.get(row).get(col, ""))
             result.append(';'.join(row_text))
 
         text = '\n'.join(result)
 
-        QCoreApplication.instance().clipboard().setText(text)
+        QGuiApplication.clipboard().setText(text)
 
     def find_replace(self):
         current_tab_id = self._tabs.currentIndex()
@@ -475,7 +497,7 @@ class MTSignalConfigurator(QWidget):
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(
                 f"Error when dumping variables to file: {file_path} {e}")
             logger.exception(e)
@@ -492,7 +514,7 @@ class MTSignalConfigurator(QWidget):
             self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error parsing file. {e}")
             logger.exception(e)
             box.exec_()
@@ -525,7 +547,7 @@ class MTSignalConfigurator(QWidget):
             self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error parsing file. {e}")
             logger.exception(e)
             box.exec_()
@@ -730,5 +752,13 @@ def show_msg(message):
     box = QMessageBox()
     box.setIcon(QMessageBox.Icon.Critical)
     box.setWindowTitle("Table parse failed")
+    box.setText(message)
+    box.exec_()
+
+
+def show_popup_msg(title: str, message: str):
+    box = QMessageBox()
+    box.setIcon(QMessageBox.Icon.Critical)
+    box.setWindowTitle(title)
     box.setText(message)
     box.exec_()
