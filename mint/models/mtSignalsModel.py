@@ -126,7 +126,7 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._fast_mode = False
 
-    def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
+    def setData(self, index: QModelIndex, value: typing.Any, role: int = ..., is_downsampled: bool = False) -> bool:
         if not index.isValid():
             return False
         row = index.row()
@@ -142,7 +142,12 @@ class MTSignalsModel(QAbstractItemModel):
 
         if row + 1 >= self._table.index.size:
             self.insertRows(row + 1, 1, QModelIndex())
-        self._table.iloc[row, column] = value
+
+        # Indicate if the signal is downsampled or not
+        if is_downsampled:
+            self._table.iloc[row, column] = value + '|Downsampled'
+        else:
+            self._table.iloc[row, column] = value
 
         if not self._fast_mode:
             self.dataChanged.emit(self.createIndex(row, column), self.createIndex(row, column))
@@ -326,7 +331,7 @@ class MTSignalsModel(QAbstractItemModel):
                 self.setData(model_idx, Result.BUSY, Qt.DisplayRole)
                 signal.get_data()
 
-            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole)
+            self.setData(model_idx, str(signal.status_info), Qt.DisplayRole, signal.isDownsampled)
 
     @contextmanager
     def init_create_signals(self):
@@ -446,15 +451,21 @@ class MTSignalsModel(QAbstractItemModel):
 
                             if len(elements[2]) == 0:
                                 # Remove pulses from global
-                                value = [i for i in default_value if i not in elements[1]]
+                                value = [i.strip() for i in default_value if i.strip() and i.strip() not in elements[1]]
                                 # Add pulses from global
-                                value.extend([i for i in elements[0] if i not in default_value])
+                                value.extend([i for i in elements[0] if i not in value])
                                 # If there are no pulses set default list
                                 if len(value) == 0:
-                                    value = ['']
+                                    if default_value == '':
+                                        value = default_value
+                                    else:
+                                        value = ['']
 
                         else:
                             value = default_value
+                            # Check for empty pulse
+                            if not (default_value == '' or default_value == ['']):
+                                value = [pulse for pulse in value if pulse.strip()]
                             fls[column_name] = 0
 
                     else:
