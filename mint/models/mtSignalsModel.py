@@ -499,7 +499,7 @@ class MTSignalsModel(QAbstractItemModel):
                                         value = 0
                                     else:
                                         value = None
-                                    fls[column_name] = 1
+                                    fls[column_name] = 0
                                 else:
                                     value = default_value
                                     fls[column_name] = 0
