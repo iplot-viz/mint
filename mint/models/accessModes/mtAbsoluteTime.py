@@ -112,7 +112,3 @@ class MTAbsoluteTime(MTGenericAccessMode):
             self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         elif self.sender() == self.toTimeNs:
             self.toTimeNs.setText(self.toTimeNs.text().ljust(9, '0'))
-        self.mapper.model().setStringList([self.fromTime.text(),
-                                           self.toTime.text(),
-                                           self.fromTimeNs.text(),
-                                           self.toTimeNs.text()])
