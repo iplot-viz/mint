@@ -478,7 +478,7 @@ class MTSignalConfigurator(QWidget):
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
-        context_menu.addAction("Add pulse", self.on_search_pulse)
+        context_menu.addAction("Set pulse", self.on_search_pulse)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
         context_menu.addAction(self.style().standardIcon(
