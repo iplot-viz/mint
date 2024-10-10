@@ -125,6 +125,7 @@ class MTSignalsModel(QAbstractItemModel):
             yield None
         finally:
             self._fast_mode = False
+            self.layoutChanged.emit()
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ..., is_downsampled: bool = False) -> bool:
         if not index.isValid():

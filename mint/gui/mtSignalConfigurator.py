@@ -355,7 +355,6 @@ class MTSignalConfigurator(QWidget):
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
                 self._model.setData(idx, text, Qt.ItemDataRole.EditRole)
-            self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
 
     def delete_contents(self):
@@ -472,6 +471,10 @@ class MTSignalConfigurator(QWidget):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.delete_contents()
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
