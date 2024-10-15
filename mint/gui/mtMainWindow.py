@@ -237,6 +237,11 @@ class MTMainWindow(IplotQtMainWindow):
         super().updateCanvasPreferences()
         self.indicate_ready()
 
+    def reset_prefs(self):
+        self.indicate_busy('Resetting preferences...')
+        super().reset_prefs()
+        self.indicate_ready()
+
     def reDraw(self):
         self.indicate_busy('Redrawing...')
         super().reDraw()
