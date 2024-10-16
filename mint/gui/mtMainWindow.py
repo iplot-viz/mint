@@ -188,8 +188,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
-    def wireConnections(self):
-        super().wireConnections()
+    def wire_connections(self):
+        super().wire_connections()
         self.sigCfgWidget.statusChanged.connect(self._statusBar.showMessage)
         self.sigCfgWidget.buildAborted.connect(self.on_table_abort)
         self.sigCfgWidget.showProgress.connect(self._progressBar.show)
@@ -206,7 +206,7 @@ class MTMainWindow(IplotQtMainWindow):
         logger.error(message)
 
         box = QMessageBox()
-        box.setIcon(QMessageBox.Critical)
+        box.setIcon(QMessageBox.Icon.Critical)
         box.setWindowTitle("Table Build Failed")
         box.setText(message)
         box.exec_()
@@ -232,9 +232,9 @@ class MTMainWindow(IplotQtMainWindow):
             self.setCentralWidget(self._centralWidget)
             self._floatingWindow.hide()
 
-    def updateCanvasPreferences(self):
+    def update_canvas_preferences(self):
         self.indicate_busy('Applying preferences...')
-        super().updateCanvasPreferences()
+        super().update_canvas_preferences()
         self.indicate_ready()
 
     def reset_prefs(self):
@@ -242,9 +242,9 @@ class MTMainWindow(IplotQtMainWindow):
         super().reset_prefs()
         self.indicate_ready()
 
-    def reDraw(self):
+    def re_draw(self):
         self.indicate_busy('Redrawing...')
-        super().reDraw()
+        super().re_draw()
         self.indicate_ready()
 
     def on_export(self):
@@ -396,7 +396,7 @@ class MTMainWindow(IplotQtMainWindow):
                 logger.info(f"Finished loading workspace {file_path}")
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error {str(e)}: cannot import workspace from file: {file_path}")
             logger.exception(e)
             box.exec_()
@@ -410,7 +410,7 @@ class MTMainWindow(IplotQtMainWindow):
                 f.write(self.canvas.get_signals_as_csv())
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error {str(e)}: cannot export data plots to file: {file_path}")
             logger.exception(e)
             box.exec_()
@@ -424,7 +424,7 @@ class MTMainWindow(IplotQtMainWindow):
                 f.write(json.dumps(self.export_dict()))
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error {str(e)}: cannot export workspace to file: {file_path}")
             logger.exception(e)
             box.exec_()
