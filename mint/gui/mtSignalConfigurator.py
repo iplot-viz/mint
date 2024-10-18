@@ -7,6 +7,7 @@
 from collections import defaultdict
 import json
 import os
+from enum import Enum
 from pathlib import Path
 
 import pandas as pd
@@ -16,14 +17,16 @@ import typing
 from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette
+from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
+from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
+from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
@@ -37,7 +40,7 @@ from iplotLogging import setupLogger
 
 logger = setupLogger.get_logger(__name__)
 
-# These variables act as a signle point reference to define the title of the tabs.
+# These variables act as a single point reference to define the title of the tabs.
 ALL_VIEW_NAME = "All"
 DA_VIEW_NAME = "Data-Access"
 PLAYOUT_VIEW_NAME = "Plot-Layout"
@@ -59,6 +62,7 @@ NEAT_VIEW = {
         "x": True,
         "y": True,
         "z": True,
+        "Extremities": True,
         "Plot type": True,
         "Status": True
     },
@@ -76,6 +80,7 @@ NEAT_VIEW = {
         "x": False,
         "y": False,
         "z": False,
+        "Extremities": False,
         "Plot type": False,
         "Status": True
     },
@@ -93,6 +98,7 @@ NEAT_VIEW = {
         "x": False,
         "y": False,
         "z": False,
+        "Extremities": False,
         "Plot type": True,
         "Status": True
     },
@@ -110,35 +116,40 @@ NEAT_VIEW = {
         "x": True,
         "y": True,
         "z": True,
+        "Extremities": False,
         "Plot type": False,
         "Status": True
     }
 }
 
 
-class RowAliasType:
+class RowAliasType(Enum):
     Simple = 'SIMPLE'
     Mixed = 'MIXED'
     NoAlias = 'NOALIAS'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
     alias_valid = is_non_empty_string(alias)
 
-    p = Parser().set_expression(name)
+    try:
+        p = Parser().set_expression(name)
+    except InvalidExpression:
+        p = Parser().set_expression("")
+
     raw_name = True  # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
 
     if alias_valid and raw_name:
-        return RowAliasType.Simple, name
+        return RowAliasType.Simple, name, p
     elif alias_valid and not raw_name:
-        return RowAliasType.Mixed, name
+        return RowAliasType.Mixed, name, p
     else:
-        return RowAliasType.NoAlias, name
+        return RowAliasType.NoAlias, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -207,8 +218,13 @@ class MTSignalConfigurator(QWidget):
 
         self.selectModuleDialog = ModuleImporter()
 
+        self.selectPulseDialog = PulseBrowser()
+        self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
+
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
+
+        self._processed = set()  # Set used to store the different rows processed
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
@@ -216,8 +232,8 @@ class MTSignalConfigurator(QWidget):
         shortcut2.activated.connect(self.paste_contents_from_clipboard)
 
     def on_current_view_changed(self, index: int):
-        currentView = self.item_widgets[index]
-        self._toolbar.configureColsBtn.setMenu(currentView.header_menu())
+        current_view = self.item_widgets[index]
+        self._toolbar.configureColsBtn.setMenu(current_view.header_menu())
 
     def on_parse_button_pressed(self):
         logger.debug('Build order:')
@@ -283,9 +299,28 @@ class MTSignalConfigurator(QWidget):
         if not df.empty:
             self._model.append_dataframe(df)
 
+    def append_pulse(self, pulses):
+        current_tab_id = self._tabs.currentIndex()
+        selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        if not len(selected_ids):
+            return
+
+        for idx in selected_ids:
+            new_idx = self._model.index(idx.row(), 7)
+            cur_pulses = self._model.data(new_idx, Qt.ItemDataRole.DisplayRole)
+            pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
+            # Check that the pulse is not already added
+            for pulse in pulses:
+                pulse_set.add(pulse)
+
+            final_text = ", ".join(pulse_set)
+
+            # Add the pulse in the corresponding cells
+            self.set_bulk_contents(final_text, [new_idx])
+
     def insert_empty_rows(self, above: bool):
-        currentTabId = self._tabs.currentIndex()
-        selection = self._signal_item_widgets[currentTabId].view().selectionModel() \
+        current_tab_id = self._tabs.currentIndex()
+        selection = self._signal_item_widgets[current_tab_id].view().selectionModel() \
             .selectedIndexes()  # type: List[QModelIndex()]
 
         total_rows = set(index.row() for index in selection)
@@ -319,8 +354,7 @@ class MTSignalConfigurator(QWidget):
                 right = max(right, idx.column())
                 top = min(top, idx.row())
                 bottom = max(bottom, idx.row())
-                self._model.setData(idx, text, Qt.EditRole)
-            self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
+                self._model.setData(idx, text, Qt.ItemDataRole.EditRole)
         self.ready.emit()
 
     def delete_contents(self):
@@ -331,42 +365,59 @@ class MTSignalConfigurator(QWidget):
     def paste_contents_from_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-
         if not len(selected_ids):
             return
 
-        text = QCoreApplication.instance().clipboard().text()  # type: str
+        text = QGuiApplication.clipboard().text()  # type: str
         text = text.strip()  # sometimes, user might have copied unnecessary line breaks at the start / end.
         if not text:
             data = [['']]
         else:
             data = [line.split(';') for line in text.splitlines()]
-
+        copy_rows = len(data)
+        copy_cols = len(data[0])
+        self.busy.emit()
         if len(data) == 1 and len(data[0]) == 1:
             self.set_bulk_contents(text, selected_ids)
             return
 
-        self.busy.emit()
+        rows = set()
+        columns = set()
+        for idx in selected_ids:
+            rows.add(idx.row())
+            columns.add(idx.column())
+        if len(columns) == 1:
+            columns = set(range(min(columns), min(columns) + copy_cols))
+        if len(rows) == 1:
+            rows = set(range(min(rows), min(rows) + copy_rows))
 
+        total_columns = max(columns) - min(columns) + 1
+        total_rows = max(rows) - min(rows) + 1
+        if total_columns != len(columns) or total_rows != len(rows):
+            show_popup_msg("Can't paste data", "Only rectangular selection is available")
+            self.ready.emit()
+            return
+        if total_rows % copy_rows != 0 or total_columns % copy_cols != 0:
+            self.ready.emit()
+            show_popup_msg("Can't paste data", f"Copied data {copy_rows}x{copy_cols} and "
+                                               f"selection cells {total_rows}x{total_columns} are not proportional")
+            return
         left = 1 << 32
         right = 0
         top = 1 << 32
         bottom = 0
 
-        row = selected_ids[0].row()
-        for line in data:
-
-            col = selected_ids[0].column()
-            for value in line:
-                idx = self._model.createIndex(row, col)
-                left = min(left, idx.column())
-                right = max(right, idx.column())
-                top = min(top, idx.row())
-                bottom = max(bottom, idx.row())
-                with self._model.activate_fast_mode():
-                    self._model.setData(idx, value, Qt.EditRole)
-                col += 1
-            row += 1
+        for col in range(min(columns), max(columns) + 1, copy_cols):
+            for row in range(min(rows), max(rows) + 1, copy_rows):
+                for i, line in enumerate(data):
+                    for j, value in enumerate(line):
+                        idx = self._model.createIndex(row + i, col + j)
+                        left = min(left, idx.column())
+                        right = max(right, idx.column())
+                        top = min(top, idx.row())
+                        bottom = max(bottom, idx.row())
+                        with self._model.activate_fast_mode():
+                            self._model.setData(idx, value, Qt.ItemDataRole.EditRole)
 
         self._model.dataChanged.emit(self._model.index(top, left), self._model.index(bottom, right))
         self.ready.emit()
@@ -374,28 +425,32 @@ class MTSignalConfigurator(QWidget):
     def copy_contents_to_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
-
         contents = defaultdict(lambda: defaultdict(str))
         rows = set()
         columns = set()
         for idx in selected_ids:
-            value = self._model.data(idx, Qt.DisplayRole)
+            value = self._model.data(idx, Qt.ItemDataRole.DisplayRole)
             column = idx.column()
             row = idx.row()
             contents[row][column] = value
             columns.add(column)
             rows.add(row)
-
+        total_columns = max(columns) - min(columns) + 1
+        total_rows = max(rows) - min(rows) + 1
+        if total_columns != len(columns) or total_rows != len(rows):
+            show_popup_msg("Can't copy data", "Only rectangular selection is available")
+            self.ready.emit()
+            return
         result = []
-        for key, row in contents.items():
+        for row in range(min(rows), max(rows) + 1):
             row_text = []
-            for intern_key, value in row.items():
-                row_text.append(str(value))
+            for col in range(min(columns), max(columns) + 1):
+                row_text.append(contents.get(row).get(col, ""))
             result.append(';'.join(row_text))
 
         text = '\n'.join(result)
 
-        QCoreApplication.instance().clipboard().setText(text)
+        QGuiApplication.clipboard().setText(text)
 
     def find_replace(self):
         current_tab_id = self._tabs.currentIndex()
@@ -412,8 +467,18 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def on_search_pulse(self):
+        self.selectPulseDialog.flag = "table"
+        self.selectPulseDialog.show()
+        self.selectPulseDialog.activateWindow()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.delete_contents()
+
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         context_menu = QMenu(self)
+        context_menu.addAction("Set pulse", self.on_search_pulse)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_DialogOkButton")), "Insert above", lambda: self.insert_empty_rows(True))
         context_menu.addAction(self.style().standardIcon(
@@ -435,7 +500,7 @@ class MTSignalConfigurator(QWidget):
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(
                 f"Error when dumping variables to file: {file_path} {e}")
             logger.exception(e)
@@ -452,7 +517,7 @@ class MTSignalConfigurator(QWidget):
             self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error parsing file. {e}")
             logger.exception(e)
             box.exec_()
@@ -485,7 +550,7 @@ class MTSignalConfigurator(QWidget):
             self.resize_views_to_contents()
         except Exception as e:
             box = QMessageBox()
-            box.setIcon(QMessageBox.Critical)
+            box.setIcon(QMessageBox.Icon.Critical)
             box.setText(f"Error parsing file. {e}")
             logger.exception(e)
             box.exec_()
@@ -548,31 +613,17 @@ class MTSignalConfigurator(QWidget):
                 kwargs.get(code_name))})
         # Initialize pre-requisites
         df = self._model.get_dataframe()
-        aliases = df.loc[:, mtBp.get_column_name(
-            self._model.blueprint, 'Alias')].tolist()
-        duplicates = set([a for a in aliases if aliases.count(a) > 1])
-        try:
-            duplicates.remove('')
-        except KeyError:
-            pass
-
-        if len(duplicates):
-            invalid_rows = [aliases.index(dup) + 1 for dup in duplicates]
-            self._abort_build(
-                f"Found duplicate aliases: {duplicates}. Please check row number (s): {invalid_rows}")
-            return
+        aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
+        duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
         error_msgs = []
         graph = defaultdict(list)
-        statusColIdx = self.model.columnCount(QModelIndex()) - 1
+        status_col_idx = self.model.columnCount(QModelIndex()) - 1
         with self._model.activate_fast_mode():
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
-                modelIdx = self.model.createIndex(idx, statusColIdx)
-                row_type, name = _row_predicate(
-                    row, aliases, self._model.blueprint)
-
-                p = Parser().set_expression(name)
+                model_idx = self.model.createIndex(idx, status_col_idx)
+                row_type, name, p = _row_predicate(row, aliases, self._model.blueprint)
 
                 for var_name in p.var_map.keys():
                     if var_name in duplicates:
@@ -584,7 +635,7 @@ class MTSignalConfigurator(QWidget):
                                 conflict_row_ids.append(alias_idx)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
-                        self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                        self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
                 else:
@@ -601,7 +652,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                             elif idx not in graph[alias_idx]:
                                 graph[idx].append(aliases.index(k))
@@ -610,7 +661,7 @@ class MTSignalConfigurator(QWidget):
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
                                 error_msgs.append(sinfo.msg)
-                                self.model.setData(modelIdx, str(sinfo), Qt.DisplayRole)
+                                self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                         except ValueError:
                             continue
@@ -628,21 +679,22 @@ class MTSignalConfigurator(QWidget):
                 self.set_progress(int(i * 100 / num_keys))
                 yield from self._traverse(graph, k)
 
+        self._model.layoutChanged.emit()
+        self._model.aliases = []
         self.set_progress(100)
         self.ready.emit()
         self.end_build()
 
-    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int, processed=None) -> \
+    def _traverse(self, graph: typing.DefaultDict[int, typing.List[int]], row_idx: int) -> \
             typing.Iterator[Waypoint]:
-        if processed is None:
-            processed = set()
+
         for idx in graph[row_idx]:
-            if idx in processed:
+            if idx in self._processed:
                 continue
             else:
-                yield from self._traverse(graph, idx, processed)
+                yield from self._traverse(graph, idx)
         else:
-            processed.add(row_idx)
+            self._processed.add(row_idx)
             yield from self._model.create_signals(row_idx)
 
     def begin_build(self):
@@ -701,7 +753,15 @@ def main():
 
 def show_msg(message):
     box = QMessageBox()
-    box.setIcon(QMessageBox.Critical)
+    box.setIcon(QMessageBox.Icon.Critical)
     box.setWindowTitle("Table parse failed")
+    box.setText(message)
+    box.exec_()
+
+
+def show_popup_msg(title: str, message: str):
+    box = QMessageBox()
+    box.setIcon(QMessageBox.Icon.Critical)
+    box.setWindowTitle(title)
     box.setText(message)
     box.exec_()

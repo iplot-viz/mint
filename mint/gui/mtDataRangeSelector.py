@@ -49,6 +49,7 @@ class MTDataRangeSelector(QWidget):
             self.stack.addWidget(item.form)
             button = QRadioButton(parent=self.radioGroup)
             button.setText(item.label())
+            button.setToolTip(item.tooltip())
             button.clicked.connect(partial(self.select_page, idx))
             self.radioGroup.layout().addWidget(button)
 
@@ -109,23 +110,24 @@ class MTDataRangeSelector(QWidget):
     def get_time_range(self) -> Tuple[Union[int, str], Union[int, str]]:
         """Extract begin and end timestamps if present in time_model"""
         model = self.accessModes[self.stack.currentIndex()]
+        model_properties = model.properties()
         if model.mode == MTGenericAccessMode.TIME_RANGE:
-            ts_start = model.properties().get("ts_start")
-            ts_end = model.properties().get("ts_end")
+            ts_start = model_properties.get("ts_start") + "." + model_properties.get("ts_ns_start")
+            ts_end = model_properties.get("ts_end") + "." + model_properties.get("ts_ns_end")
             return to_unix_time_stamp(ts_start), to_unix_time_stamp(ts_end)
         elif model.mode == MTGenericAccessMode.RELATIVE_TIME:
-            time_base = model.properties().get("base")
+            time_base = model_properties.get("base")
             ts_end = int(self.get_time_now())
-            ts_start = ts_end - 10 ** 9 * int(time_base) * int(model.properties().get("relative"))
+            ts_start = ts_end - 10 ** 9 * int(time_base) * int(model_properties.get("relative"))
             return ts_start, ts_end
         else:
-            time_base = model.properties().get("base")
+            time_base = model_properties.get("base")
             try:
-                t_start = float(model.properties().get("t_start")) * int(time_base)
+                t_start = float(model_properties.get("t_start")) * int(time_base)
             except (ValueError, TypeError):
                 t_start = ''
             try:
-                t_end = float(model.properties().get("t_end")) * int(time_base)
+                t_end = float(model_properties.get("t_end")) * int(time_base)
             except (ValueError, TypeError):
                 t_end = ''
             return t_start, t_end

@@ -3,7 +3,7 @@
 # Stage 1 : Pip install
 
 # Set up environment
-source ci/st00-header.sh $* || exit 1
+source ci-build/st00-header.sh $* || exit 1
 
 # Create a virtualized environment for installing mint
 if [ -d "${PREFIX_DIR}" ];

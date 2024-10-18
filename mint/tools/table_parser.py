@@ -26,8 +26,8 @@ def str_to_arr(value: str):
 
 def get_value(row: Series, col_name: str, type_func=str):
     v = row[col_name]
-    if type_func == bool and v not in ['1', 1, 'True', 'true']:
-        v = ''
+    if type_func == bool:
+        v = v in ['1', 1, 'True', 'true']
     if v is None:
         return type_func()
     try:

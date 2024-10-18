@@ -34,15 +34,15 @@ case $toolchain in
 
   "foss")
     # Graphics backend requirements
-    try module load matplotlib/3.5.1-foss-2020b
-    try module load VTK/9.1.0-foss-2020b
+    try module load matplotlib/3.8.2-gfbf-2023b
+    try module load VTK/9.3.0-foss-2023b
     ;;
 
   "intel")
 
     # Graphics backend requirements
-    try module load matplotlib/3.5.1-intel-2020b
-    try module load VTK/9.1.0-intel-2020b
+    try module load matplotlib/3.8.2-iimkl-2023b
+    try module load VTK/9.3.0-intel-2023b
     ;;
    *)
     echo "Unknown toolchain $toolchain"
@@ -50,12 +50,12 @@ case $toolchain in
 esac
 
 # Graphical User Interface backend
-try module load PySide6/6.2.3-GCCcore-10.2.0
+try module load PySide6/6.6.2-GCCcore-13.2.0
 
 # Testing/Coverage requirements
-try module load coverage/5.5-GCCcore-10.2.0
+try module load coverage/7.4.4-GCCcore-13.2.0
 
-#try module list -t 2>&1
+#try module -t list 2>&1
 
 export HOME=$PWD
 echo "HOME was set to $HOME"

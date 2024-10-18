@@ -63,7 +63,7 @@ def run_app(q_app: QApplication, args=None):
 
     #########################################################################
     # 2. Plot canvas
-    canvas = Canvas(grid=True)
+    canvas = Canvas()
 
     #########################################################################
     # 3. Prepare model for data range
