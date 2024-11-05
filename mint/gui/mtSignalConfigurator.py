@@ -616,7 +616,7 @@ class MTSignalConfigurator(QWidget):
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
-        error_msgs = []
+        # error_msgs = []
         graph = defaultdict(list)
         status_col_idx = self.model.columnCount(QModelIndex()) - 1
         with self._model.activate_fast_mode():
@@ -632,9 +632,10 @@ class MTSignalConfigurator(QWidget):
                         conflict_row_ids = []
                         for alias_idx, alias in enumerate(aliases):
                             if var_name == alias:
-                                conflict_row_ids.append(alias_idx)
+                                conflict_row_ids.append(alias_idx + 1)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
-                        error_msgs.append(sinfo.msg)
+                        logger.warning(sinfo.msg)
+                        # error_msgs.append(sinfo.msg)
                         self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
@@ -651,7 +652,8 @@ class MTSignalConfigurator(QWidget):
                                 sinfo = StatusInfo()
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
-                                error_msgs.append(sinfo.msg)
+                                logger.warning(sinfo.msg)
+                                # error_msgs.append(sinfo.msg)
                                 self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                             elif idx not in graph[alias_idx]:
@@ -660,16 +662,19 @@ class MTSignalConfigurator(QWidget):
                                 sinfo = StatusInfo()
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , circular dependency with alias '{k}'"
-                                error_msgs.append(sinfo.msg)
+                                logger.warning(sinfo.msg)
+                                # error_msgs.append(sinfo.msg)
                                 self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
                         except ValueError:
                             continue
 
+        """
         if error_msgs:
             error_msg = '\n----\n'.join(error_msgs)
             self._abort_build(error_msg)
             return
+        """
 
         # Traverse the graph's edges.
         with self._model.init_create_signals():

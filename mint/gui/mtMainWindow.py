@@ -557,12 +557,9 @@ class MTMainWindow(IplotQtMainWindow):
         if self.console_button.isChecked():
             self.console_widget.show()
             self.console_button.setText("Hide console")
-            # Reset the button background color when opening the console
-            # self.console_button.setStyleSheet("")
         else:
             self.console_widget.hide()
             self.console_button.setText("Show console")
-
         # Reset the button background color when opening/closing the console
         self.console_button.setStyleSheet("")
 

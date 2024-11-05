@@ -2,7 +2,7 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
-import logging
+
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -447,6 +447,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning("Invalid Pulse Id")
                                     break
 
                             if len(elements[2]) == 0:
@@ -480,6 +481,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning("Invalid Date")
                             value = default_value
 
                         # None value but there are pulses
@@ -488,6 +490,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning("Invalid Date")
 
                             if default_value == '':
                                 if column_name == 'StartTime':
@@ -514,6 +517,7 @@ class MTSignalsModel(QAbstractItemModel):
                             else:
                                 value = default_value
                                 fls[column_name] = 1
+                                logger.warning("Invalid Date")
 
                         # There is a value and pulses
                         elif value is not None and out['PulseId']:
@@ -524,6 +528,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     value = None
                                 fls[column_name] = 1
+                                logger.warning("Invalid Date")
                             else:
                                 # keep value
                                 fls[column_name] = 0
@@ -534,19 +539,22 @@ class MTSignalsModel(QAbstractItemModel):
                             if value <= out['StartTime'] or fls['StartTime'] == 1 or fls[column_name] == 1:
                                 fls[column_name] = 1
                                 fls['StartTime'] = 1
+                                logger.warning("Invalid Date")
                             else:
                                 fls[column_name] = 0
                                 fls['StartTime'] = 0
                 else:
-                    if k == 'DataSource':  # Do not read default value when parsing an already filled in table.
+                    if k == 'DataSource':  # Do not read default value when parsing an already filled in table
                         value = get_value(inp, column_name, type_func)
                         if value == '':
                             fls[column_name] = 1
+                            logger.warning("Invalid Data Source")
                         else:
                             if value in self.data_sources:
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning("Invalid Data Source")
                     else:
                         value = get_value(inp, column_name, type_func) or default_value
 
@@ -580,20 +588,20 @@ class MTSignalsModel(QAbstractItemModel):
                                                     fls[column_name] = 0
                                                 else:
                                                     fls[column_name] = 1
-                                                    logging.warning("Invalid Variable")
+                                                    logger.warning("Invalid Variable")
                                             else:
                                                 fls[column_name] = 1
-                                                logging.warning("Invalid Variable")
+                                                logger.warning("Invalid Variable")
                                         except InvalidExpression:
                                             fls[column_name] = 1
-                                            logging.warning("Invalid Variable")
+                                            logger.warning("Invalid Variable")
                                     else:
                                         # Incorrect variable
                                         fls[column_name] = 1
-                                        logging.warning("Invalid Variable")
+                                        logger.warning("Invalid Variable")
                                 else:
                                     fls[column_name] = 1  # Variable with incorrect DataSource
-                                    logging.warning("Invalid Variable")
+                                    logger.warning("Invalid Variable")
                             else:
                                 fls[column_name] = 0
 
@@ -606,21 +614,24 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
-                                    logging.warning("Invalid Stack")
+                                    logger.warning("Invalid Stack")
 
                         # Row Span - Col Span
                         elif column_name == 'Row span' or column_name == 'Col span':
                             if value <= 0:
                                 fls[column_name] = 1
                                 value = 1
+                                logger.warning("Invalid Span")
                             elif value == 1:
                                 if inp[column_name] == '1' or inp[column_name] == '':
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning("Invalid Span")
                             elif value > 10:
                                 fls[column_name] = 1
                                 value = 1
+                                logger.warning("Invalid Span")
                             else:
                                 # Keep value
                                 fls[column_name] = 0
@@ -635,6 +646,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning("Invalid Envelope")
 
                         # Alias
                         elif column_name == 'Alias':
@@ -645,6 +657,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     # Repeated alias
                                     fls[column_name] = 1
+                                    logger.warning("Repeated Alias")
                             else:
                                 fls[column_name] = 0
 
@@ -656,13 +669,16 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning("Invalid Expression")
                             except InvalidExpression:
                                 fls[column_name] = 1
+                                logger.warning("Invalid Expression")
 
                         # Plot Type
                         elif column_name == 'Plot type':
                             if value != 'PlotXY':
                                 fls[column_name] = 1
+                                logger.warning("Invalid Plot Type")
                             else:
                                 fls[column_name] = 0
 
