@@ -21,7 +21,7 @@ from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
 
-from iplotDataAccess.dataAccess2 import DataAccess2
+from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY, Plot
@@ -50,7 +50,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def __init__(self,
                  canvas: Canvas,
-                 da: DataAccess2,
+                 da: DataAccess,
                  model: dict,
                  app_version: str,
                  data_dir: os.PathLike = '.',
