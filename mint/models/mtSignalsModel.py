@@ -2,7 +2,7 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
-
+import logging
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -580,15 +580,20 @@ class MTSignalsModel(QAbstractItemModel):
                                                     fls[column_name] = 0
                                                 else:
                                                     fls[column_name] = 1
+                                                    logging.warning("Invalid Variable")
                                             else:
                                                 fls[column_name] = 1
+                                                logging.warning("Invalid Variable")
                                         except InvalidExpression:
                                             fls[column_name] = 1
+                                            logging.warning("Invalid Variable")
                                     else:
                                         # Incorrect variable
                                         fls[column_name] = 1
+                                        logging.warning("Invalid Variable")
                                 else:
                                     fls[column_name] = 1  # Variable with incorrect DataSource
+                                    logging.warning("Invalid Variable")
                             else:
                                 fls[column_name] = 0
 
@@ -601,6 +606,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logging.warning("Invalid Stack")
 
                         # Row Span - Col Span
                         elif column_name == 'Row span' or column_name == 'Col span':
