@@ -51,10 +51,11 @@ class ConsoleHandler(logging.Handler):
     Custom logging handler that outputs log messages to a specified QPlainTextEdit widget
     """
 
-    def __init__(self, console_widget, button, level=logging.WARNING):
-        super().__init__(level)
+    def __init__(self, console_widget, button):
+        super().__init__()
         self.console_widget = console_widget
         self.console_button = button
+        self.marked_warning = False
 
     def emit(self, record):
         """
@@ -65,8 +66,14 @@ class ConsoleHandler(logging.Handler):
         such as the message or the severity level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
         msg = self.format(record)
-        self.console_widget.appendPlainText(msg)
-        self.console_button.setStyleSheet("background-color: red;")
+        if record.levelno >= logging.WARNING:
+            self.console_widget.appendPlainText(msg)
+            self.console_button.setStyleSheet("background-color: red;")
+            self.marked_warning = True
+        else:
+            if not self.marked_warning:
+                self.console_button.setStyleSheet("")
+            self.marked_warning = False
 
 
 class MTMainWindow(IplotQtMainWindow):
@@ -206,8 +213,8 @@ class MTMainWindow(IplotQtMainWindow):
                     }
         """)
         self.console_widget.hide()
-        # Create console handler with minimum WARNING level
-        self.console_handler = ConsoleHandler(self.console_widget, self.console_button, level=logging.WARNING)
+        # Create console handler
+        self.console_handler = ConsoleHandler(self.console_widget, self.console_button)
         self.setup_logging()
 
         self.dataAccessWidget = QWidget(self)
@@ -546,10 +553,8 @@ class MTMainWindow(IplotQtMainWindow):
     def setup_logging(self):
         # Define the format of log messages
         self.console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-
         # Add the console handler to the main logger
         logging.getLogger().addHandler(self.console_handler)
-
         # Set minimum level in main logger to WARNING
         logging.getLogger().setLevel(logging.WARNING)
 
