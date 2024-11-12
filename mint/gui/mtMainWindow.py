@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY, Plot
+from iplotlib.core.plot import Plot, PlotXY, PlotContour
 from iplotlib.interface import IplotSignalAdapter
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -57,7 +57,6 @@ class MTMainWindow(IplotQtMainWindow):
                  data_sources=None,
                  blueprint: dict = mtBlueprintParser.DEFAULT_BLUEPRINT,
                  impl: str = "matplotlib",
-                 signal_class: type = IplotSignalAdapter,
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
@@ -65,8 +64,7 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_class = PlotXY
-        self.signal_class = signal_class
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -355,7 +353,9 @@ class MTMainWindow(IplotQtMainWindow):
             if 'uid' not in params or params['uid'] is None:
                 params['uid'] = waypt.kwargs['uid']
 
-            new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            # REVIEW THIS PART
+            new_signal = waypt.func(*waypt.args, **waypt.kwargs)
+            # new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
@@ -631,6 +631,11 @@ class MTMainWindow(IplotQtMainWindow):
             for row in range(max(rows.keys())):
                 plot = None
                 if row + 1 in rows.keys():
+
+                    plot_types = list(
+                        set(signal.plot_type for signals in rows[row + 1][2].values() for signal in signals))
+                    # Will add corresponding validation
+
                     x_axis_transformed = False
                     for signals in rows[row + 1][2].values():
                         for signal in signals:
@@ -668,7 +673,8 @@ class MTMainWindow(IplotQtMainWindow):
                         x_axis.begin = rows[row + 1][3][0]
                         x_axis.end = rows[row + 1][3][1]
 
-                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
+                    plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row + 1][0],
+                                                            col_span=rows[row + 1][1])
                     for stack, signals in rows[row + 1][2].items():
                         for signal in signals:
                             if signal.stream_valid:
