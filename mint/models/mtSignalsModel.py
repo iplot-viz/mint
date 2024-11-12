@@ -16,6 +16,7 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 from PySide6.QtGui import QBrush, QColor
 
 from iplotProcessing.common import InvalidExpression
+from iplotlib.core import SignalXY, SignalContour
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, ParserHelper
 from iplotProcessing.tools import Parser
 
@@ -56,7 +57,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     ROWUID_COLNAME = 'uid'
 
-    def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
         super().__init__(parent)
 
@@ -71,7 +72,7 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table = pd.DataFrame(columns=column_names)
         self._table_fails = pd.DataFrame(columns=column_names)
-        self._signal_class = signal_class
+        self._signal_class = None
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
         self.data_sources = AppDataAccess.da.get_connected_data_sources()
@@ -344,8 +345,11 @@ class MTSignalsModel(QAbstractItemModel):
 
     def create_signals(self, row_idx: int) -> typing.Iterator[Waypoint]:
         signal_params = dict()
+        # Initialize attributes for Waypoint  // Review if this is the best way
+        col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
-        for i, parsed_row in enumerate(self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx+1)):
+        for i, parsed_row in enumerate(
+                self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1)):
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
             if i == 0:  # grab these from the first row we encounter.
@@ -377,6 +381,11 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
+            if signal_params['plot_type'] == 'PlotXY':
+                self._signal_class = SignalXY
+            elif signal_params['plot_type'] == 'PlotContour':
+                self._signal_class = SignalContour
+
             waypoint = Waypoint(row_idx,
                                 col_num,
                                 row_num,
@@ -388,9 +397,9 @@ class MTSignalsModel(QAbstractItemModel):
                                 ts_end,
                                 func=mtBP.construct_signal,
                                 args=[self.blueprint],
-                                kwargs={
-                                    'signal_class': self._signal_class, **signal_params}
+                                kwargs={'signal_class': self._signal_class, **signal_params}
                                 )
+
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 

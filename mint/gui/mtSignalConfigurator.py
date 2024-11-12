@@ -163,15 +163,13 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None,
-                 signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None, parent=None):
         super().__init__(parent)
 
         if data_sources is None:
             data_sources = []
-        self._signal_class = signal_class
 
-        self._model = MTSignalsModel(blueprint=blueprint, signal_class=self._signal_class)
+        self._model = MTSignalsModel(blueprint=blueprint)
 
         self._scsv_dir = scsv_dir
         self.data_sources = data_sources
