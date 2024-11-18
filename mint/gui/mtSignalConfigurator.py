@@ -17,7 +17,7 @@ import typing
 from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
+from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication, QAction
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
@@ -28,6 +28,7 @@ from iplotProcessing.tools.parsers import Parser
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
+from iplotWidgets.consoleWidget.consoleWidget import ConsoleWidget
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -220,6 +221,10 @@ class MTSignalConfigurator(QWidget):
 
         self.selectPulseDialog = PulseBrowser()
         self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
+
+        # MINT Console
+        self.console = ConsoleWidget()
+        self.console.setup_logging()
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None

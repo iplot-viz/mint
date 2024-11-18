@@ -177,11 +177,15 @@ class MTMainWindow(IplotQtMainWindow):
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
+        show_console_action = QAction("Show Console", self)
+        show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
+
         file_menu.addAction(self.sigCfgWidget.tool_bar().openAction)
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
         file_menu.addAction(exit_action)
+        file_menu.addAction(show_console_action)
 
         self.drawBtn = QPushButton("Draw")
         pxmap = QPixmap()
