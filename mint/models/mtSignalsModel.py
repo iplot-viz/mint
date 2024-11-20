@@ -171,10 +171,13 @@ class MTSignalsModel(QAbstractItemModel):
             data = [["" for _ in range(self._table.columns.size)]]
             data_fails = [[0 for _ in range(self._table.columns.size)]]
             empty_row = pd.DataFrame(data=data, columns=self._table.columns)
+            col_data_source = mtBP.get_column_name(self.blueprint, 'DataSource')
+            col_plot_type = mtBP.get_column_name(self.blueprint, 'PlotType')
             empty_row_fails = pd.DataFrame(data=data_fails, columns=self._table.columns)
             # Set default Datasource
-            empty_row.loc[0, mtBP.get_column_name(self.blueprint, 'DataSource')] = self.blueprint.get('DataSource').get(
-                'default')
+            empty_row.loc[0, col_data_source] = self.blueprint.get('DataSource').get('default')
+            # Set default PlotType
+            empty_row.loc[0, col_plot_type] = self.blueprint.get('PlotType').get('default')
             # Generate uid
             empty_row.loc[0, self.ROWUID_COLNAME] = str(uuid.uuid4())
             self._table = pd.concat([self._table.iloc[:new_row], empty_row, self._table.iloc[new_row:]]).reset_index(
