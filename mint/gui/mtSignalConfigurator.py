@@ -31,6 +31,7 @@ from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
+from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
@@ -186,6 +187,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -197,6 +199,7 @@ class MTSignalConfigurator(QWidget):
             widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
+            widget.view().setItemDelegateForColumn(14, self._pt_delegate)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
