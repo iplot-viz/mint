@@ -184,8 +184,8 @@ class MTMainWindow(IplotQtMainWindow):
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
-        file_menu.addAction(exit_action)
         file_menu.addAction(show_console_action)
+        file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
         pxmap = QPixmap()
