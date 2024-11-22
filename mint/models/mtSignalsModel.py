@@ -346,13 +346,13 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._signal_stack_ids.clear()
 
-    def create_signals(self, row_idx: int) -> typing.Iterator[Waypoint]:
+    def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
         signal_params = dict()
         # Initialize attributes for Waypoint  // Review if this is the best way
         col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
         for i, parsed_row in enumerate(
-                self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1)):
+                self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
             if i == 0:  # grab these from the first row we encounter.
@@ -406,7 +406,7 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 
-    def _parse_series(self, inp: pd.Series, fls: pd.Series, table_row) -> typing.Iterator[pd.Series]:
+    def _parse_series(self, inp: pd.Series, fls: pd.Series, table_row, stack) -> typing.Iterator[pd.Series]:
         with self.activate_fast_mode():
             out = dict()
 
@@ -590,6 +590,9 @@ class MTSignalsModel(QAbstractItemModel):
                         elif column_name == 'Stack':
                             if value == '':
                                 fls[column_name] = 0
+                            elif value in stack:
+                                fls[column_name] = 1
+                                logger.warning("PlotContour cannot be stacked, just PlotXY can be stacked")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0
