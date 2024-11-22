@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour
-from iplotlib.interface import IplotSignalAdapter
+from iplotlib.core.signal import SignalContour
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
@@ -577,31 +577,10 @@ class MTMainWindow(IplotQtMainWindow):
                 )
                 if any(conditions):
                     signal.stream_valid = False
-
+            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
                 plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
-
-            try:
-                prev_stack = set([signal_type.plot_type for signal in plan[waypt.col_num][waypt.row_num][2].values() if
-                                  signal for signal_type in signal])
-
-                if len(prev_stack) > 1:
-                    raise ValueError("Stack plots must have the same signal types")
-                    # logger.error("Stack plots must have the same signal types")
-
-                else:
-                    plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
-
-            except (IndexError, ValueError) as e:
-                # box = QMessageBox()
-                # box.setIcon(QMessageBox.Icon.Critical)
-                # box.setText(f"Error {str(e)}")
-                # logger.exception(e)
-                # box.exec_()
-                logger.error(e)
-                self.indicate_ready()
-                return
 
         # import collections
         # ord = collections.OrderedDict(sorted(plan.items()))

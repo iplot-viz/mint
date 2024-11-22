@@ -227,6 +227,8 @@ class MTSignalConfigurator(QWidget):
 
         self._processed = set()  # Set used to store the different rows processed
 
+        self.invalid_stacks = []  # Used to verify the stacks
+
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
         shortcut2 = QShortcut(QKeySequence("Ctrl+V"), self)
@@ -617,6 +619,9 @@ class MTSignalConfigurator(QWidget):
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
+        # Stack and PlotType
+        self.check_stack_table(df)
+
         error_msgs = []
         graph = defaultdict(list)
         status_col_idx = self.model.columnCount(QModelIndex()) - 1
@@ -696,7 +701,23 @@ class MTSignalConfigurator(QWidget):
                 yield from self._traverse(graph, idx)
         else:
             self._processed.add(row_idx)
-            yield from self._model.create_signals(row_idx)
+            yield from self._model.create_signals(row_idx, self.invalid_stacks)
+
+    def check_stack_table(self, df):
+        # Filter dataframe and extract valid values for 'Stack' and 'Plot Type' columns
+        df_filtered = df[df['Stack'] != ""]
+        stack_valid = df_filtered['Stack'].tolist()
+        plot_types_valid = df_filtered['Plot type'].tolist()
+        # Create new dataframe to validate stacks against their plot types
+        data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
+        # Identify invalid stacks:
+        #   - Those stacks in which a PlotContour is stacked
+        self.invalid_stacks = (
+            data.groupby('Stack')
+            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
+            ['Stack']
+            .unique()
+        )
 
     def begin_build(self):
         self.showProgress.emit()
