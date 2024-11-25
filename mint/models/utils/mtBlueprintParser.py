@@ -87,7 +87,7 @@ def get_code_names(blueprint: dict, predicate_keys=None):
             yield v.get('code_name')
 
 
-def construct_signal(blueprint: dict, signal_class: type = Signal, **signal_params) -> Signal:
+def construct_signal(blueprint: dict, signal_class: type, **signal_params) -> Signal:
     for k, v in blueprint.items():
         if k.startswith('$'):
             continue

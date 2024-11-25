@@ -24,7 +24,6 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour
-from iplotlib.core.signal import SignalContour
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
@@ -353,9 +352,7 @@ class MTMainWindow(IplotQtMainWindow):
             if 'uid' not in params or params['uid'] is None:
                 params['uid'] = waypt.kwargs['uid']
 
-            # REVIEW THIS PART
-            new_signal = waypt.func(*waypt.args, **waypt.kwargs)
-            # new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
