@@ -3,7 +3,6 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
-import logging
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
@@ -16,10 +15,10 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QEvent
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
-    QSplitter, QVBoxLayout, QWidget, QPlainTextEdit
+    QSplitter, QVBoxLayout, QWidget
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
@@ -44,36 +43,6 @@ from mint.tools.sanity_checks import check_data_range
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
-
-
-class ConsoleHandler(logging.Handler):
-    """
-    Custom logging handler that outputs log messages to a specified QPlainTextEdit widget
-    """
-
-    def __init__(self, console_widget, button):
-        super().__init__()
-        self.console_widget = console_widget
-        self.console_button = button
-        self.marked_warning = False
-
-    def emit(self, record):
-        """
-        Responsible for handling the emission of log messages. When a new log of WARNING level or higher is detected,
-        the button associated with the console is marked red
-
-        :param record: It is an object of type LogRecord that contains all the information about the event being logged,
-        such as the message or the severity level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        """
-        msg = self.format(record)
-        if record.levelno >= logging.WARNING:
-            self.console_widget.appendPlainText(msg)
-            self.console_button.setStyleSheet("background-color: red;")
-            self.marked_warning = True
-        else:
-            if not self.marked_warning:
-                self.console_button.setStyleSheet("")
-            self.marked_warning = False
 
 
 class MTMainWindow(IplotQtMainWindow):
@@ -120,6 +89,12 @@ class MTMainWindow(IplotQtMainWindow):
 
         super().__init__(parent=parent, flags=flags)
 
+        # Console button and Icon
+        self.console_button = QPushButton()
+        console_pxmap = QPixmap()
+        console_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/terminal.png'))
+        self.console_button.setIcon(QIcon(console_pxmap))
+
         self.refreshTimer = QTimer(self)
         self.refreshTimer.setTimerType(Qt.CoarseTimer)
         self.refreshTimer.setSingleShot(False)
@@ -133,6 +108,8 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
         self._statusBar.addPermanentWidget(self._progressBar)
+        self._statusBar.addPermanentWidget(QLabel('|'))
+        self._statusBar.addPermanentWidget(self.console_button)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self._memoryMonitor)
         self._statusBar.addPermanentWidget(QLabel('|'))
@@ -177,8 +154,10 @@ class MTMainWindow(IplotQtMainWindow):
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
-        show_console_action = QAction("Show Console", self)
+        # QAction console widget
+        show_console_action = QAction(QIcon(console_pxmap), "&Show Console", self)
         show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
+        self.console_button.clicked.connect(self.sigCfgWidget.console.show_console)
 
         file_menu.addAction(self.sigCfgWidget.tool_bar().openAction)
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
@@ -193,33 +172,11 @@ class MTMainWindow(IplotQtMainWindow):
         self.drawBtn.setIcon(QIcon(pxmap))
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(QIcon(pxmap))
-        self.console_button = QPushButton("Show console")
-        self.console_button.setCheckable(True)
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
         self.daWidgetButtons.layout().addWidget(self.streamBtn)
         self.daWidgetButtons.layout().addWidget(self.drawBtn)
-        self.daWidgetButtons.layout().addWidget(self.console_button)
-
-        self.console_widget = QPlainTextEdit()
-        self.console_widget.setReadOnly(True)
-        self.console_widget.setMinimumWidth(1000)
-        self.console_widget.setMinimumHeight(450)
-        self.console_widget.setStyleSheet("""
-            QPlainTextEdit
-                    {
-                        background-color: #2b2b2b;          /* Dark background */
-                        color: #ffffff;                     /* Light color for the text */
-                        font-family: Consolas, monospace;   /* Monospaced font */
-                        font-size: 12px;                    /* Font size */
-                        padding: 8px;                       /* Spacing around text */
-                    }
-        """)
-        self.console_widget.hide()
-        # Create console handler
-        self.console_handler = ConsoleHandler(self.console_widget, self.console_button)
-        self.setup_logging()
 
         self.dataAccessWidget = QWidget(self)
         self.dataAccessWidget.setLayout(QVBoxLayout())
@@ -238,8 +195,6 @@ class MTMainWindow(IplotQtMainWindow):
         # Setup connections
         self.drawBtn.clicked.connect(self.draw_clicked)
         self.streamBtn.clicked.connect(self.stream_clicked)
-        self.console_button.clicked.connect(self.toggle_console)
-        self.console_widget.installEventFilter(self)
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
@@ -553,43 +508,6 @@ class MTMainWindow(IplotQtMainWindow):
 
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
-
-    def setup_logging(self):
-        # Define the format of log messages
-        self.console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-        # Add the console handler to the main logger
-        logging.getLogger().addHandler(self.console_handler)
-        # Set minimum level in main logger to WARNING
-        logging.getLogger().setLevel(logging.WARNING)
-
-    def toggle_console(self):
-        if self.console_button.isChecked():
-            self.console_widget.show()
-            self.console_button.setText("Hide console")
-        else:
-            self.console_widget.hide()
-            self.console_button.setText("Show console")
-        # Reset the button background color when opening/closing the console
-        self.console_button.setStyleSheet("")
-
-    def eventFilter(self, watched, event):
-        """
-        Function used to manage the closing of the console widget
-        :param watched: QWidget, object being watched
-        :param event: QEvent, event being processed
-
-        :return: bool, return True if the event has been handled. Otherwise, it calls the event handler of the base
-        class and returns its result
-        """
-
-        if watched == self.console_widget and event.type() == QEvent.Type.Close:
-            self.console_button.setText("Show console")
-            # Uncheck the console button
-            self.console_button.setChecked(False)
-            # Reset the button background color when closing the console
-            self.console_button.setStyleSheet("")
-            return True
-        return super().eventFilter(watched, event)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()

@@ -17,7 +17,7 @@ import typing
 from typing import List
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
-from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication, QAction
+from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
