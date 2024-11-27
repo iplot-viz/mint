@@ -655,7 +655,7 @@ class MTMainWindow(IplotQtMainWindow):
                     else:
                         signal_x_is_date = True
 
-                    y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row + 1][2].items()))]
+                    y_axes = [LinearAxis() for _ in range(len(rows[row + 1][2].items()))]
 
                     x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                         window=x_axis_window)
