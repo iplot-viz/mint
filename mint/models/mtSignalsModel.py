@@ -332,6 +332,10 @@ class MTSignalsModel(QAbstractItemModel):
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
                 signal.get_data()
 
+                # Check Signal status
+                # if signal.status_info.result == 'Fail':
+                # Variable is not valid: 1) Incorrect name 2) No data in that interval
+
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
     @contextmanager
@@ -560,7 +564,8 @@ class MTSignalsModel(QAbstractItemModel):
                                     # Check variable or expression with variable
                                     # Check necessary to obtain the valid name of each variable
                                     variable_name = value.split('/')[0]
-                                    if AppDataAccess.da.get_var_list(data_source_name=inp['DS'], pattern=variable_name):
+                                    if AppDataAccess.da.get_var_simple(data_source_name=inp['DS'],
+                                                                       pattern=variable_name):
                                         # Correct variable
                                         fls[column_name] = 0
                                     elif value.find(Parser.marker_in) != -1 or value.find(Parser.marker_out) != -1:
