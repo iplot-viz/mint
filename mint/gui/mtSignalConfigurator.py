@@ -31,6 +31,7 @@ from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
+from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
@@ -163,15 +164,13 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None,
-                 signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None, parent=None):
         super().__init__(parent)
 
         if data_sources is None:
             data_sources = []
-        self._signal_class = signal_class
 
-        self._model = MTSignalsModel(blueprint=blueprint, signal_class=self._signal_class)
+        self._model = MTSignalsModel(blueprint=blueprint)
 
         self._scsv_dir = scsv_dir
         self.data_sources = data_sources
@@ -188,6 +187,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -199,6 +199,7 @@ class MTSignalConfigurator(QWidget):
             widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
+            widget.view().setItemDelegateForColumn(14, self._pt_delegate)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
@@ -225,6 +226,8 @@ class MTSignalConfigurator(QWidget):
         self._find_replace_dialog = None
 
         self._processed = set()  # Set used to store the different rows processed
+
+        self.invalid_stacks = []  # Used to verify the stacks
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
@@ -616,6 +619,9 @@ class MTSignalConfigurator(QWidget):
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
+        # Stack and PlotType
+        self.check_stack_table(df)
+
         error_msgs = []
         graph = defaultdict(list)
         status_col_idx = self.model.columnCount(QModelIndex()) - 1
@@ -695,7 +701,23 @@ class MTSignalConfigurator(QWidget):
                 yield from self._traverse(graph, idx)
         else:
             self._processed.add(row_idx)
-            yield from self._model.create_signals(row_idx)
+            yield from self._model.create_signals(row_idx, self.invalid_stacks)
+
+    def check_stack_table(self, df):
+        # Filter dataframe and extract valid values for 'Stack' and 'Plot Type' columns
+        df_filtered = df[df['Stack'] != ""]
+        stack_valid = df_filtered['Stack'].tolist()
+        plot_types_valid = df_filtered['Plot type'].tolist()
+        # Create new dataframe to validate stacks against their plot types
+        data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
+        # Identify invalid stacks:
+        #   - Those stacks in which a PlotContour is stacked
+        self.invalid_stacks = (
+            data.groupby('Stack')
+            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
+            ['Stack']
+            .unique()
+        )
 
     def begin_build(self):
         self.showProgress.emit()

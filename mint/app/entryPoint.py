@@ -103,8 +103,7 @@ def run_app(q_app: QApplication, args=None):
                             data_dir=DEFAULT_DATA_DIR,
                             data_sources=data_sources,
                             blueprint=blueprint,
-                            impl=canvas_impl,
-                            signal_class=IplotSignalAdapter)
+                            impl=canvas_impl)
 
     main_win.setWindowTitle(f"{q_app.applicationName()}: {q_app.applicationPid()}")
     main_win.statusBar().addPermanentWidget(
