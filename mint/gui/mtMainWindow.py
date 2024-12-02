@@ -341,6 +341,12 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
+            # Check if signal name is valid
+            signal_valid = waypt.func(*waypt.args, **waypt.kwargs)
+            self.sigCfgWidget.model.update_signal_data(waypt.idx, signal_valid, True)
+            if signal_valid.status_info.result == 'Fail':
+                continue
+
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
