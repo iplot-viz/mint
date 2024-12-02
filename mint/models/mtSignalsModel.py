@@ -333,8 +333,12 @@ class MTSignalsModel(QAbstractItemModel):
                 signal.get_data()
 
                 # Check Signal status
-                # if signal.status_info.result == 'Fail':
-                # Variable is not valid: 1) Incorrect name 2) No data in that interval
+                if signal.status_info.result == 'Fail':
+                    # If variable is not valid we have two cases:
+                    #   1) Incorrect name
+                    #   2) No data in that interval
+                    index = self._table.index[self._table['Variable'] == signal.name].tolist()
+                    self._table_fails.loc[index, 'Variable'] = 1
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
@@ -559,43 +563,7 @@ class MTSignalsModel(QAbstractItemModel):
 
                         # Variable
                         if column_name == 'Variable':
-                            if value != '':
-                                if not fls['DS']:
-                                    # Check variable or expression with variable
-                                    # Check necessary to obtain the valid name of each variable
-                                    variable_name = value.split('/')[0]
-                                    if AppDataAccess.da.get_var_simple(data_source_name=inp['DS'],
-                                                                       pattern=variable_name):
-                                        # Correct variable
-                                        fls[column_name] = 0
-                                    elif value.find(Parser.marker_in) != -1 or value.find(Parser.marker_out) != -1:
-                                        correct = True
-                                        try:
-                                            p.set_expression(value)
-                                            if p.is_valid:
-                                                variable = p.get_var_expression(value)
-                                                for var in variable:
-                                                    variable_name = var.split('/')[0]
-                                                    if not AppDataAccess.da.get_var_list(data_source_name=inp['DS'],
-                                                                                         pattern=variable_name) and \
-                                                            variable_name not in self.aliases:
-                                                        correct = False
-                                                        break
-                                                if correct:
-                                                    fls[column_name] = 0
-                                                else:
-                                                    fls[column_name] = 1
-                                            else:
-                                                fls[column_name] = 1
-                                        except InvalidExpression:
-                                            fls[column_name] = 1
-                                    else:
-                                        # Incorrect variable
-                                        fls[column_name] = 1
-                                else:
-                                    fls[column_name] = 1  # Variable with incorrect DataSource
-                            else:
-                                fls[column_name] = 0
+                            fls[column_name] = 0
 
                         # Stack
                         elif column_name == 'Stack':

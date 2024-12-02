@@ -534,12 +534,33 @@ class MTMainWindow(IplotQtMainWindow):
             if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
-                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, False)
+                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
             signal = waypt.func(*waypt.args, **waypt.kwargs)
             if not signal.label:
                 continue
+            signal.data_access_enabled = False if self.canvas.streaming else True
+            signal.hi_precision_data = True if self.canvas.streaming else False
+            if not stream:
+                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            else:
+                # In the case of streaming, only simple variables are kept
+                conditions = (
+                    ts != signal.ts_start,
+                    te != signal.ts_end,
+                    signal.envelope,
+                    signal.x_expr != '${self}.time',
+                    signal.y_expr != '${self}.data_store[1]',
+                    signal.z_expr != '${self}.data_store[2]',
+                    len(signal.children) > 1  # Only support one level processing
+                )
+                if any(conditions):
+                    signal.stream_valid = False
+
+            if signal.status_info.result == 'Fail':
+                continue
+
             if waypt.col_num not in plan:
                 plan[waypt.col_num] = {}
 
@@ -558,24 +579,6 @@ class MTMainWindow(IplotQtMainWindow):
                     if existing[3][1] is None or waypt.ts_end > existing[3][1]:
                         existing[3][1] = waypt.ts_end
 
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-            signal.data_access_enabled = False if self.canvas.streaming else True
-            signal.hi_precision_data = True if self.canvas.streaming else False
-            if not stream:
-                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            else:
-                # In the case of streaming, only simple variables are kept
-                conditions = (
-                    ts != signal.ts_start,
-                    te != signal.ts_end,
-                    signal.envelope,
-                    signal.x_expr != '${self}.time',
-                    signal.y_expr != '${self}.data_store[1]',
-                    signal.z_expr != '${self}.data_store[2]',
-                    len(signal.children) > 1  # Only support one level processing
-                )
-                if any(conditions):
-                    signal.stream_valid = False
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
