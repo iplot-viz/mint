@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotProcessing.common import InvalidExpression
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
+from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
@@ -127,7 +127,6 @@ NEAT_VIEW = {
 class RowAliasType(Enum):
     Simple = 'SIMPLE'
     Mixed = 'MIXED'
-    NoAlias = 'NOALIAS'
 
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
@@ -149,8 +148,10 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         return RowAliasType.Simple, name, p
     elif alias_valid and not raw_name:
         return RowAliasType.Mixed, name, p
+    elif not alias_valid and raw_name:
+        return RowAliasType.Simple, name, p
     else:
-        return RowAliasType.NoAlias, name, p
+        return RowAliasType.Mixed, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -645,7 +646,7 @@ class MTSignalConfigurator(QWidget):
                         if idx in graph:
                             graph.pop(idx)
                 else:
-                    if row_type != RowAliasType.Mixed:
+                    if row_type == RowAliasType.Simple:
                         graph[idx].clear()
                         continue
 
@@ -687,6 +688,7 @@ class MTSignalConfigurator(QWidget):
 
         self._model.layoutChanged.emit()
         self._model.aliases = []
+        self._processed.clear()
         self.set_progress(100)
         self.ready.emit()
         self.end_build()
@@ -700,8 +702,9 @@ class MTSignalConfigurator(QWidget):
             else:
                 yield from self._traverse(graph, idx)
         else:
-            self._processed.add(row_idx)
-            yield from self._model.create_signals(row_idx, self.invalid_stacks)
+            if row_idx not in self._processed:
+                self._processed.add(row_idx)
+                yield from self._model.create_signals(row_idx, self.invalid_stacks)
 
     def check_stack_table(self, df):
         # Filter dataframe and extract valid values for 'Stack' and 'Plot Type' columns
