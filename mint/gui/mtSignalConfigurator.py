@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotProcessing.common import InvalidExpression
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
+from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
