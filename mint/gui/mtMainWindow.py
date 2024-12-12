@@ -22,8 +22,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import PlotXY, Plot
-from iplotlib.interface import IplotSignalAdapter
+from iplotlib.core.plot import Plot, PlotXY, PlotContour
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
@@ -56,7 +55,6 @@ class MTMainWindow(IplotQtMainWindow):
                  data_sources=None,
                  blueprint: dict = mtBlueprintParser.DEFAULT_BLUEPRINT,
                  impl: str = "matplotlib",
-                 signal_class: type = IplotSignalAdapter,
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
@@ -64,8 +62,7 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_class = PlotXY
-        self.signal_class = signal_class
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -540,6 +537,7 @@ class MTMainWindow(IplotQtMainWindow):
         plan = dict()
 
         for waypt in self.sigCfgWidget.build(**da_params):
+            existing = None
 
             if not waypt.func and not waypt.args:
                 continue
@@ -626,7 +624,7 @@ class MTMainWindow(IplotQtMainWindow):
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=None):
         if not plan.keys():
-            self.canvas.plots = []
+            self.canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -640,56 +638,65 @@ class MTMainWindow(IplotQtMainWindow):
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for colnum, rows in plan.items():
-            for row in range(max(rows.keys())):
+            for row in range(1, max(rows.keys()) + 1):
                 plot = None
-                if row + 1 in rows.keys():
-                    x_axis_transformed = False
-                    for signals in rows[row + 1][2].values():
+                if row not in rows.keys():
+                    self.canvas.add_plot(None, col=colnum - 1)
+                    continue
+
+                plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
+                if len(plot_types) > 1 or any(value not in self.plot_classes.keys() for value in plot_types):
+                    self.canvas.add_plot(None, col=colnum - 1)
+                    continue
+
+                x_axis_transformed = False
+                for signals in rows[row][2].values():
+                    for signal in signals:
+                        if signal.x_expr != '${self}.time':
+                            x_axis_transformed = True
+                            break
+
+                if not canvas.streaming:
+                    signal_x_is_date = False
+                    for stack, signals in rows[row][2].items():
                         for signal in signals:
-                            if signal.x_expr != '${self}.time':
-                                x_axis_transformed = True
-                                break
+                            try:
+                                x_data = signal.get_data()[0]
+                                if x_axis_transformed:
+                                    if len(x_data) > 0:
+                                        signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                else:
+                                    if rows[row][3][0] is not None:
+                                        signal_x_is_date |= bool(rows[row][3][0] > (1 << 53))
+                            except (IndexError, ValueError) as _:
+                                signal_x_is_date = False
+                else:
+                    signal_x_is_date = True
 
-                    if not canvas.streaming:
-                        signal_x_is_date = False
-                        for stack, signals in rows[row + 1][2].items():
-                            for signal in signals:
-                                try:
-                                    x_data = signal.get_data()[0]
-                                    if x_axis_transformed:
-                                        if len(x_data) > 0:
-                                            signal_x_is_date |= bool(min(x_data) > (1 << 53))
-                                    else:
-                                        if rows[row + 1][3][0] is not None:
-                                            signal_x_is_date |= bool(rows[row + 1][3][0] > (1 << 53))
-                                except (IndexError, ValueError) as _:
-                                    signal_x_is_date = False
-                    else:
-                        signal_x_is_date = True
+                y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row][2].items()))]
 
-                    y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row + 1][2].items()))]
+                x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
+                                    window=x_axis_window)
 
-                    x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
-                                        window=x_axis_window)
+                # In case of processed signals, the limits are not set until the drawn_fn occurs
+                # In the other hand, for no processed signals and for pulses the limits are set as follows:
+                if not x_axis_transformed:
+                    x_axis.original_begin = rows[row][3][0]
+                    x_axis.original_end = rows[row][3][1]
+                    x_axis.begin = rows[row][3][0]
+                    x_axis.end = rows[row][3][1]
 
-                    # In case of processed signals, the limits are not set until the drawn_fn occurs
-                    # In the other hand, for no processed signals and for pulses the limits are set as follows:
-                    if not x_axis_transformed:
-                        x_axis.original_begin = rows[row + 1][3][0]
-                        x_axis.original_end = rows[row + 1][3][1]
-                        x_axis.begin = rows[row + 1][3][0]
-                        x_axis.end = rows[row + 1][3][1]
+                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row][0],
+                                                        col_span=rows[row][1])
+                for stack, signals in rows[row][2].items():
+                    for signal in signals:
+                        if signal.stream_valid:
+                            plot.add_signal(signal, stack=stack)
 
-                    plot = self.plot_class(axes=[x_axis, y_axes], row_span=rows[row + 1][0], col_span=rows[row + 1][1])
-                    for stack, signals in rows[row + 1][2].items():
-                        for signal in signals:
-                            if signal.stream_valid:
-                                plot.add_signal(signal, stack=stack)
-
-                    # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
-                    # is not added to the Canvas and None is added instead.
-                    if canvas.streaming and not plot.signals:
-                        plot = None
+                # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
+                # is not added to the Canvas and None is added instead.
+                if canvas.streaming and not plot.signals:
+                    plot = None
 
                 self.canvas.add_plot(plot, col=colnum - 1)
 
