@@ -708,7 +708,6 @@ class MTSignalConfigurator(QWidget):
         df_filtered = df[df['Stack'] != ""]
         stack_valid = df_filtered['Stack'].tolist()
         plot_types_valid = df_filtered['Plot type'].replace("", "PlotXY").tolist()  # Check if "" in column Plot Type
-
         # Create new dataframe to validate stacks against their plot types
         data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
         # Identify invalid stacks:

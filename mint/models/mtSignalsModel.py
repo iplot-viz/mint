@@ -348,7 +348,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
         signal_params = dict()
-        # Initialize attributes for Waypoint  // Review if this is the best way
+        # Initialize attributes for Waypoint
         col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
         for i, parsed_row in enumerate(
