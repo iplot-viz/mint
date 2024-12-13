@@ -592,7 +592,8 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning("PlotContour cannot be stacked, just PlotXY can be stacked")
+                                logger.warning(f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY"
+                                               f" can be stacked in the table row [{table_row}]")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0
