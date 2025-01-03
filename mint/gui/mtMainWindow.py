@@ -339,6 +339,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            plot.parent = self.canvas
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -353,10 +354,11 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal.parent = plot
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
-            # Replace signal.
+            # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.set_progress(99)
