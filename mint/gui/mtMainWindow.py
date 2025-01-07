@@ -88,7 +88,7 @@ class MTMainWindow(IplotQtMainWindow):
         super().__init__(parent=parent, flags=flags)
 
         self.refreshTimer = QTimer(self)
-        self.refreshTimer.setTimerType(Qt.CoarseTimer)
+        self.refreshTimer.setTimerType(Qt.TimerType.CoarseTimer)
         self.refreshTimer.setSingleShot(False)
         self.refreshTimer.timeout.connect(lambda: self.on_timeout())
         self._memoryMonitor = MTMemoryMonitor(parent=self, pid=QCoreApplication.instance().applicationPid())
@@ -125,7 +125,7 @@ class MTMainWindow(IplotQtMainWindow):
         help_menu = self.menuBar().addMenu("&Help")
 
         exit_action = QAction("Exit", self.menuBar())
-        exit_action.setShortcuts(QKeySequence.Quit)
+        exit_action.setShortcuts(QKeySequence.StandardKey.Quit)
         exit_action.triggered.connect(QApplication.closeAllWindows)
 
         about_qt_action = QAction("About Qt", self.menuBar())
@@ -171,7 +171,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.dataAccessWidget.layout().addWidget(self.daWidgetButtons)
 
         self._centralWidget = QSplitter(self)
-        self._centralWidget.setOrientation(Qt.Horizontal)
+        self._centralWidget.setOrientation(Qt.Orientation.Horizontal)
         self._centralWidget.addWidget(self.dataAccessWidget)
         self._centralWidget.addWidget(self.graphicsArea)
         self.setCentralWidget(self._centralWidget)
@@ -211,7 +211,7 @@ class MTMainWindow(IplotQtMainWindow):
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
             # we detach now.
-            self._floatingWindow.addToolBar(Qt.TopToolBarArea, self.toolBar)
+            self._floatingWindow.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolBar)
             self.graphicsArea.setLayout(QVBoxLayout())
             self.graphicsArea.layout().addWidget(self.canvasStack)
             self._floatingWindow.setCentralWidget(self.graphicsArea)
@@ -338,6 +338,12 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
+            # Check if signal name is valid
+            signal_valid = waypt.func(*waypt.args, **waypt.kwargs)
+            self.sigCfgWidget.model.update_signal_data(waypt.idx, signal_valid, True)
+            if signal_valid.status_info.result == 'Fail':
+                continue
+
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
             plot.parent = self.canvas
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
@@ -376,7 +382,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
-    def import_json(self, file_path: os.PathLike):
+    def import_json(self, file_path: str):
         self.statusBar().showMessage(f"Importing {file_path} ..")
         try:
             with open(file_path, mode='r') as f:
@@ -402,7 +408,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.indicate_ready()
             return
 
-    def export_data_plots(self, file_path: os.PathLike):
+    def export_data_plots(self, file_path: str):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
             with open(file_path, mode='w') as f:
@@ -416,7 +422,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.indicate_ready()
             return
 
-    def export_json(self, file_path: os.PathLike):
+    def export_json(self, file_path: str):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
             with open(file_path, mode='w') as f:
@@ -451,7 +457,9 @@ class MTMainWindow(IplotQtMainWindow):
             # Dumps are done before canvas processing
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
-            self.sigCfgWidget.export_scsv(os.path.join(dump_dir, "signals_table" + str(os.getpid()) + ".scsv"))
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = f"signals_table_{os.getpid()}_{timestamp}.scsv"
+            self.sigCfgWidget.export_scsv(os.path.join(dump_dir, file_name))
 
             self.build()
 
@@ -534,12 +542,33 @@ class MTMainWindow(IplotQtMainWindow):
             if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
-                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, False)
+                    self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
             signal = waypt.func(*waypt.args, **waypt.kwargs)
             if not signal.label:
                 continue
+            signal.data_access_enabled = False if self.canvas.streaming else True
+            signal.hi_precision_data = True if self.canvas.streaming else False
+            if not stream:
+                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+            else:
+                # In the case of streaming, only simple variables are kept
+                conditions = (
+                    ts != signal.ts_start,
+                    te != signal.ts_end,
+                    signal.envelope,
+                    signal.x_expr != '${self}.time',
+                    signal.y_expr != '${self}.data_store[1]',
+                    signal.z_expr != '${self}.data_store[2]',
+                    len(signal.children) > 1  # Only support one level processing
+                )
+                if any(conditions):
+                    signal.stream_valid = False
+
+            if signal.status_info.result == 'Fail':
+                continue
+
             if waypt.col_num not in plan:
                 plan[waypt.col_num] = {}
 
@@ -558,24 +587,6 @@ class MTMainWindow(IplotQtMainWindow):
                     if existing[3][1] is None or waypt.ts_end > existing[3][1]:
                         existing[3][1] = waypt.ts_end
 
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-            signal.data_access_enabled = False if self.canvas.streaming else True
-            signal.hi_precision_data = True if self.canvas.streaming else False
-            if not stream:
-                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            else:
-                # In the case of streaming, only simple variables are kept
-                conditions = (
-                    ts != signal.ts_start,
-                    te != signal.ts_end,
-                    signal.envelope,
-                    signal.x_expr != '${self}.time',
-                    signal.y_expr != '${self}.data_store[1]',
-                    signal.z_expr != '${self}.data_store[2]',
-                    len(signal.children) > 1  # Only support one level processing
-                )
-                if any(conditions):
-                    signal.stream_valid = False
             plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
