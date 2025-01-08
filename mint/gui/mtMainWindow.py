@@ -15,7 +15,7 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
@@ -481,6 +481,9 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
 
         self.prefWindow.update()
+        if self.prefWindow.isVisible():
+            self.prefWindow.treeView.selectionModel().select(self.prefWindow.treeView.model().index(0, 0),
+                                                             QItemSelectionModel.Select)
 
         self.drop_history()  # clean zoom history; is this best place?
         self.start_auto_refresh()
