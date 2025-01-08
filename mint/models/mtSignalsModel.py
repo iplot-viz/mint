@@ -356,11 +356,11 @@ class MTSignalsModel(QAbstractItemModel):
 
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
         signal_params = dict()
-        # Initialize attributes for Waypoint  // Review if this is the best way
+        # Initialize attributes for Waypoint
         col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
         for i, parsed_row in enumerate(
-                self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], stack)):
+                self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
             if i == 0:  # grab these from the first row we encounter.
@@ -414,7 +414,7 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 
-    def _parse_series(self, inp: pd.Series, fls: pd.Series, stack) -> typing.Iterator[pd.Series]:
+    def _parse_series(self, inp: pd.Series, fls: pd.Series, table_row, stack) -> typing.Iterator[pd.Series]:
         with self.activate_fast_mode():
             out = dict()
 
@@ -467,6 +467,9 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning(
+                                        f"The pulse '{pulse}' could not be found in the data source '{inp['DS']}' "
+                                        f"in the table row [{table_row}]")
                                     break
 
                             if len(elements[2]) == 0:
@@ -500,6 +503,8 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid date format: expected an absolute timestamp in nanoseconds in "
+                                               f"the table row [{table_row}]")
                             value = default_value
 
                         # None value but there are pulses
@@ -508,6 +513,8 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid date format: expected a relative timestamp when using pulses "
+                                               f"in the table row [{table_row}]")
 
                             if default_value == '':
                                 if column_name == 'StartTime':
@@ -534,6 +541,8 @@ class MTSignalsModel(QAbstractItemModel):
                             else:
                                 value = default_value
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid date format: expected an absolute timestamp when using a time "
+                                               f"range without pulses in the table row [{table_row}]")
 
                         # There is a value and pulses
                         elif value is not None and out['PulseId']:
@@ -544,6 +553,8 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     value = None
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid date format: expected a relative timestamp when using pulses "
+                                               f"in the table row [{table_row}]")
                             else:
                                 # keep value
                                 fls[column_name] = 0
@@ -554,6 +565,8 @@ class MTSignalsModel(QAbstractItemModel):
                             if value <= out['StartTime'] or fls['StartTime'] == 1 or fls[column_name] == 1:
                                 fls[column_name] = 1
                                 fls['StartTime'] = 1
+                                logger.warning(f"Chronology error: EndTime must be later than the StartTime in the "
+                                               f"table row [{table_row}]")
                             else:
                                 fls[column_name] = 0
                                 fls['StartTime'] = 0
@@ -562,11 +575,15 @@ class MTSignalsModel(QAbstractItemModel):
                         value = get_value(inp, column_name, type_func)
                         if value == '':
                             fls[column_name] = 1
+                            logger.warning(f"Invalid datasource: the 'Datasource' field cannot be empty in the table "
+                                           f"row [{table_row}]")
                         else:
                             if value in self.data_sources:
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid datasource: the value '{value}' is not found in the list of "
+                                               f"available datasources in the table row [{table_row}]")
                     else:
                         value = get_value(inp, column_name, type_func) or default_value
 
@@ -583,26 +600,35 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning("PlotContour cannot be stacked, just PlotXY can be stacked")
+                                logger.warning(f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY"
+                                               f" can be stacked in the table row [{table_row}]")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning(f"Invalid stack: The stack identifier must be a numeric value in the"
+                                                   f" table row [{table_row}]")
 
                         # Row Span - Col Span
                         elif column_name == 'Row span' or column_name == 'Col span':
                             if value <= 0:
                                 fls[column_name] = 1
                                 value = 1
+                                logger.warning(f"Invalid value for '{column_name}': the value must be greater than 0 in"
+                                               f" the table row [{table_row}]")
                             elif value == 1:
                                 if inp[column_name] == '1' or inp[column_name] == '':
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning(f"Invalid value for '{column_name}': the value must be numeric in "
+                                                   f"the table row [{table_row}]")
                             elif value > 10:
                                 fls[column_name] = 1
                                 value = 1
+                                logger.warning(f"Invalid value for '{column_name}': the value exceeds the maximum limit"
+                                               f" of 10 in the table row [{table_row}]")
                             else:
                                 # Keep value
                                 fls[column_name] = 0
@@ -617,6 +643,8 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning(f"Invalid envelope value: expected '0' or an empty string to disable"
+                                                   f" the envelope, or '1' to enable it in the table row [{table_row}]")
 
                         # Alias
                         elif column_name == 'Alias':
@@ -627,6 +655,8 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     # Repeated alias
                                     fls[column_name] = 1
+                                    logger.warning(f"Invalid alias: the alias '{value}' is already present in the list "
+                                                   f"of aliases in the table row [{table_row}]")
                             else:
                                 fls[column_name] = 0
 
@@ -638,13 +668,19 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
+                                    logger.warning(f"Invalid '{column_name}' expression: the provided expression cannot"
+                                                   f" be evaluated correctly")
                             except InvalidExpression:
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid '{column_name}' expression: the provided expression cannot be "
+                                               f"evaluated correctly")
 
                         # Plot Type
                         elif column_name == 'Plot type':
                             if value not in ['PlotXY', 'PlotContour']:
                                 fls[column_name] = 1
+                                logger.warning(f"Invalid plot type: '{value}' is not a valid plot type. Expected"
+                                               f" 'PlotXY' or 'PlotContour'")
                             else:
                                 fls[column_name] = 0
 
