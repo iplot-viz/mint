@@ -357,6 +357,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            plot.parent = self.canvas
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -371,10 +372,11 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal.parent = plot
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
-            # Replace signal.
+            # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.set_progress(99)
@@ -687,7 +689,7 @@ class MTMainWindow(IplotQtMainWindow):
                 else:
                     signal_x_is_date = True
 
-                y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row][2].items()))]
+                y_axes = [LinearAxis() for _ in range(len(rows[row][2].items()))]
 
                 x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                     window=x_axis_window)
