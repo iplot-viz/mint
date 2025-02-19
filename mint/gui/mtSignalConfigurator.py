@@ -131,25 +131,28 @@ class RowAliasType(Enum):
 
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
-    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
 
-    alias_valid = is_non_empty_string(alias)
+    is_simple = True
+    for expr in ['x', 'y', 'z']:
+        temp = row[mtBp.get_column_name(blueprint, expr)]
+        if temp != '':
+            try:
+                Parser().set_expression(temp)
+                is_simple = False
+            except InvalidExpression:
+                pass
 
     try:
         p = Parser().set_expression(name)
     except InvalidExpression:
         p = Parser().set_expression("")
 
-    raw_name = True  # True: name does not consist of any pre-defined aliases
+    # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
+        is_simple &= all([var not in aliases for var in list(p.var_map.keys())])
 
-    if alias_valid and raw_name:
-        return RowAliasType.Simple, name, p
-    elif alias_valid and not raw_name:
-        return RowAliasType.Mixed, name, p
-    elif not alias_valid and raw_name:
+    if is_simple:
         return RowAliasType.Simple, name, p
     else:
         return RowAliasType.Mixed, name, p
