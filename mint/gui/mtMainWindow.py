@@ -379,6 +379,9 @@ class MTMainWindow(IplotQtMainWindow):
             # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
+            # Add markers in the markers table when importing
+            self.qtcanvas._marker_window.import_table(new_signal)
+
         self.sigCfgWidget.set_progress(99)
 
         self.sigCfgWidget.model.dataChanged.emit(self.sigCfgWidget.model.index(0, 0),
