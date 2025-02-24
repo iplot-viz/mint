@@ -340,6 +340,9 @@ class MTMainWindow(IplotQtMainWindow):
         self.sigCfgWidget.begin_build()
         self.sigCfgWidget.set_progress(0)
 
+        # Clear markers table before importing new signals
+        self.qtcanvas._marker_window.clear_info()
+
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         for i, waypt in enumerate(path):
             self.sigCfgWidget.set_status_message(f"Updating {waypt} ..")
@@ -380,7 +383,8 @@ class MTMainWindow(IplotQtMainWindow):
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
             # Add markers in the markers table when importing
-            self.qtcanvas._marker_window.import_table(new_signal)
+            if new_signal.markers_list:
+                self.qtcanvas._marker_window.import_table(new_signal)
 
         self.sigCfgWidget.set_progress(99)
 
