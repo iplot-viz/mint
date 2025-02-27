@@ -14,6 +14,9 @@ import pkgutil
 import socket
 import typing
 import pandas as pd
+import importlib.util
+import importlib.resources as pkg_resources
+from importlib_resources import files
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
@@ -25,6 +28,8 @@ from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
+from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
+from iplotlib.qt.gui.iplotQtCanvasFactory import IplotQtCanvasFactory
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 from iplotDataAccess.dataAccess import DataAccess
@@ -58,6 +63,7 @@ class MTMainWindow(IplotQtMainWindow):
                  parent: typing.Optional[QWidget] = None,
                  flags: Qt.WindowFlags = Qt.WindowFlags()):
 
+        self.qtcanvas: IplotQtCanvas = None
         if data_sources is None:
             data_sources = []
         self.canvas = canvas
@@ -118,13 +124,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.streamerCfgWidget = MTStreamConfigurator(self)
         self.aboutMINT = MTAbout(self)
         self.setAcceptDrops(True)
-
-        if impl.lower() == "matplotlib":
-            from iplotlib.impl.matplotlib.qt.qtMatplotlibCanvas import QtMatplotlibCanvas
-            self.qtcanvas = QtMatplotlibCanvas(tight_layout=True, canvas=self.canvas, parent=self.canvasStack)
-        elif impl.lower() == "vtk":
-            from iplotlib.impl.vtk.qt import QtVTKCanvas
-            self.qtcanvas = QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
+        self.qtcanvas = IplotQtCanvasFactory.new(impl.lower(), tight_layout=True, canvas=self.canvas,
+                                                 parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
 
