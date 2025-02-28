@@ -3,7 +3,6 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
-
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
@@ -16,7 +15,7 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
@@ -87,6 +86,12 @@ class MTMainWindow(IplotQtMainWindow):
 
         super().__init__(parent=parent, flags=flags)
 
+        # Console button and Icon
+        self.console_button = QPushButton()
+        console_pxmap = QPixmap()
+        console_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/terminal.png'))
+        self.console_button.setIcon(QIcon(console_pxmap))
+
         self.refreshTimer = QTimer(self)
         self.refreshTimer.setTimerType(Qt.TimerType.CoarseTimer)
         self.refreshTimer.setSingleShot(False)
@@ -100,6 +105,8 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
         self._statusBar.addPermanentWidget(self._progressBar)
+        self._statusBar.addPermanentWidget(QLabel('|'))
+        self._statusBar.addPermanentWidget(self.console_button)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self._memoryMonitor)
         self._statusBar.addPermanentWidget(QLabel('|'))
@@ -144,10 +151,16 @@ class MTMainWindow(IplotQtMainWindow):
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
 
+        # QAction console widget
+        show_console_action = QAction(QIcon(console_pxmap), "&Show Console", self)
+        show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
+        self.console_button.clicked.connect(self.sigCfgWidget.console.show_console)
+
         file_menu.addAction(self.sigCfgWidget.tool_bar().openAction)
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
+        file_menu.addAction(show_console_action)
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
@@ -156,7 +169,6 @@ class MTMainWindow(IplotQtMainWindow):
         self.drawBtn.setIcon(QIcon(pxmap))
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(QIcon(pxmap))
-
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
@@ -345,6 +357,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            plot.parent = self.canvas
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -359,10 +372,11 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal.parent = plot
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
-            # Replace signal.
+            # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
         self.sigCfgWidget.set_progress(99)
@@ -469,6 +483,9 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
 
         self.prefWindow.update()
+        if self.prefWindow.isVisible():
+            self.prefWindow.treeView.selectionModel().select(self.prefWindow.treeView.model().index(0, 0),
+                                                             QItemSelectionModel.Select)
 
         self.drop_history()  # clean zoom history; is this best place?
         self.start_auto_refresh()
@@ -672,7 +689,7 @@ class MTMainWindow(IplotQtMainWindow):
                 else:
                     signal_x_is_date = True
 
-                y_axes = [LinearAxis(autoscale=True) for _ in range(len(rows[row][2].items()))]
+                y_axes = [LinearAxis() for _ in range(len(rows[row][2].items()))]
 
                 x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                     window=x_axis_window)

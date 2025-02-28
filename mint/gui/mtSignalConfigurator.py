@@ -22,12 +22,13 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotProcessing.common import InvalidExpression
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
+from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
+from iplotWidgets.consoleWidget.consoleWidget import ConsoleWidget
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -127,7 +128,6 @@ NEAT_VIEW = {
 class RowAliasType(Enum):
     Simple = 'SIMPLE'
     Mixed = 'MIXED'
-    NoAlias = 'NOALIAS'
 
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
@@ -149,8 +149,10 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         return RowAliasType.Simple, name, p
     elif alias_valid and not raw_name:
         return RowAliasType.Mixed, name, p
+    elif not alias_valid and raw_name:
+        return RowAliasType.Simple, name, p
     else:
-        return RowAliasType.NoAlias, name, p
+        return RowAliasType.Mixed, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -221,6 +223,10 @@ class MTSignalConfigurator(QWidget):
 
         self.selectPulseDialog = PulseBrowser()
         self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
+
+        # MINT Console
+        self.console = ConsoleWidget()
+        self.console.setup_logging()
 
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
@@ -638,14 +644,14 @@ class MTSignalConfigurator(QWidget):
                         conflict_row_ids = []
                         for alias_idx, alias in enumerate(aliases):
                             if var_name == alias:
-                                conflict_row_ids.append(alias_idx)
+                                conflict_row_ids.append(alias_idx + 1)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
                         self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
                 else:
-                    if row_type != RowAliasType.Mixed:
+                    if row_type == RowAliasType.Simple:
                         graph[idx].clear()
                         continue
 
@@ -687,6 +693,7 @@ class MTSignalConfigurator(QWidget):
 
         self._model.layoutChanged.emit()
         self._model.aliases = []
+        self._processed.clear()
         self.set_progress(100)
         self.ready.emit()
         self.end_build()
@@ -700,14 +707,15 @@ class MTSignalConfigurator(QWidget):
             else:
                 yield from self._traverse(graph, idx)
         else:
-            self._processed.add(row_idx)
-            yield from self._model.create_signals(row_idx, self.invalid_stacks)
+            if row_idx not in self._processed:
+                self._processed.add(row_idx)
+                yield from self._model.create_signals(row_idx, self.invalid_stacks)
 
     def check_stack_table(self, df):
         # Filter dataframe and extract valid values for 'Stack' and 'Plot Type' columns
         df_filtered = df[df['Stack'] != ""]
         stack_valid = df_filtered['Stack'].tolist()
-        plot_types_valid = df_filtered['Plot type'].tolist()
+        plot_types_valid = df_filtered['Plot type'].replace("", "PlotXY").tolist()  # Check if "" in column Plot Type
         # Create new dataframe to validate stacks against their plot types
         data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
         # Identify invalid stacks:
