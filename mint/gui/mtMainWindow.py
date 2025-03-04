@@ -488,6 +488,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
+        self.canvasStack.currentWidget().check_markers(self.canvas)
 
         self.prefWindow.update()
         if self.prefWindow.isVisible():
