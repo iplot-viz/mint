@@ -72,7 +72,6 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table = pd.DataFrame(columns=column_names)
         self._table_fails = pd.DataFrame(columns=column_names)
-        self._signal_class = None
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
         self.data_sources = AppDataAccess.da.get_connected_data_sources()
@@ -393,9 +392,11 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_end = signal_params.get('ts_end')
 
             if signal_params['plot_type'] == 'PlotXY':
-                self._signal_class = SignalXY
+                signal_class = SignalXY
             elif signal_params['plot_type'] == 'PlotContour':
-                self._signal_class = SignalContour
+                signal_class = SignalContour
+            else:
+                continue
 
             waypoint = Waypoint(row_idx,
                                 col_num,
@@ -408,7 +409,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 ts_end,
                                 func=mtBP.construct_signal,
                                 args=[self.blueprint],
-                                kwargs={'signal_class': self._signal_class, **signal_params}
+                                kwargs={'signal_class': signal_class, **signal_params}
                                 )
 
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
