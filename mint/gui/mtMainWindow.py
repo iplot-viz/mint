@@ -20,6 +20,7 @@ from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
 
+from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour
@@ -27,7 +28,6 @@ from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
-from iplotDataAccess.dataAccess import DataAccess
 
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector

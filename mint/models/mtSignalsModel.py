@@ -74,7 +74,7 @@ class MTSignalsModel(QAbstractItemModel):
         self._table_fails = pd.DataFrame(columns=column_names)
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
-        self.data_sources = AppDataAccess.da.get_connected_data_sources()
+        self.data_sources = AppDataAccess.da.get_connected_data_source_names()
         self.aliases = []
 
     @property
@@ -463,7 +463,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     idx = 2
 
                                 # Check each pulse
-                                if AppDataAccess.da.get_pulse_list(data_source_name=inp['DS'], pattern=pulse):
+                                if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(pattern=pulse).empty:
                                     elements[idx].append(pulse)
                                     fls[column_name] = 0
                                 else:
