@@ -95,7 +95,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def data(self, index: QModelIndex, role: int = ...):
         if index.isValid():
-            value = self._table.iloc[index.row()][index.column()]
+            value = self._table.iloc[index.row(), index.column()]
             if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
                 return value
             if role == Qt.ItemDataRole.BackgroundRole:
