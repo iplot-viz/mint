@@ -6,4 +6,4 @@ IPLOT_LOG_LEVEL=INFO
 IPLOT_LOG_FILENAME=mint.log
 IPLOT_SOURCES_CONFIG=/opt/codac/apps/mint/mint/mydatasources.cfg
 IPLOT_LOG_LIMIT=10
-
+IPLOT_CANVAS_CONFIG=/opt/codac/apps/mint/mint/data/canvas_properties/default_properties.json

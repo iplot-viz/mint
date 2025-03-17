@@ -19,7 +19,7 @@ def run_app(q_app: QApplication, args=None):
     from PySide6.QtWidgets import QLabel
 
     from iplotlib.core import Canvas
-    from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
+    from iplotlib.interface.iplotSignalAdapter import AccessHelper
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
 
