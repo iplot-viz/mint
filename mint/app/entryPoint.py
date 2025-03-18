@@ -94,7 +94,7 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
-    data_sources = AccessHelper.da.get_connected_data_sources()
+    data_sources = AccessHelper.da.get_connected_data_source_names()
 
     main_win = MTMainWindow(canvas,
                             AccessHelper.da,

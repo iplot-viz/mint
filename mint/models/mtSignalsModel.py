@@ -72,10 +72,9 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table = pd.DataFrame(columns=column_names)
         self._table_fails = pd.DataFrame(columns=column_names)
-        self._signal_class = None
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
-        self.data_sources = AppDataAccess.da.get_connected_data_sources()
+        self.data_sources = AppDataAccess.da.get_connected_data_source_names()
         self.aliases = []
 
     @property
@@ -96,7 +95,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def data(self, index: QModelIndex, role: int = ...):
         if index.isValid():
-            value = self._table.iloc[index.row()][index.column()]
+            value = self._table.iloc[index.row(), index.column()]
             if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
                 return value
             if role == Qt.ItemDataRole.BackgroundRole:
@@ -392,12 +391,12 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
-            if signal_params['plot_type'] == 'PlotXY':
-                self._signal_class = SignalXY
+            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider':
+                signal_class = SignalXY
             elif signal_params['plot_type'] == 'PlotContour':
-                self._signal_class = SignalContour
-            elif signal_params['plot_type'] == 'PlotXYWithSlider':
-                self._signal_class = SignalXY
+                signal_class = SignalContour
+            else:
+                continue
 
             waypoint = Waypoint(row_idx,
                                 col_num,
@@ -410,7 +409,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 ts_end,
                                 func=mtBP.construct_signal,
                                 args=[self.blueprint],
-                                kwargs={'signal_class': self._signal_class, **signal_params}
+                                kwargs={'signal_class': signal_class, **signal_params}
                                 )
 
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
@@ -464,7 +463,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     idx = 2
 
                                 # Check each pulse
-                                if AppDataAccess.da.get_pulse_list(data_source_name=inp['DS'], pattern=pulse):
+                                if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(pattern=pulse).empty:
                                     elements[idx].append(pulse)
                                     fls[column_name] = 0
                                 else:
@@ -602,8 +601,9 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY or PlotXYWithSlider"
-                                               f" can be stacked in the table row [{table_row}]")
+                                logger.warning(
+                                    f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY or PlotXYWithSlider"
+                                    f" can be stacked in the table row [{table_row}]")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0

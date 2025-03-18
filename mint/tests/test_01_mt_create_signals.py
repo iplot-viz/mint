@@ -1,5 +1,6 @@
 # Description: Small code snippets to test the code that creates signals from the table.
 # Author: Jaswant Sai Panchumarti
+from iplotDataAccess.dataSource import DataSource
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -34,13 +35,13 @@ class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     def setUp(self) -> None:
         super().setUp()
 
-    @patch("iplotDataAccess.dataAccess.DataSource.connected", new_callable=PropertyMock)
+    @patch.object(DataSource, "connected", new=True, create=True)
     @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
     @patch("iplotDataAccess.dataAccess.DataAccess.get_var_fields")
-    @patch("iplotDataAccess.dataAccess.DataAccess.get_pulse_list")
+    @patch("iplotDataAccess.dataAccess.DataSource.get_pulses_df")
     @patch("iplotDataAccess.dataAccess.DataSource.connect")
     @patch.object(DataAccess, 'get_var_list')
-    def test_create_simple(self, mock_get_var_list, data_connect, pulse_list, var_fields, cbs_list,
+    def test_create_simple(self, mock_get_var_list, pulse_list, var_fields, cbs_list,
                            source_connected) -> None:
         source_connected.return_value = True
         var_fields.return_value = {}
