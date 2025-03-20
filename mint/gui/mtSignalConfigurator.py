@@ -132,6 +132,7 @@ class RowAliasType(Enum):
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
+    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
 
     is_simple = True
     for expr in ['x', 'y', 'z']:
@@ -139,7 +140,10 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         if temp != '':
             try:
                 Parser().set_expression(temp)
-                is_simple = False
+                if alias in Parser().var_map.keys() or 'self' in Parser().var_map.keys():
+                    is_simple = True
+                else:
+                    is_simple = False
             except InvalidExpression:
                 pass
 
@@ -725,7 +729,8 @@ class MTSignalConfigurator(QWidget):
         #   - Those stacks in which a PlotContour is stacked
         self.invalid_stacks = (
             data.groupby('Stack')
-            .filter(lambda group: len(group) > 1 and not (all(group['PlotType'] == 'PlotXY') or all(group['PlotType'] == 'PlotXYWithSlider')))
+            .filter(lambda group: len(group) > 1 and not (
+                    all(group['PlotType'] == 'PlotXY') or all(group['PlotType'] == 'PlotXYWithSlider')))
             ['Stack']
             .unique()
         )
