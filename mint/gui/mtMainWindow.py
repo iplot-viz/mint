@@ -24,10 +24,10 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour
+from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
-
 
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
@@ -382,8 +382,8 @@ class MTMainWindow(IplotQtMainWindow):
             # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
-            # Add markers in the markers table when importing
-            if new_signal.markers_list:
+            # Add markers in the markers table when importing, only if the signals is SignalXY and has markers
+            if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
 
         self.sigCfgWidget.set_progress(99)
