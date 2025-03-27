@@ -382,7 +382,7 @@ class MTMainWindow(IplotQtMainWindow):
             # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
 
-            # Add markers in the markers table when importing, only if the signals is SignalXY and has markers
+            # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
             if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
 
