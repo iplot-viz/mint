@@ -5,11 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mint"
 description = "A Python Qt application for ITER Data Visualtization using the iplotlib framework"
-authors = [{ name = "Lana Abadie", email = "lana.abadie@iter.org" }]
+authors = [
+    { name = "Lana Abadie", email = "lana.abadie@iter.org" },
+    { name = "Pablo Martin Villares", email = "pmartin@minsait.com" },
+    { name = "Jhon Steeven Cabanilla Alvarado", email = "jscabanilla@minsait.com" },
+]
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">= 3.8"
+requires-python = ">= 3.11"
 license = { text = "MIT" }
-keywords = ["MINT", "Qt", "UDA", "Matplotlib", "VTK", "Canvas", "Plot", "Signal"]
+keywords = ["MINT", "Qt Application", "UDA", "Data Visualtization"]
 classifiers = [
     "Programming Language :: Python :: 3",
     # "License :: OSI Approved :: MIT License",
