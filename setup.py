@@ -46,7 +46,7 @@ setuptools.setup(
         ]
     },
     package_data={
-        "mint.data": ["scsv/*", "workspaces/*", "data_signals/*", "blueprint.json"],
+        "mint.data": ["scsv/*", "workspaces/*", "data_signals/*", "blueprint.json", "canvas_properties/default_properties.json"],
         "mint.gui": ["icons/*.png", "res/*.ui"],
         "mint": ["mydatasources.cfg"],
     },
