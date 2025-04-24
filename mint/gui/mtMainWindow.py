@@ -489,6 +489,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.canvasStack.currentWidget().check_markers(self.canvas)
+        # Calculation of the necessary statistics
+        self.canvasStack.currentWidget().stats(self.canvas)
 
         self.prefWindow.update()
         if self.prefWindow.isVisible():
