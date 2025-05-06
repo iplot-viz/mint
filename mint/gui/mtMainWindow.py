@@ -398,6 +398,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_busy('Drawing...')
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
+        # Compute statistics when importing workspace
+        self.canvasStack.currentWidget().stats(self.canvas)
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
@@ -489,7 +491,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.canvasStack.currentWidget().check_markers(self.canvas)
-        # Calculation of the necessary statistics
+        # Compute statistics when drawing
         self.canvasStack.currentWidget().stats(self.canvas)
 
         self.prefWindow.update()
