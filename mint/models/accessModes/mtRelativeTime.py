@@ -69,6 +69,17 @@ class MTRelativeTime(MTGenericAccessMode):
         }
 
     def from_dict(self, contents: dict):
-        self.mapper.model().setStringList(
-            [str(contents.get("relative")), str(contents.get("base")), str(contents.get("auto_refresh"))])
+        relative = str(contents.get("relative"))
+        base = str(contents.get("base"))
+        auto_refresh = str(contents.get("auto_refresh"))
+
+        self.mapper.model().setStringList([relative, base, auto_refresh])
+
+        # Update ComboBox index
+        try:
+            index = [str(option[0]) for option in self.options].index(base)
+            self.units.setCurrentIndex(index)
+        except ValueError:
+            self.units.setCurrentIndex(0)
+
         super().from_dict(contents)
