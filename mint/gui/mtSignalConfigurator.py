@@ -136,15 +136,16 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
 
     is_simple = True
     p = Parser()
-    for expr in ['x', 'y', 'z']:
-        temp = row[mtBp.get_column_name(blueprint, expr)]
-        if temp != '':
-            try:
-                p.set_expression(temp)
-                # Check if the expression only uses the row's alias or 'self'
-                is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
-            except InvalidExpression:
-                pass
+    for dim in ['x', 'y', 'z']:
+        expression = row[mtBp.get_column_name(blueprint, dim)]
+        if expression == '':
+            continue
+        try:
+            p.set_expression(expression)
+            # Check if the expression only uses the row's alias or 'self'
+            is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+        except InvalidExpression:
+            pass
 
     # Check for variable column
     try:
