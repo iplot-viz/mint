@@ -132,21 +132,25 @@ class RowAliasType(Enum):
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
+    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
 
     is_simple = True
+    p = Parser()
     for expr in ['x', 'y', 'z']:
         temp = row[mtBp.get_column_name(blueprint, expr)]
         if temp != '':
             try:
-                Parser().set_expression(temp)
-                is_simple = False
+                p.set_expression(temp)
+                # Check if the expression only uses the row's alias or 'self'
+                is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
             except InvalidExpression:
                 pass
 
+    # Check for variable column
     try:
-        p = Parser().set_expression(name)
+        p.set_expression(name)
     except InvalidExpression:
-        p = Parser().set_expression("")
+        p.set_expression("")
 
     # True: name does not consist of any pre-defined aliases
     if p.is_valid:
