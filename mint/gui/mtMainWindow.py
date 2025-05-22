@@ -553,10 +553,6 @@ class MTMainWindow(IplotQtMainWindow):
             ts, te = self.dataRangeSelector.get_time_range()
 
         self.canvas.auto_refresh = refresh_interval
-        if stream:
-            self.canvas.autoscale = Canvas.autoscale
-        else:
-            self.canvas.autoscale = x_axis_date
 
         da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
         plan = dict()
