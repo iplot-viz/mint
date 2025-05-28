@@ -5,7 +5,7 @@
 
  Authors       : Anze Zagar
 
- Copyright (c) : 2010-2023 ITER Organization,
+ Copyright (c) : 2010-2024 ITER Organization,
                  CS 90 046
                  13067 St. Paul-lez-Durance Cedex
                  France
@@ -21,14 +21,14 @@
     <artifactId>mint</artifactId>
     <packaging>codac</packaging>
     <name>CODAC Core System Python3 plotting library which support Qt backend</name>
-    <version>1.0.1</version>
+    <version>1.3.0</version>
     <description>CODAC Core System Python 1-D tool for time traces</description>
     <url>http://www.iter.org/</url>
     <!--  parent pom.xml  -->
     <parent>
         <groupId>org.iter.codac.units</groupId>
         <artifactId>maven-iter-settings</artifactId>
-        <version>7.1.0</version>
+        <version>7.3.0</version>
     </parent>
     <licenses>
     </licenses>
@@ -66,23 +66,23 @@
                                 <copy source="mint" target="mint/mint"/>
 				<copy source="setup.py" target="mint/setup.py"/>
 				<copy source="requirements.txt" target="mint/requirements.txt"/>
-				<copy source="default_proto_env" target="mint/default_proto_env"/>
-				<copy source="mint.sh" target="mint/mint.sh"/>
+				<copy source="default_mint_env" target="mint/default_mint_env"/>
 				<expand source="mint/_version.py" file="mint/mint/_version.py" rpmeval="true" mvneval="true" />
                             </init>
                         <packaging>
                         <package>
-            				<requires codac="true">python38-modules</requires>
+            				<requires codac="true">python3.11-modules</requires>
 <obsoletes codac="true" >protoplot-pyqt5</obsoletes>
 <requires codac="true">iplotlib-qt</requires>
 <requires >libicu</requires>
 <requires codac="true">iplotDataAccess</requires>
 <requires codac="true">iplotLogging</requires>
 <requires codac="true">iplotWidgets</requires>
-<include type="file" source="mint" target="apps/mint"/>
+                                <include type="python" python="python311" wheel="setup.py" />
+<!--include type="file" source="mint" target="apps/mint"/-->
 
-<include type="file" source="mint/mint.sh" target="bin/mint" />
-<include type="config" source="mint/default_proto_env" targetroot="CODAC_CONF" target="env.d/mint" />
+<include type="config" source="mint/default_mint_env" targetroot="CODAC_CONF" target="env.d/mint" />
+<include type="config" source="mint/mint/mydatasources.cfg" targetroot="CODAC_CONF" target="mint/datasources_def.cfg" />
                         </package>
                     </packaging>
                 </configuration>

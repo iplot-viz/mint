@@ -57,5 +57,9 @@ try module load coverage/7.4.4-GCCcore-13.2.0
 
 #try module -t list 2>&1
 
+# Avoid getting stuck with UDA issues:
+export UDA_MAX_SOCKET_DELAY=0
+export UDA_MAX_SOCKET_ATTEMPTS=0
+
 export HOME=$PWD
 echo "HOME was set to $HOME"
