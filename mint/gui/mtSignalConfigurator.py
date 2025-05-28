@@ -197,7 +197,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -730,7 +730,8 @@ class MTSignalConfigurator(QWidget):
         #   - Those stacks in which a PlotContour is stacked
         self.invalid_stacks = (
             data.groupby('Stack')
-            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
+            .filter(lambda group: len(group) > 1 and not (
+                    all(group['PlotType'] == 'PlotXY') or all(group['PlotType'] == 'PlotXYWithSlider')))
             ['Stack']
             .unique()
         )
