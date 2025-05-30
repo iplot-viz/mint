@@ -745,11 +745,9 @@ class MTSignalConfigurator(QWidget):
 
     def set_status_message(self, msg):
         self.statusChanged.emit(msg)
-        QCoreApplication.instance().processEvents()
 
     def set_progress(self, value: int):
         self.progressChanged.emit(value)
-        QCoreApplication.instance().processEvents()
 
 
 def main():

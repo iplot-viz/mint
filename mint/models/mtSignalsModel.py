@@ -60,6 +60,9 @@ class MTSignalsModel(QAbstractItemModel):
     def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
         super().__init__(parent)
+        self._white_brush = QBrush(QColor('white'))
+        self._red_brush = QBrush(QColor('red'))
+        self._orange_brush = QBrush(QColor('orange'))
 
         self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
@@ -94,21 +97,21 @@ class MTSignalsModel(QAbstractItemModel):
         return self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
-        if index.isValid():
-            value = self._table.iloc[index.row(), index.column()]
-            if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
-                return value
-            if role == Qt.ItemDataRole.BackgroundRole:
-                fail_value = self._table_fails.iloc[index.row(), index.column()]
-                # Value 0 corresponds to a correct cell.
-                # Value 1 corresponds to a main error.
-                # Value 2 corresponds to a secondary error resulting from a main error.
-                if fail_value == 0:
-                    return QBrush(QColor('white'))
-                elif fail_value == 1:
-                    return QBrush(QColor('red'))
-                else:
-                    return QBrush(QColor('orange'))
+        if not index.isValid():
+            return None
+        if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
+            return self._table.iat[index.row(), index.column()]
+        if role == Qt.ItemDataRole.BackgroundRole:
+            fail_value = self._table_fails.iat[index.row(), index.column()]
+            # Value 0 corresponds to a correct cell.
+            # Value 1 corresponds to a main error.
+            # Value 2 corresponds to a secondary error resulting from a main error.
+            if fail_value == 0:
+                return self._white_brush
+            elif fail_value == 1:
+                return self._red_brush
+            else:
+                return self._orange_brush
         return None
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
@@ -157,7 +160,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            if index.column() != self._table.columns.size - 1:
+            if self._table.columns[index.column()] != 'Status':
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
