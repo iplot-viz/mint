@@ -733,6 +733,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
+        self.canvasStack.currentWidget().stats(self.canvas)
 
         self.indicate_ready()
 
