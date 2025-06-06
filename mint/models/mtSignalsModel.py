@@ -386,10 +386,13 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids.clear()
 
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
-        # Read alias and stack from the table row
-        alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
+        # If the row is already marked as failed, skip drawing
+        if self._table_fails.at[row_idx, 'Variable'] == 1:
+            logger.debug(f"Row {row_idx}: skip draw (marked as failed)")
+            return iter(())
+
+        # Read stack from the table row
         stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
-        alias = self._table.at[row_idx, alias_col]
         stack_val = self._table.at[row_idx, stack_col]
 
         # Skip drawing if stack is missing
