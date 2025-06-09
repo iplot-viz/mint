@@ -321,6 +321,13 @@ class MTMainWindow(IplotQtMainWindow):
         self.dataRangeSelector.import_dict(data_range)
 
         delete_keys_from_dict(input_dict, ['dec_samples'])
+
+        # Remove previous slider references
+        for col in self.canvas.plots:
+            for plot in col:
+                if isinstance(plot, PlotXYWithSlider):
+                    plot.clean_slider()
+
         main_canvas = input_dict.get('main_canvas')
         self.canvas = Canvas.from_dict(main_canvas)
 
