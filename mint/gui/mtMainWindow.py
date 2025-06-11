@@ -3,6 +3,7 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+import gc
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
@@ -14,6 +15,7 @@ import pkgutil
 import socket
 import typing
 import pandas as pd
+import tracemalloc
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
@@ -474,6 +476,9 @@ class MTMainWindow(IplotQtMainWindow):
         if self.streamerCfgWidget.is_activated():
             return
 
+        tracemalloc.start()
+        snapshot_start = tracemalloc.take_snapshot()
+
         if not no_build:
             # Dumps are done before canvas processing
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
@@ -484,15 +489,24 @@ class MTMainWindow(IplotQtMainWindow):
 
             self.build()
 
+        # INICIO TRAZADO MEMORIA ===
+        snapshot_after_build = tracemalloc.take_snapshot()
+
         self.indicate_busy("Drawing...")
         self.stop_auto_refresh()
 
         self.canvasStack.currentWidget().unfocus_plot()
+        snapshot_after_unfocus = tracemalloc.take_snapshot()
+
         self.canvasStack.currentWidget().set_canvas(self.canvas)
+        snapshot_after_set_canvas = tracemalloc.take_snapshot()
+
         self.canvasStack.refreshLinks()
         self.canvasStack.currentWidget().check_markers(self.canvas)
         # Compute statistics when drawing
         self.canvasStack.currentWidget().stats(self.canvas)
+
+        snapshot_after_stats = tracemalloc.take_snapshot()
 
         self.prefWindow.update()
         if self.prefWindow.isVisible():
@@ -502,6 +516,16 @@ class MTMainWindow(IplotQtMainWindow):
         self.drop_history()  # clean zoom history; is this best place?
         self.start_auto_refresh()
         self.indicate_ready()
+
+        def print_diff(before, after, label):
+            stats = after.compare_to(before, 'lineno')
+            total = sum([stat.size_diff for stat in stats])
+            print(f"[{label}] Memory change: {total / 1024:.2f} KB")
+
+        print_diff(snapshot_start, snapshot_after_build, "After build")
+        print_diff(snapshot_after_build, snapshot_after_unfocus, "After unfocus_plot")
+        print_diff(snapshot_after_unfocus, snapshot_after_set_canvas, "After set_canvas")
+        print_diff(snapshot_after_set_canvas, snapshot_after_stats, "After stats")
 
     def stream_clicked(self):
         """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
