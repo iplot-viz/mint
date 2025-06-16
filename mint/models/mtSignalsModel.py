@@ -138,6 +138,16 @@ class MTSignalsModel(QAbstractItemModel):
         if role != Qt.ItemDataRole.EditRole and role != Qt.ItemDataRole.DisplayRole:
             return False
 
+        # Filter actual and literal newline/tab on interactive edit
+        if not self._fast_mode and isinstance(value, str):
+            # replace real CR/LF and tabs
+            value = value.replace('\r\n', ' ').replace('\r', ' ')
+            value = value.replace('\n', ' ').replace('\t', ' ')
+            # replace literal backslash sequences
+            value = value.replace('\\n', ' ').replace('\\t', ' ')
+            # collapse multiple spaces
+            value = re.sub(r' +', ' ', value)
+
         if isinstance(value, str):
             value = value.strip()
             if ',' in value:
