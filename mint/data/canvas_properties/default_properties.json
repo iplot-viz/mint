@@ -29,5 +29,6 @@
   "legend_format": "color_bar",
   "equivalent_units": false,
   "color_map": "viridis",
-  "color": null
+  "color": null,
+  "sync_slider": false
 }

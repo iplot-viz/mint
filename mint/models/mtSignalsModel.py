@@ -404,7 +404,7 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
-            if signal_params['plot_type'] == 'PlotXY':
+            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider':
                 signal_class = SignalXY
             elif signal_params['plot_type'] == 'PlotContour':
                 signal_class = SignalContour
@@ -614,8 +614,10 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY"
-                                               f" can be stacked in the table row [{table_row}]")
+                                logger.warning(
+                                    f"Invalid stack in table row [{table_row}]: "
+                                    f"Plot of type PlotContour or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
+                                    f"Mixing different plot types in the same stack is not allowed.")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0
@@ -691,10 +693,10 @@ class MTSignalsModel(QAbstractItemModel):
 
                         # Plot Type
                         elif column_name == 'Plot type':
-                            if value not in ['PlotXY', 'PlotContour']:
+                            if value not in ['PlotXY', 'PlotContour', 'PlotXYWithSlider']:
                                 fls[column_name] = 1
                                 logger.warning(f"Invalid plot type: '{value}' is not a valid plot type. Expected"
-                                               f" 'PlotXY' or 'PlotContour'")
+                                               f" 'PlotXY' or 'PlotContour' or 'PlotXYWithSlider'")
                             else:
                                 fls[column_name] = 0
 

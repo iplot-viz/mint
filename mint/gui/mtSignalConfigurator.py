@@ -197,7 +197,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -724,14 +724,29 @@ class MTSignalConfigurator(QWidget):
         df_filtered = df[df['Stack'] != ""]
         stack_valid = df_filtered['Stack'].tolist()
         plot_types_valid = df_filtered['Plot type'].replace("", "PlotXY").tolist()  # Check if "" in column Plot Type
+
         # Create new dataframe to validate stacks against their plot types
-        data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
-        # Identify invalid stacks:
-        #   - Those stacks in which a PlotContour is stacked
+        data = pd.DataFrame({
+            "Stack": stack_valid,
+            "PlotType": plot_types_valid
+        })
+
+        def is_invalid(group):
+            # Identify invalid stacks:
+            #   - It contains a PlotXYWithSlider stacked
+            #   - It mixes different plot types (PlotXY and PlotXYWithSlider) (PlotXY and PlotContour)
+            #   (PlotContour and PlotXYWithSlider)
+            types = group['PlotType']
+            stacks = group['Stack']
+
+            if any(t == 'PlotXYWithSlider' and s.count(".") >= 2 for t, s in zip(types, stacks)):
+                return True
+            return not (all(types == 'PlotXY') or all(types == 'PlotXYWithSlider'))
+
+        # Filter invalid stacks
         self.invalid_stacks = (
             data.groupby('Stack')
-            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
-            ['Stack']
+            .filter(is_invalid)['Stack']
             .unique()
         )
 
