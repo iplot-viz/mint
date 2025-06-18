@@ -4,6 +4,7 @@
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 import gc
+import weakref
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
@@ -362,7 +363,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-            plot.parent = self.canvas
+            plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -377,7 +378,7 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
-            new_signal.parent = plot
+            new_signal.parent = weakref.ref(plot)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
