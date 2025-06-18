@@ -514,6 +514,7 @@ class MTSignalConfigurator(QWidget):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
+            logger.info(f"Saved signal set: {file_path}")
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
@@ -532,6 +533,7 @@ class MTSignalConfigurator(QWidget):
             if not df.empty:
                 self._model.set_dataframe(df)
             self.resize_views_to_contents()
+            logger.info(f"Opened signal set: {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -565,6 +567,7 @@ class MTSignalConfigurator(QWidget):
             if not df.empty:
                 self._model.append_dataframe(df)
             self.resize_views_to_contents()
+            logger.info(f"Appended signal set: {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)

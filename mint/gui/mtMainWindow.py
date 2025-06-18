@@ -104,11 +104,14 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
+        self._workspaceLabel = QLabel("No workspace loaded")
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self._memoryMonitor)
+        self._statusBar.addPermanentWidget(QLabel('|'))
+        self._statusBar.addPermanentWidget(self._workspaceLabel)
         self._statusBar.addPermanentWidget(QLabel('|'))
 
         self.graphicsArea = QWidget(self)
@@ -413,6 +416,7 @@ class MTMainWindow(IplotQtMainWindow):
     def import_json(self, file_path: str):
         self.statusBar().showMessage(f"Importing {file_path} ..")
         try:
+            logger.info(f"Loading workspace: {file_path}")
             with open(file_path, mode='r') as f:
                 payload = f.read()
                 payload = payload.replace("data_access.dataAccessSignal.DataAccessSignal",
@@ -427,6 +431,9 @@ class MTMainWindow(IplotQtMainWindow):
                 self.import_dict(json.loads(payload, object_hook=lambda d: {int(k) if k.lstrip('-').isdigit() else k: v
                                                                             for k, v in d.items()}))
                 logger.info(f"Finished loading workspace {file_path}")
+                # Update the workspace label in the status bar after successful import
+                self._workspaceLabel.setText(os.path.basename(file_path))
+                self._workspaceLabel.setToolTip(file_path)
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -441,6 +448,7 @@ class MTMainWindow(IplotQtMainWindow):
         try:
             with open(file_path, mode='w') as f:
                 f.write(self.canvas.get_signals_as_csv())
+            logger.info(f"Finished exporting data {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -455,6 +463,7 @@ class MTMainWindow(IplotQtMainWindow):
         try:
             with open(file_path, mode='w') as f:
                 f.write(json.dumps(self.export_dict()))
+            logger.info(f"Finished exporting workspace {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
