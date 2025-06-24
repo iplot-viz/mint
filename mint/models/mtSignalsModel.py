@@ -798,3 +798,25 @@ class MTSignalsModel(QAbstractItemModel):
         )
         # Notify views that layout has changed
         self.layoutChanged.emit()
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+        """
+        Sort the model by the given column index and order.
+        This will rearrange the underlying DataFrame in-place.
+        """
+        # Determine the column name from the DataFrame
+        col_name = self._table.columns[column]
+        # Translate Qt sort order to boolean
+        ascending = (order == Qt.SortOrder.AscendingOrder)
+
+        # Notify views that layout is about to change
+        self.layoutAboutToBeChanged.emit()
+        # Perform the sort on the DataFrame
+        self._table.sort_values(
+            by=col_name,
+            ascending=ascending,
+            inplace=True,
+            ignore_index=True
+        )
+        # Notify views that layout has changed
+        self.layoutChanged.emit()
