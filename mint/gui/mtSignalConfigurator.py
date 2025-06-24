@@ -210,6 +210,7 @@ class MTSignalConfigurator(QWidget):
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
             widget.view().setItemDelegateForColumn(14, self._pt_delegate)
+            widget.view().setSortingEnabled(True)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
