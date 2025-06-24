@@ -92,7 +92,7 @@ class MTDataRangeSelector(QWidget):
         self.stack.setCurrentIndex(page_id)
         self.modeChanged.emit()
         # Emit cancelRefresh if we are leaving relative mode
-        if self.accessModes[page_id].mode != MTGenericAccessMode.RELATIVE_TIME:
+        if self.accessModes[self.stack.currentIndex()].mode == MTGenericAccessMode.RELATIVE_TIME:
             self.cancelRefresh.emit()
             logger.info("Canvas auto-refresh cancelled (left relative mode)")
 
