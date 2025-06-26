@@ -338,6 +338,7 @@ class MTMainWindow(IplotQtMainWindow):
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
         ParserHelper.env.clear()  # Removes any previously aliased signals.
+        self.canvasStack.currentWidget()._parser.clear()
         self.indicate_ready()
         self.sigCfgWidget.set_status_message("Update signals ..")
         self.sigCfgWidget.begin_build()
@@ -561,6 +562,11 @@ class MTMainWindow(IplotQtMainWindow):
         super().closeEvent(event)
 
     def build(self, stream=False):
+        ParserHelper.env.clear()  # explicar
+        # Keep copy of previous canvas to be able to restore preferences
+        # Antes de realizar la copia, debemos asegurarnos que no se dupliquen datos inncesesarios que puedan
+        # causar fugas de memoria
+        self.canvasStack.currentWidget()._parser.clear()
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.time_window() * 1000000000
@@ -639,22 +645,6 @@ class MTMainWindow(IplotQtMainWindow):
             # Set end time to avoid None values for EndTime in case of pulses
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
                 plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
-
-        # import collections
-        # ord = collections.OrderedDict(sorted(plan.items()))
-        # new_plan = {}
-        # col_sp = 1
-        # for x, y in ord.items():
-        #     ord2 = collections.OrderedDict(sorted(y.items()))
-        #     row_sp = 1
-        #     rows = {}
-        #     next_col_sp = 1
-        #     for z, k in ord2.items():
-        #         rows[z + row_sp - 1] = k
-        #         row_sp = k[0]
-        #         next_col_sp = max(next_col_sp, k[1])
-        #     new_plan[x + col_sp - 1] = rows
-        #     col_sp = next_col_sp
 
         self.indicate_busy('Retrieving data...')
 
