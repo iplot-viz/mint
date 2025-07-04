@@ -96,6 +96,8 @@ def construct_signal(blueprint: dict, signal_class: type, **signal_params) -> Si
                 signal_params.pop(v.get('code_name'))
             except KeyError:
                 continue
+    # Remove any extra keys not expected by the signal class, like 'comment'
+    signal_params.pop('comment', None)
     return signal_class(**signal_params)
 
 

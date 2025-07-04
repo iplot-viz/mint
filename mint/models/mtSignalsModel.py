@@ -135,18 +135,26 @@ class MTSignalsModel(QAbstractItemModel):
             return False
         row = index.row()
         column = index.column()
+        col_name = self._table.columns[column]
+
         if role != Qt.ItemDataRole.EditRole and role != Qt.ItemDataRole.DisplayRole:
             return False
 
-        # Filter actual and literal newline/tab on interactive edit
-        if not self._fast_mode and isinstance(value, str):
-            # replace real CR/LF and tabs
-            value = value.replace('\r\n', ' ').replace('\r', ' ')
-            value = value.replace('\n', ' ').replace('\t', ' ')
-            # replace literal backslash sequences
-            value = value.replace('\\n', ' ').replace('\\t', ' ')
-            # collapse multiple spaces
-            value = re.sub(r' +', ' ', value)
+        if col_name != 'Comment':
+
+            # Filter actual and literal newline/tab on interactive edit
+            if not self._fast_mode and isinstance(value, str):
+                # replace real CR/LF and tabs
+                value = value.replace('\r\n', ' ').replace('\r', ' ')
+                value = value.replace('\n', ' ').replace('\t', ' ')
+                # replace literal backslash sequences
+                value = value.replace('\\n', ' ').replace('\\t', ' ')
+                # collapse multiple spaces
+                value = re.sub(r' +', ' ', value)
+        else:
+            # For Comment: preserve newlines, cap at 1000 chars
+            if isinstance(value, str):
+                value = value[:1000]
 
         if isinstance(value, str):
             value = value.strip()
@@ -322,13 +330,17 @@ class MTSignalsModel(QAbstractItemModel):
         # 2. table
         column_names = list(mtBP.get_column_names(temp_blueprint))
         self._entity_attribs = list(mtBP.get_code_names(temp_blueprint))
-        if input_dict.get('table'):
-            df = pd.DataFrame(input_dict.get('table'), dtype=str, columns=column_names)
-        elif input_dict.get('variables_table'):  # old style.
-            df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
-            df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)
+        if 'table' in input_dict:
+            raw = input_dict['table']
+        elif 'variables_table' in input_dict:
+            raw = input_dict['variables_table']
         else:
             raise Exception('No variables table in workspace!')
+
+        df = pd.DataFrame(raw, dtype=str)
+        df.columns = column_names[:df.shape[1]]
+        df = df.reindex(columns=column_names, fill_value='')
+
         if not df.empty:
             self.set_dataframe(df)
 

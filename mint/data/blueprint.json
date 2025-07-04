@@ -96,5 +96,11 @@
         "default": "",
         "label": "uid",
         "type_name": "str"
+    },
+    "Comment": {
+        "code_name": "comment",
+        "default": "",
+        "label": "Comment",
+        "type_name": "str"
     }
 }
