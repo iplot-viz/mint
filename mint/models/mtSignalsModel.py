@@ -777,7 +777,7 @@ class MTSignalsModel(QAbstractItemModel):
             else:
                 yield pd.Series(out), fls
 
-    def sort(self, column: int, order: Qt.SortOrder = Qt.AscendingOrder) -> None:
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         """
         Sort the model by the given column index and order.
         This will rearrange the underlying DataFrame in-place.
