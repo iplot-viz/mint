@@ -112,6 +112,13 @@ class MTSignalsModel(QAbstractItemModel):
                 return self._red_brush
             else:
                 return self._orange_brush
+        # tooltip for comment column
+        if role == Qt.ItemDataRole.ToolTipRole:
+            # get the column name
+            column_name = self._table.columns[index.column()]
+            if column_name == "Comment":
+                return self._table.iat[index.row(), index.column()]
+
         return None
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
