@@ -345,6 +345,7 @@ class MTSignalsModel(QAbstractItemModel):
             raise Exception('No variables table in workspace!')
 
         df = pd.DataFrame(raw, dtype=str)
+        df.columns = column_names[:df.shape[1]]
         df = df.reindex(columns=column_names, fill_value='')
 
         if not df.empty:
