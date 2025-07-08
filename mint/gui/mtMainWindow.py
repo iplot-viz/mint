@@ -409,7 +409,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         # Compute statistics when importing workspace
-        self.canvasStack.currentWidget().stats(self.canvas)
+        if path:
+            self.canvasStack.currentWidget().stats(self.canvas)
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
