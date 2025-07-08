@@ -344,15 +344,6 @@ class MTSignalsModel(QAbstractItemModel):
             signal.status_info.reset()
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
-            # Clear previous error marker (if any)
-            if self._table_fails.at[row_idx, 'Variable'] != 0:
-                self._table_fails.loc[row_idx, 'Variable'] = 0
-                self.dataChanged.emit(
-                    self.index(row_idx, 0),
-                    self.index(row_idx, self._table.shape[1] - 1),
-                    [Qt.ItemDataRole.BackgroundRole]
-                )
-
             if fetch_data:
                 # Read alias and stack from the table row
                 alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
@@ -361,13 +352,8 @@ class MTSignalsModel(QAbstractItemModel):
                 stack_val = self._table.at[row_idx, stack_col]
 
                 # Skip query if alias or stack is missing
-                if not (alias and stack_val):
-                    logger.debug(f"Row {row_idx}: skip query (missing alias or stack)")
-                    return
-
-                # Skip query if the row is already marked as failed
-                if self._table_fails.at[row_idx, 'Variable'] == 1:
-                    logger.debug(f"Row {row_idx}: skip query (marked as failed)")
+                if not alias and not stack_val:
+                    logger.debug(f"Row {row_idx}: skip query (missing alias and stack)")
                     return
 
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
@@ -380,13 +366,6 @@ class MTSignalsModel(QAbstractItemModel):
                     #   2) No data in that interval
                     index = self._table.index[self._table['Variable'] == signal.name].tolist()
                     self._table_fails.loc[index, 'Variable'] = 1
-                    # Refresh info
-                    for i in index:
-                        self.dataChanged.emit(
-                            self.index(i, 0),
-                            self.index(i, self._table.shape[1] - 1),
-                            [Qt.ItemDataRole.BackgroundRole]
-                        )
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
@@ -399,30 +378,18 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids.clear()
 
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
-        # If the row is already marked as failed, skip drawing
-        if self._table_fails.at[row_idx, 'Variable'] == 1:
-            logger.debug(f"Row {row_idx}: skip draw (marked as failed)")
-            return iter(())
-
-        # Read stack from the table row
-        stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
-        stack_val = self._table.at[row_idx, stack_col]
-
-        # Skip drawing if stack is missing
-        if not stack_val:
-            logger.debug(f"Row {row_idx}: skip draw (missing stack)")
-            return iter(())
-
         signal_params = dict()
         # Initialize attributes for Waypoint
         col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
         for i, parsed_row in enumerate(
                 self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
-            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
-            if i == 0:  # grab these from the first row we encounter.
-                if any(parsed_row[1] > 0):  # Do not draw Plots containing errors
+            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
+            errors = any(parsed_row[1] > 0)
+
+            if i == 0:  # grab these from the first row we encounter
+                if errors:  # Do not draw Plots containing errors
                     stack_val = ''
                 else:
                     stack_val = signal_params.get('stack_val')
@@ -439,10 +406,14 @@ class MTSignalsModel(QAbstractItemModel):
                     bad_stack = True
 
                 if bad_stack:
+                    # In this case, the signal will only be created if there are no errors
                     stack_num = 1
                     col_num = row_num = 0
-                    if stack_val:
-                        # This message for status?
+                    if errors:
+                        logger.warning(f'Errors encountered during signal creation')
+                        return
+                    else:
+                        # Message for status
                         logger.warning(f'Ignored wrong stack value: {stack_val}')
 
                 col_span = signal_params.get('col_span') or 1
