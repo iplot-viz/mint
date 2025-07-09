@@ -512,9 +512,17 @@ class MTSignalsModel(QAbstractItemModel):
                                     idx = 2
 
                                 # Check each pulse
-                                if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(pattern=pulse).empty:
-                                    elements[idx].append(pulse)
-                                    fls[column_name] = 0
+                                if inp['DS'] in self.data_sources:
+                                    if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(
+                                            pattern=pulse).empty:
+                                        elements[idx].append(pulse)
+                                        fls[column_name] = 0
+                                    else:
+                                        fls[column_name] = 1
+                                        logger.warning(
+                                            f"The pulse '{pulse}' could not be found in the data source '{inp['DS']}' "
+                                            f"in the table row [{table_row}]")
+                                        break
                                 else:
                                     fls[column_name] = 1
                                     logger.warning(
