@@ -778,24 +778,19 @@ class MTSignalsModel(QAbstractItemModel):
     def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
         """
         Sort the model by the given column index and order.
-        This will rearrange the underlying DataFrame in-place.
+        Empty values always pushed to the bottom, rest by column as string.
         """
         # Determine the column name from the DataFrame
         col_name = self._table.columns[column]
-
-        # Translate Qt sort order to boolean
         ascending = (order == Qt.SortOrder.AscendingOrder)
 
         # Notify views that layout is about to change
         self.layoutAboutToBeChanged.emit()
 
-        # Temporary flag: 0 for non-empty, 1 for empty
-        self._table['_empty_flag'] = (
-                self._table[col_name].isna() |
-                (self._table[col_name].astype(str) == '')
-        ).astype(int)
+        # Convert everything to string before flag (homogenize)
+        col_as_str = self._table[col_name].astype(str)
+        self._table['_empty_flag'] = (col_as_str.isna() | (col_as_str == '')).astype(int)
 
-        # Sort first by flag (empties last), then by the real column
         self._table.sort_values(
             by=['_empty_flag', col_name],
             ascending=[True, ascending],
@@ -803,8 +798,5 @@ class MTSignalsModel(QAbstractItemModel):
             ignore_index=True
         )
 
-        # Remove the temporary flag
         self._table.drop(columns=['_empty_flag'], inplace=True)
-
-        # Notify views that layout has changed
         self.layoutChanged.emit()
