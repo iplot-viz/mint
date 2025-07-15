@@ -736,16 +736,20 @@ class MTSignalConfigurator(QWidget):
         })
 
         def is_invalid(group):
-            # Identify invalid stacks:
-            #   - It contains a PlotXYWithSlider stacked
-            #   - It mixes different plot types (PlotXY and PlotXYWithSlider) (PlotXY and PlotContour)
-            #   (PlotContour and PlotXYWithSlider)
+            # Identify invalid stacks
             types = group['PlotType']
-            stacks = group['Stack']
 
-            if any(t == 'PlotXYWithSlider' and s.count(".") >= 2 for t, s in zip(types, stacks)):
+            # Rule #1: Stacked plots must contain only PlotXY types
+            if group["Stack"].values[0].count(".") > 1 and not all(types == 'PlotXY'):
                 return True
-            return not (all(types == 'PlotXY') or all(types == 'PlotXYWithSlider'))
+
+            # Rule #2: A PlotContour stack cannot contain more than one signal
+            if all(types == 'PlotContour') and len(types) > 1:
+                return True
+
+            # Rule #3: Mixing different plot types in the same stack is not allowed
+            if types.nunique() != 1:
+                return True
 
         # Filter invalid stacks
         self.invalid_stacks = (
