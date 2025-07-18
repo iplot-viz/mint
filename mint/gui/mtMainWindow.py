@@ -336,8 +336,6 @@ class MTMainWindow(IplotQtMainWindow):
 
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
-        ParserHelper.env.clear()  # Removes any previously aliased signals.
-        self.canvasStack.currentWidget()._parser.clear()
         self.indicate_ready()
         self.sigCfgWidget.set_status_message("Update signals ..")
         self.sigCfgWidget.begin_build()
@@ -399,6 +397,8 @@ class MTMainWindow(IplotQtMainWindow):
         self.sigCfgWidget.set_progress(100)
 
         self.indicate_busy('Drawing...')
+        ParserHelper.env.clear()  # Removes any previously aliased signals.
+        self.canvasStack.currentWidget()._parser.clear()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         # Compute statistics when importing workspace
