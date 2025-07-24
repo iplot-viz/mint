@@ -1,31 +1,31 @@
 # Description: Small code snippets to test the code that creates signals from the table.
 # Author: Jaswant Sai Panchumarti
+from iplotDataAccess.dataSource import DataSource
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.tests.QAppOffscreenTestAdapter import QAppOffscreenTestAdapter
 from iplotDataAccess.appDataAccess import AppDataAccess
-from iplotDataAccess.dataAccess import DataAccess
-from unittest.mock import patch, PropertyMock
+from unittest.mock import patch
 
 test_table_1 = {
     "table": [
-        ["codacuda", "Signal:A", "1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:B", "1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:C", "2.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:D", "2.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:E", "3.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:F", "3.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
+        ["codacuda", "Signal:A", "1.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:B", "1.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:C", "2.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:D", "2.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:E", "3.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:F", "3.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""]]
 }
 
 test_table_2 = {
     "table": [
-        ["codacuda", "Signal:A", "1.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:B", "1.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:C", "2.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:D", "2.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:E", "3.1.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:F", "3.1.2", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:G", "4.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-        ["codacuda", "Signal:H", "4.1", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]]
+        ["codacuda", "Signal:A", "1.1.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:B", "1.1.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:C", "2.1.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:D", "2.1.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:E", "3.1.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:F", "3.1.2", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:G", "4.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""],
+        ["codacuda", "Signal:H", "4.1", "", "", "", "", "", "", "", "", "", "", "", "PlotXY", "", ""]]
 }
 
 
@@ -34,24 +34,24 @@ class TestMTCreateSignalsFromTable(QAppOffscreenTestAdapter):
     def setUp(self) -> None:
         super().setUp()
 
-    @patch("iplotDataAccess.dataAccess.DataSource.connected", new_callable=PropertyMock)
-    @patch("iplotDataAccess.dataAccess.DataAccess.get_cbs_list")
-    @patch("iplotDataAccess.dataAccess.DataAccess.get_var_fields")
-    @patch("iplotDataAccess.dataAccess.DataAccess.get_pulse_list")
+    @patch.object(DataSource, "connected", new=True, create=True)
+    @patch("iplotDataAccess.dataAccess.DataSource.get_cbs_dict")
+    @patch("iplotDataAccess.dataAccess.DataSource.get_var_fields")
+    @patch("iplotDataAccess.dataAccess.DataSource.get_pulses_df")
     @patch("iplotDataAccess.dataAccess.DataSource.connect")
-    @patch.object(DataAccess, 'get_var_list')
-    def test_create_simple(self, mock_get_var_list, data_connect, pulse_list, var_fields, cbs_list,
+    @patch.object(DataSource, 'get_var_dict')
+    def test_create_simple(self, mock_get_var_dict, pulse_list, var_fields, cbs_dict,
                            source_connected) -> None:
         source_connected.return_value = True
         var_fields.return_value = {}
         pulse_list.return_value = []
-        cbs_list.return_value = {}
+        cbs_dict.return_value = {}
 
         if not AppDataAccess.initialize():
             return
         self.sigCfgWidget = MTSignalConfigurator()
         self.sigCfgWidget.import_dict(test_table_1)
-        mock_get_var_list.return_value = ["correct_values"]
+        mock_get_var_dict.return_value = {"correct_values": ""}
         path = list(self.sigCfgWidget.build())
 
         self.assertEqual(len(path), 6)

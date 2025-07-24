@@ -19,7 +19,7 @@ def run_app(q_app: QApplication, args=None):
     from PySide6.QtWidgets import QLabel
 
     from iplotlib.core import Canvas
-    from iplotlib.interface.iplotSignalAdapter import AccessHelper, IplotSignalAdapter
+    from iplotlib.interface.iplotSignalAdapter import AccessHelper
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
 
@@ -94,7 +94,7 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
-    data_sources = AccessHelper.da.get_connected_data_sources()
+    data_sources = AccessHelper.da.get_connected_data_source_names()
 
     main_win = MTMainWindow(canvas,
                             AccessHelper.da,
@@ -103,8 +103,7 @@ def run_app(q_app: QApplication, args=None):
                             data_dir=DEFAULT_DATA_DIR,
                             data_sources=data_sources,
                             blueprint=blueprint,
-                            impl=canvas_impl,
-                            signal_class=IplotSignalAdapter)
+                            impl=canvas_impl)
 
     main_win.setWindowTitle(f"{q_app.applicationName()}: {q_app.applicationPid()}")
     main_win.statusBar().addPermanentWidget(

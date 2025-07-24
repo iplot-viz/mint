@@ -77,8 +77,7 @@ class MTDataRangeSelector(QWidget):
         # for ex: even if pulse numbers were specified, the 'mode' key was set to TIME_RANGE.
         # We fix that inconsistency here.
         for idx, mode_name in enumerate(MTGenericAccessMode.get_supported_modes()):
-            if any([k in input_dict.keys() for k in self.accessModes[idx].properties().keys()]):
-                input_dict.update({'mode': mode_name})
+            if mode_name == input_dict['mode']:
                 self.radioGroup.layout().itemAt(idx).widget().click()
                 break
         else:  # cannot understand input_dict, log error and fail.

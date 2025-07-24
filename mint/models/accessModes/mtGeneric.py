@@ -22,7 +22,7 @@ class MTGenericAccessMode(QObject):
 
     @staticmethod
     def get_supported_modes():
-        return [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER, MTGenericAccessMode.PULSE_NUMBER]
+        return [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER, MTGenericAccessMode.RELATIVE_TIME]
 
     def properties(self):
         return {}

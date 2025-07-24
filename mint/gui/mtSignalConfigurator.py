@@ -22,15 +22,17 @@ from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QPro
     QTabWidget, QTableView, QVBoxLayout, QWidget
 
 from iplotProcessing.common import InvalidExpression
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, StatusInfo
+from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
 from iplotProcessing.tools.parsers import Parser
 
 from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
+from iplotWidgets.consoleWidget.consoleWidget import ConsoleWidget
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
+from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
@@ -126,30 +128,39 @@ NEAT_VIEW = {
 class RowAliasType(Enum):
     Simple = 'SIMPLE'
     Mixed = 'MIXED'
-    NoAlias = 'NOALIAS'
 
 
 def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
-    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
+    alias = row[mtBp.get_column_name(blueprint, 'Alias')]
 
-    alias_valid = is_non_empty_string(alias)
+    is_simple = True
+    p = Parser()
+    for dim in ['x', 'y', 'z']:
+        expression = row[mtBp.get_column_name(blueprint, dim)]
+        if expression == '':
+            continue
+        try:
+            p.set_expression(expression)
+            # Check if the expression only uses the row's alias or 'self'
+            is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+        except InvalidExpression:
+            pass
 
+    # Check for variable column
     try:
-        p = Parser().set_expression(name)
+        p.set_expression(name)
     except InvalidExpression:
-        p = Parser().set_expression("")
+        p.set_expression("")
 
-    raw_name = True  # True: name does not consist of any pre-defined aliases
+    # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        raw_name &= all([var not in aliases for var in list(p.var_map.keys())])
+        is_simple &= all([var not in aliases for var in list(p.var_map.keys())])
 
-    if alias_valid and raw_name:
+    if is_simple:
         return RowAliasType.Simple, name, p
-    elif alias_valid and not raw_name:
-        return RowAliasType.Mixed, name, p
     else:
-        return RowAliasType.NoAlias, name, p
+        return RowAliasType.Mixed, name, p
 
 
 class MTSignalConfigurator(QWidget):
@@ -163,15 +174,13 @@ class MTSignalConfigurator(QWidget):
 
     # add_dataframe = Signal(pd.DataFrame)
 
-    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None,
-                 signal_class: type = IplotSignalAdapter, parent=None):
+    def __init__(self, blueprint: dict = mtBp.DEFAULT_BLUEPRINT, scsv_dir: str = '.', data_sources=None, parent=None):
         super().__init__(parent)
 
         if data_sources is None:
             data_sources = []
-        self._signal_class = signal_class
 
-        self._model = MTSignalsModel(blueprint=blueprint, signal_class=self._signal_class)
+        self._model = MTSignalsModel(blueprint=blueprint)
 
         self._scsv_dir = scsv_dir
         self.data_sources = data_sources
@@ -188,6 +197,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -199,6 +209,7 @@ class MTSignalConfigurator(QWidget):
             widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
+            widget.view().setItemDelegateForColumn(14, self._pt_delegate)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
@@ -221,10 +232,16 @@ class MTSignalConfigurator(QWidget):
         self.selectPulseDialog = PulseBrowser()
         self.selectPulseDialog.cmd_finish.connect(self.append_pulse)
 
+        # MINT Console
+        self.console = ConsoleWidget()
+        self.console.setup_logging()
+
         self.model.insertRows(0, 1, QModelIndex())
         self._find_replace_dialog = None
 
         self._processed = set()  # Set used to store the different rows processed
+
+        self.invalid_stacks = []  # Used to verify the stacks
 
         shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         shortcut.activated.connect(self.copy_contents_to_clipboard)
@@ -616,6 +633,9 @@ class MTSignalConfigurator(QWidget):
         aliases = df.loc[:, mtBp.get_column_name(self._model.blueprint, 'Alias')].tolist()
         duplicates = set([a for a in aliases if aliases.count(a) > 1 and a != ''])
 
+        # Stack and PlotType
+        self.check_stack_table(df)
+
         error_msgs = []
         graph = defaultdict(list)
         status_col_idx = self.model.columnCount(QModelIndex()) - 1
@@ -632,14 +652,14 @@ class MTSignalConfigurator(QWidget):
                         conflict_row_ids = []
                         for alias_idx, alias in enumerate(aliases):
                             if var_name == alias:
-                                conflict_row_ids.append(alias_idx)
+                                conflict_row_ids.append(alias_idx + 1)
                         sinfo.msg = f"Conflicted row: {idx + 1}, '{var_name}' is defined in row (s): {conflict_row_ids}"
                         error_msgs.append(sinfo.msg)
                         self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                         if idx in graph:
                             graph.pop(idx)
                 else:
-                    if row_type != RowAliasType.Mixed:
+                    if row_type == RowAliasType.Simple:
                         graph[idx].clear()
                         continue
 
@@ -681,6 +701,7 @@ class MTSignalConfigurator(QWidget):
 
         self._model.layoutChanged.emit()
         self._model.aliases = []
+        self._processed.clear()
         self.set_progress(100)
         self.ready.emit()
         self.end_build()
@@ -694,8 +715,25 @@ class MTSignalConfigurator(QWidget):
             else:
                 yield from self._traverse(graph, idx)
         else:
-            self._processed.add(row_idx)
-            yield from self._model.create_signals(row_idx)
+            if row_idx not in self._processed:
+                self._processed.add(row_idx)
+                yield from self._model.create_signals(row_idx, self.invalid_stacks)
+
+    def check_stack_table(self, df):
+        # Filter dataframe and extract valid values for 'Stack' and 'Plot Type' columns
+        df_filtered = df[df['Stack'] != ""]
+        stack_valid = df_filtered['Stack'].tolist()
+        plot_types_valid = df_filtered['Plot type'].replace("", "PlotXY").tolist()  # Check if "" in column Plot Type
+        # Create new dataframe to validate stacks against their plot types
+        data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
+        # Identify invalid stacks:
+        #   - Those stacks in which a PlotContour is stacked
+        self.invalid_stacks = (
+            data.groupby('Stack')
+            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
+            ['Stack']
+            .unique()
+        )
 
     def begin_build(self):
         self.showProgress.emit()
