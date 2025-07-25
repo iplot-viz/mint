@@ -91,6 +91,10 @@ class MTDataRangeSelector(QWidget):
     def select_page(self, page_id: int):
         self.stack.setCurrentIndex(page_id)
         self.modeChanged.emit()
+        # Emit cancelRefresh if we are leaving relative mode
+        if self.accessModes[self.stack.currentIndex()].mode == MTGenericAccessMode.RELATIVE_TIME:
+            self.cancelRefresh.emit()
+            logger.info("Canvas auto-refresh cancelled (left relative mode)")
 
     def is_x_axis_date(self) -> bool:
         mode = self.accessModes[self.stack.currentIndex()].mode

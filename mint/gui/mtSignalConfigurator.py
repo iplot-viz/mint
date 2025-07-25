@@ -197,7 +197,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour"], self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -210,6 +210,7 @@ class MTSignalConfigurator(QWidget):
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
             widget.view().setItemDelegateForColumn(14, self._pt_delegate)
+            widget.view().setSortingEnabled(True)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
@@ -514,6 +515,7 @@ class MTSignalConfigurator(QWidget):
         try:
             self.busy.emit()
             df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
+            logger.info(f"Saved signal set: {file_path}")
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
             box = QMessageBox()
@@ -532,6 +534,7 @@ class MTSignalConfigurator(QWidget):
             if not df.empty:
                 self._model.set_dataframe(df)
             self.resize_views_to_contents()
+            logger.info(f"Opened signal set: {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -565,6 +568,7 @@ class MTSignalConfigurator(QWidget):
             if not df.empty:
                 self._model.append_dataframe(df)
             self.resize_views_to_contents()
+            logger.info(f"Appended signal set: {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -724,14 +728,33 @@ class MTSignalConfigurator(QWidget):
         df_filtered = df[df['Stack'] != ""]
         stack_valid = df_filtered['Stack'].tolist()
         plot_types_valid = df_filtered['Plot type'].replace("", "PlotXY").tolist()  # Check if "" in column Plot Type
+
         # Create new dataframe to validate stacks against their plot types
-        data = pd.DataFrame({"Stack": stack_valid, "PlotType": plot_types_valid})
-        # Identify invalid stacks:
-        #   - Those stacks in which a PlotContour is stacked
+        data = pd.DataFrame({
+            "Stack": stack_valid,
+            "PlotType": plot_types_valid
+        })
+
+        def is_invalid(group):
+            # Identify invalid stacks
+            types = group['PlotType']
+
+            # Rule #1: Stacked plots must contain only PlotXY types
+            if group["Stack"].values[0].count(".") > 1 and not all(types == 'PlotXY'):
+                return True
+
+            # Rule #2: A PlotContour stack cannot contain more than one signal
+            if all(types == 'PlotContour') and len(types) > 1:
+                return True
+
+            # Rule #3: Mixing different plot types in the same stack is not allowed
+            if types.nunique() != 1:
+                return True
+
+        # Filter invalid stacks
         self.invalid_stacks = (
             data.groupby('Stack')
-            .filter(lambda group: len(group) > 1 and not all(group['PlotType'] == 'PlotXY'))
-            ['Stack']
+            .filter(is_invalid)['Stack']
             .unique()
         )
 
@@ -745,11 +768,9 @@ class MTSignalConfigurator(QWidget):
 
     def set_status_message(self, msg):
         self.statusChanged.emit(msg)
-        QCoreApplication.instance().processEvents()
 
     def set_progress(self, value: int):
         self.progressChanged.emit(value)
-        QCoreApplication.instance().processEvents()
 
 
 def main():

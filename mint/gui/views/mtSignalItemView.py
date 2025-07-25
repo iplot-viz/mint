@@ -37,7 +37,8 @@ class MTSignalItemView(QWidget):
 
         # remove old actions.
         for act in self._actions:
-            self._menu.removeAction(act)
+            if act is not None:
+                self._menu.removeAction(act)
         self._actions.clear()
 
         # add new actions and keep a reference on python side.
@@ -45,6 +46,7 @@ class MTSignalItemView(QWidget):
             column_name = model.headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
             if column_name == MTSignalsModel.ROWUID_COLNAME:
                 self.toggle_column(column, False)
+                self._actions.append(None)  # None for keep aligned index
             else:
                 cbox = QCheckBox(column_name, self._menu)
                 cbox.setChecked(True)
@@ -53,8 +55,10 @@ class MTSignalItemView(QWidget):
                 cbox.toggled.connect(partial(self.toggle_column, column))
                 self._actions.append(act)
 
-        # fill menu with actions.
-        self._menu.addActions(self._actions)
+        # fill menu with actions
+        for act in self._actions:
+            if act is not None:
+                self._menu.addAction(act)
         self._menu.setContentsMargins(5, 0, 0, 0)
 
     def toggle_column(self, column: int, state: bool):

@@ -60,6 +60,9 @@ class MTSignalsModel(QAbstractItemModel):
     def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
         super().__init__(parent)
+        self._white_brush = QBrush(QColor('white'))
+        self._red_brush = QBrush(QColor('red'))
+        self._orange_brush = QBrush(QColor('orange'))
 
         self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
@@ -94,21 +97,28 @@ class MTSignalsModel(QAbstractItemModel):
         return self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
-        if index.isValid():
-            value = self._table.iloc[index.row(), index.column()]
-            if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
-                return value
-            if role == Qt.ItemDataRole.BackgroundRole:
-                fail_value = self._table_fails.iloc[index.row(), index.column()]
-                # Value 0 corresponds to a correct cell.
-                # Value 1 corresponds to a main error.
-                # Value 2 corresponds to a secondary error resulting from a main error.
-                if fail_value == 0:
-                    return QBrush(QColor('white'))
-                elif fail_value == 1:
-                    return QBrush(QColor('red'))
-                else:
-                    return QBrush(QColor('orange'))
+        if not index.isValid():
+            return None
+        if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
+            return self._table.iat[index.row(), index.column()]
+        if role == Qt.ItemDataRole.BackgroundRole:
+            fail_value = self._table_fails.iat[index.row(), index.column()]
+            # Value 0 corresponds to a correct cell.
+            # Value 1 corresponds to a main error.
+            # Value 2 corresponds to a secondary error resulting from a main error.
+            if fail_value == 0:
+                return self._white_brush
+            elif fail_value == 1:
+                return self._red_brush
+            else:
+                return self._orange_brush
+        # tooltip for comment column
+        if role == Qt.ItemDataRole.ToolTipRole:
+            # get the column name
+            column_name = self._table.columns[index.column()]
+            if column_name == "Comment":
+                return self._table.iat[index.row(), index.column()]
+
         return None
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
@@ -132,8 +142,26 @@ class MTSignalsModel(QAbstractItemModel):
             return False
         row = index.row()
         column = index.column()
+        col_name = self._table.columns[column]
+
         if role != Qt.ItemDataRole.EditRole and role != Qt.ItemDataRole.DisplayRole:
             return False
+
+        if col_name != 'Comment':
+
+            # Filter actual and literal newline/tab on interactive edit
+            if not self._fast_mode and isinstance(value, str):
+                # replace real CR/LF and tabs
+                value = value.replace('\r\n', ' ').replace('\r', ' ')
+                value = value.replace('\n', ' ').replace('\t', ' ')
+                # replace literal backslash sequences
+                value = value.replace('\\n', ' ').replace('\\t', ' ')
+                # collapse multiple spaces
+                value = re.sub(r' +', ' ', value)
+        else:
+            # For Comment: preserve newlines, cap at 1000 chars
+            if isinstance(value, str):
+                value = value[:1000]
 
         if isinstance(value, str):
             value = value.strip()
@@ -157,7 +185,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            if index.column() != self._table.columns.size - 1:
+            if self._table.columns[index.column()] != 'Status':
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
@@ -206,7 +234,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-3].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-4].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -278,7 +306,7 @@ class MTSignalsModel(QAbstractItemModel):
         df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
 
         # Check if last row is empty
-        if self._table.empty or self._table.iloc[-1:, 1:-3].any(axis=1).bool():
+        if self._table.empty or self._table.iloc[-1:, 1:-4].any(axis=1).bool():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
             self.insertRows(len(self._table), 1, QModelIndex())
             self._table_fails = pd.concat([self._table_fails, df_fails], ignore_index=True)
@@ -309,13 +337,17 @@ class MTSignalsModel(QAbstractItemModel):
         # 2. table
         column_names = list(mtBP.get_column_names(temp_blueprint))
         self._entity_attribs = list(mtBP.get_code_names(temp_blueprint))
-        if input_dict.get('table'):
-            df = pd.DataFrame(input_dict.get('table'), dtype=str, columns=column_names)
-        elif input_dict.get('variables_table'):  # old style.
-            df = pd.DataFrame(input_dict.get('variables_table'), dtype=str)
-            df.set_axis(column_names[:df.columns.size], axis=1, inplace=True)
+        if 'table' in input_dict:
+            raw = input_dict['table']
+        elif 'variables_table' in input_dict:
+            raw = input_dict['variables_table']
         else:
             raise Exception('No variables table in workspace!')
+
+        df = pd.DataFrame(raw, dtype=str)
+        df.columns = column_names[:df.shape[1]]
+        df = df.reindex(columns=column_names, fill_value='')
+
         if not df.empty:
             self.set_dataframe(df)
 
@@ -332,6 +364,17 @@ class MTSignalsModel(QAbstractItemModel):
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
             if fetch_data:
+                # Read alias and stack from the table row
+                alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
+                stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
+                alias = self._table.at[row_idx, alias_col]
+                stack_val = self._table.at[row_idx, stack_col]
+
+                # Skip query if alias or stack is missing
+                if not alias and not stack_val:
+                    logger.debug(f"Row {row_idx}: skip query (missing alias and stack)")
+                    return
+
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
                 signal.get_data()
 
@@ -360,10 +403,12 @@ class MTSignalsModel(QAbstractItemModel):
 
         for i, parsed_row in enumerate(
                 self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
-            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
 
-            if i == 0:  # grab these from the first row we encounter.
-                if any(parsed_row[1] > 0):  # Do not draw Plots containing errors
+            signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
+            errors = any(parsed_row[1] > 0)
+
+            if i == 0:  # grab these from the first row we encounter
+                if errors:  # Do not draw Plots containing errors
                     stack_val = ''
                 else:
                     stack_val = signal_params.get('stack_val')
@@ -380,10 +425,14 @@ class MTSignalsModel(QAbstractItemModel):
                     bad_stack = True
 
                 if bad_stack:
+                    # In this case, the signal will only be created if there are no errors
                     stack_num = 1
                     col_num = row_num = 0
-                    if stack_val:
-                        # This message for status?
+                    if errors:
+                        logger.warning(f'Errors encountered during signal creation')
+                        return
+                    else:
+                        # Message for status
                         logger.warning(f'Ignored wrong stack value: {stack_val}')
 
                 col_span = signal_params.get('col_span') or 1
@@ -391,7 +440,7 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
-            if signal_params['plot_type'] == 'PlotXY':
+            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider':
                 signal_class = SignalXY
             elif signal_params['plot_type'] == 'PlotContour':
                 signal_class = SignalContour
@@ -463,9 +512,17 @@ class MTSignalsModel(QAbstractItemModel):
                                     idx = 2
 
                                 # Check each pulse
-                                if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(pattern=pulse).empty:
-                                    elements[idx].append(pulse)
-                                    fls[column_name] = 0
+                                if inp['DS'] in self.data_sources:
+                                    if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(
+                                            pattern=pulse).empty:
+                                        elements[idx].append(pulse)
+                                        fls[column_name] = 0
+                                    else:
+                                        fls[column_name] = 1
+                                        logger.warning(
+                                            f"The pulse '{pulse}' could not be found in the data source '{inp['DS']}' "
+                                            f"in the table row [{table_row}]")
+                                        break
                                 else:
                                     fls[column_name] = 1
                                     logger.warning(
@@ -601,8 +658,10 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid stack: Plot of type PlotContour cannot be stacked, just PlotXY"
-                                               f" can be stacked in the table row [{table_row}]")
+                                logger.warning(
+                                    f"Invalid stack in table row [{table_row}]: "
+                                    f"Plot of type PlotContour or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
+                                    f"Mixing different plot types in the same stack is not allowed.")
                             else:
                                 if exp_stack.match(value):
                                     fls[column_name] = 0
@@ -678,10 +737,10 @@ class MTSignalsModel(QAbstractItemModel):
 
                         # Plot Type
                         elif column_name == 'Plot type':
-                            if value not in ['PlotXY', 'PlotContour']:
+                            if value not in ['PlotXY', 'PlotContour', 'PlotXYWithSlider']:
                                 fls[column_name] = 1
                                 logger.warning(f"Invalid plot type: '{value}' is not a valid plot type. Expected"
-                                               f" 'PlotXY' or 'PlotContour'")
+                                               f" 'PlotXY' or 'PlotContour' or 'PlotXYWithSlider'")
                             else:
                                 fls[column_name] = 0
 
@@ -715,3 +774,29 @@ class MTSignalsModel(QAbstractItemModel):
                     break
             else:
                 yield pd.Series(out), fls
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
+        """
+        Sort the model by the given column index and order.
+        Empty values always pushed to the bottom, rest by column as string.
+        """
+        # Determine the column name from the DataFrame
+        col_name = self._table.columns[column]
+        ascending = (order == Qt.SortOrder.AscendingOrder)
+
+        # Notify views that layout is about to change
+        self.layoutAboutToBeChanged.emit()
+
+        # Convert everything to string before flag (homogenize)
+        col_as_str = self._table[col_name].astype(str)
+        self._table['_empty_flag'] = (col_as_str.isna() | (col_as_str == '')).astype(int)
+
+        self._table.sort_values(
+            by=['_empty_flag', col_name],
+            ascending=[True, ascending],
+            inplace=True,
+            ignore_index=True
+        )
+
+        self._table.drop(columns=['_empty_flag'], inplace=True)
+        self.layoutChanged.emit()

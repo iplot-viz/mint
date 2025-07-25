@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -62,7 +62,7 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour}
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -104,11 +104,14 @@ class MTMainWindow(IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
+        self._workspaceLabel = QLabel("No workspace loaded")
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self._memoryMonitor)
+        self._statusBar.addPermanentWidget(QLabel('|'))
+        self._statusBar.addPermanentWidget(self._workspaceLabel)
         self._statusBar.addPermanentWidget(QLabel('|'))
 
         self.graphicsArea = QWidget(self)
@@ -321,6 +324,13 @@ class MTMainWindow(IplotQtMainWindow):
         self.dataRangeSelector.import_dict(data_range)
 
         delete_keys_from_dict(input_dict, ['dec_samples'])
+
+        # Remove previous slider references
+        for col in self.canvas.plots:
+            for plot in col:
+                if isinstance(plot, PlotXYWithSlider):
+                    plot.clean_slider()
+
         main_canvas = input_dict.get('main_canvas')
         self.canvas = Canvas.from_dict(main_canvas)
 
@@ -399,13 +409,15 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         # Compute statistics when importing workspace
-        self.canvasStack.currentWidget().stats(self.canvas)
+        if path:
+            self.canvasStack.currentWidget().stats(self.canvas)
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
     def import_json(self, file_path: str):
         self.statusBar().showMessage(f"Importing {file_path} ..")
         try:
+            logger.info(f"Loading workspace: {file_path}")
             with open(file_path, mode='r') as f:
                 payload = f.read()
                 payload = payload.replace("data_access.dataAccessSignal.DataAccessSignal",
@@ -420,6 +432,9 @@ class MTMainWindow(IplotQtMainWindow):
                 self.import_dict(json.loads(payload, object_hook=lambda d: {int(k) if k.lstrip('-').isdigit() else k: v
                                                                             for k, v in d.items()}))
                 logger.info(f"Finished loading workspace {file_path}")
+                # Update the workspace label in the status bar after successful import
+                self._workspaceLabel.setText(os.path.basename(file_path))
+                self._workspaceLabel.setToolTip(file_path)
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -434,6 +449,7 @@ class MTMainWindow(IplotQtMainWindow):
         try:
             with open(file_path, mode='w') as f:
                 f.write(self.canvas.get_signals_as_csv())
+            logger.info(f"Finished exporting data {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -448,6 +464,7 @@ class MTMainWindow(IplotQtMainWindow):
         try:
             with open(file_path, mode='w') as f:
                 f.write(json.dumps(self.export_dict()))
+            logger.info(f"Finished exporting workspace {file_path}")
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -636,6 +653,14 @@ class MTMainWindow(IplotQtMainWindow):
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
 
+        # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
+        # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
+        # callback references during redrawing.
+        for col in self.canvas.plots:
+            for plot in col:
+                if isinstance(plot, PlotXYWithSlider):
+                    plot.clean_slider()
+
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicate_busy('Applying preferences...')
@@ -733,6 +758,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.canvasStack.refreshLinks()
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
+        self.canvasStack.currentWidget().stats(self.canvas)
 
         self.indicate_ready()
 
