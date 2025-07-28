@@ -493,7 +493,8 @@ class MTMainWindow(IplotQtMainWindow):
 
         if not no_build:
             # Dumps are done before canvas processing
-            dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
+            dump_dir = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/share/mint/1Dtool"
+            dump_dir += "/dumps"
             Path(dump_dir).mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_name = f"signals_table_{os.getpid()}_{timestamp}.scsv"

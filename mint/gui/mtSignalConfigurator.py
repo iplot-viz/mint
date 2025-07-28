@@ -545,7 +545,7 @@ class MTSignalConfigurator(QWidget):
             self.ready.emit()
 
     def import_last_dump(self) -> None:
-        path = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/1Dtool"
+        path = os.environ.get('IPLOT_DUMP_PATH') or f"{Path.home()}/.local/share/mint/1Dtool"
         path += "/dumps"
         files = os.listdir(path)
 
