@@ -19,6 +19,7 @@ from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, 
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
+from pyqtgraph import PlotDataItem
 
 from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
@@ -128,6 +129,9 @@ class MTMainWindow(IplotQtMainWindow):
         elif impl.lower() == "vtk":
             from iplotlib.impl.vtk.qt import QtVTKCanvas
             self.qtcanvas = QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
+        elif impl.lower() == "pyqt":
+            from iplotlib.impl.pyqtgraph.qt import QtPyQtGraphCanvas
+            self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
 
@@ -650,6 +654,10 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.indicate_busy('Retrieving data...')
 
+        def _ignore_plotdataitem(obj, memo):
+            return None  # ❗Devuelve el mismo objeto sin copiar
+
+        copy._deepcopy_dispatch[PlotDataItem] = _ignore_plotdataitem
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
 
