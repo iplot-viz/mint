@@ -99,6 +99,12 @@ class MTSignalsModel(QAbstractItemModel):
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
             return None
+        if role == Qt.ItemDataRole.DisplayRole:
+            value = self._table.iat[index.row(), index.column()]
+            column_name = self._table.columns[index.column()]
+            if column_name == "Comment" and isinstance(value, str) and len(value) > 40:
+                return value[:40] + "..."
+            return value
         if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             return self._table.iat[index.row(), index.column()]
         if role == Qt.ItemDataRole.BackgroundRole:
