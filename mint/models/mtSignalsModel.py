@@ -406,6 +406,13 @@ class MTSignalsModel(QAbstractItemModel):
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)
+            # Update Status to "Ready" if any cell is invalid.
+            status_col = mtBP.get_column_name(self.blueprint, 'Status')
+            sc = self._table.columns.get_loc(status_col)
+            if errors:
+                self._table.iat[row_idx, sc] = "Ready"
+                status_idx = self.createIndex(row_idx, sc)
+                self.dataChanged.emit(status_idx, status_idx)
 
             if i == 0:  # grab these from the first row we encounter
                 if errors:  # Do not draw Plots containing errors
