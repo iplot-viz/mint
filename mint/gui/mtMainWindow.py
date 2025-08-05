@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -62,7 +62,8 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider}
+        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotContourWithSlider": PlotContourWithSlider}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -328,7 +329,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Remove previous slider references
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         main_canvas = input_dict.get('main_canvas')
@@ -653,12 +654,12 @@ class MTMainWindow(IplotQtMainWindow):
         # Keep copy of previous canvas to be able to restore preferences
         old_canvas = copy.deepcopy(self.canvas)
 
-        # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
+        # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
