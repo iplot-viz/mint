@@ -318,6 +318,9 @@ class MTMainWindow(IplotQtMainWindow):
         return workspace
 
     def import_dict(self, input_dict: dict):
+        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        ParserHelper.env.clear()
+        self.canvasStack.currentWidget()._parser.clear()
         self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
@@ -336,9 +339,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
-        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
-        ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
+
         self.indicate_ready()
         self.sigCfgWidget.set_status_message("Update signals ..")
         self.sigCfgWidget.begin_build()
