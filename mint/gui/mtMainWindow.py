@@ -651,9 +651,6 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.indicate_busy('Retrieving data...')
 
-        # Keep copy of previous canvas to be able to restore preferences
-        old_canvas = copy.deepcopy(self.canvas)
-
         # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
@@ -661,6 +658,9 @@ class MTMainWindow(IplotQtMainWindow):
             for plot in col:
                 if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
+
+        # Keep copy of previous canvas to be able to restore preferences
+        old_canvas = copy.deepcopy(self.canvas)
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
