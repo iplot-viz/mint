@@ -130,9 +130,10 @@ class RowAliasType(Enum):
     Mixed = 'MIXED'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser, set]:
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
+    depends_on = set()
 
     is_simple = True
     p = Parser()
@@ -143,7 +144,11 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         try:
             p.set_expression(expression)
             # Check if the expression only uses the row's alias or 'self'
-            is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            is_simple &= expr
+            if not expr:
+                depends_on.add(p.get_var_expression(expression)[0])
+
         except InvalidExpression:
             pass
 
@@ -156,11 +161,15 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
     # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         is_simple &= all([var not in aliases for var in list(p.var_map.keys())])
+        if not is_simple:
+            result_dependencies = p.get_var_expression(name)
+            for res in result_dependencies:
+                depends_on.add(res)
 
     if is_simple:
-        return RowAliasType.Simple, name, p
+        return RowAliasType.Simple, name, p, depends_on
     else:
-        return RowAliasType.Mixed, name, p
+        return RowAliasType.Mixed, name, p, depends_on
 
 
 class MTSignalConfigurator(QWidget):
@@ -647,9 +656,9 @@ class MTSignalConfigurator(QWidget):
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
                 model_idx = self.model.createIndex(idx, status_col_idx)
-                row_type, name, p = _row_predicate(row, aliases, self._model.blueprint)
+                row_type, name, p, depends_on = _row_predicate(row, aliases, self._model.blueprint)
 
-                for var_name in p.var_map.keys():
+                for var_name in depends_on:
                     if var_name in duplicates:
                         sinfo = StatusInfo()
                         sinfo.result = Result.INVALID
@@ -668,7 +677,7 @@ class MTSignalConfigurator(QWidget):
                         continue
 
                     logger.debug(f"Is a mixed alias")
-                    for k in p.var_map.keys():
+                    for k in depends_on:
                         try:
                             alias_idx = aliases.index(k)
                             if alias_idx == idx:
