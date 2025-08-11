@@ -147,7 +147,9 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
             expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
             is_simple &= expr
             if not expr:
-                depends_on.add(p.get_var_expression(expression)[0])
+                result_dependencies = p.get_var_expression(expression)
+                for res in result_dependencies:
+                    depends_on.add(res)
 
         except InvalidExpression:
             pass
