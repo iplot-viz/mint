@@ -19,7 +19,7 @@ from typing import List
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
@@ -496,6 +496,38 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def open_editor_mode(self):
+        current_tab_id = self._tabs.currentIndex()
+        table_view = self._signal_item_widgets[current_tab_id].view()
+        selected_ids = table_view.selectionModel().selectedIndexes()
+        if not selected_ids:
+            return
+        index = selected_ids[0]
+        model = index.model()
+        current_text = model.data(index, Qt.EditRole) or ""
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Editor mode")
+        dlg.setModal(True)
+
+        layout = QVBoxLayout(dlg)
+        text_edit = QTextEdit(dlg)
+        text_edit.setPlainText(current_text)
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, dlg
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec() == QDialog.Accepted:
+            new_text = text_edit.toPlainText()
+            model.setData(index, new_text, Qt.EditRole)
+
+
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
@@ -520,6 +552,9 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.delete_contents)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.find_replace)
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_FileDialogDetailedView")), "Editor mode", self.open_editor_mode)
+
         context_menu.popup(event.globalPos())
 
     def export_scsv(self, file_path=None):
