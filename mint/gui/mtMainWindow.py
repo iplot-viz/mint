@@ -720,11 +720,12 @@ class MTMainWindow(IplotQtMainWindow):
                             try:
                                 x_data = signal.get_data()[0]
                                 if x_axis_transformed:
-                                    if len(x_data) > 0:
-                                        signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                    if len(x_data) > 0:  # Create a separate function to detect dates
+                                        signal_x_is_date |= bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
                                 else:
                                     if rows[row][3][0] is not None:
-                                        signal_x_is_date |= bool(rows[row][3][0] > (1 << 53))
+                                        signal_x_is_date |= bool(
+                                            rows[row][3][0] > (1 << 53) and rows[row][3][-1] < (1 << 62))
                             except (IndexError, ValueError) as _:
                                 signal_x_is_date = False
                 else:
