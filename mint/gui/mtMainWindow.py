@@ -660,13 +660,16 @@ class MTMainWindow(IplotQtMainWindow):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
-        old_canvas = copy.deepcopy(self.canvas)
+        # old_canvas = copy.deepcopy(self.canvas)
+        old_canvas = self.canvas.to_dict()
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicate_busy('Applying preferences...')
+
         # Merge with previous preferences
         self.canvas.merge(old_canvas)
+        # self.canvas.set_properties(old_canvas)
 
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
