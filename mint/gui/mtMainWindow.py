@@ -3,7 +3,7 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
-import gc
+
 import weakref
 from collections import defaultdict
 from dataclasses import fields
@@ -11,7 +11,6 @@ from datetime import datetime
 from pathlib import Path
 import json
 import os
-import copy
 import pkgutil
 import socket
 import typing
@@ -626,7 +625,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_busy('Retrieving data...')
 
         # Keep copy of previous canvas to be able to restore preferences
-        old_canvas = copy.deepcopy(self.canvas)
+        old_canvas = self.canvas.to_dict()
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
