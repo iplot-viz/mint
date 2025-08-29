@@ -99,6 +99,12 @@ class MTSignalsModel(QAbstractItemModel):
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
             return None
+        if role == Qt.ItemDataRole.DisplayRole:
+            value = self._table.iat[index.row(), index.column()]
+            column_name = self._table.columns[index.column()]
+            if column_name == "Comment" and isinstance(value, str) and len(value) > 40:
+                return value[:40] + "..."
+            return value
         if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
             return self._table.iat[index.row(), index.column()]
         if role == Qt.ItemDataRole.BackgroundRole:
@@ -406,6 +412,13 @@ class MTSignalsModel(QAbstractItemModel):
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)
+            # Update Status to "Ready" if any cell is invalid.
+            status_col = mtBP.get_column_name(self.blueprint, 'Status')
+            sc = self._table.columns.get_loc(status_col)
+            if errors:
+                self._table.iat[row_idx, sc] = "Ready"
+                status_idx = self.createIndex(row_idx, sc)
+                self.dataChanged.emit(status_idx, status_idx)
 
             if i == 0:  # grab these from the first row we encounter
                 if errors:  # Do not draw Plots containing errors

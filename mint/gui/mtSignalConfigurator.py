@@ -19,7 +19,7 @@ from typing import List
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
@@ -130,9 +130,10 @@ class RowAliasType(Enum):
     Mixed = 'MIXED'
 
 
-def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser]:
+def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tuple[RowAliasType, str, Parser, set]:
     name = row[mtBp.get_column_name(blueprint, 'Variable')]
     alias = row[mtBp.get_column_name(blueprint, 'Alias')]
+    depends_on = set()
 
     is_simple = True
     p = Parser()
@@ -143,7 +144,13 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         try:
             p.set_expression(expression)
             # Check if the expression only uses the row's alias or 'self'
-            is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            is_simple &= expr
+            if not expr:
+                result_dependencies = p.get_var_expression(expression)
+                for res in result_dependencies:
+                    depends_on.add(res)
+
         except InvalidExpression:
             pass
 
@@ -156,11 +163,15 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
     # True: name does not consist of any pre-defined aliases
     if p.is_valid:
         is_simple &= all([var not in aliases for var in list(p.var_map.keys())])
+        if not is_simple:
+            result_dependencies = p.get_var_expression(name)
+            for res in result_dependencies:
+                depends_on.add(res)
 
     if is_simple:
-        return RowAliasType.Simple, name, p
+        return RowAliasType.Simple, name, p, depends_on
     else:
-        return RowAliasType.Mixed, name, p
+        return RowAliasType.Mixed, name, p, depends_on
 
 
 class MTSignalConfigurator(QWidget):
@@ -485,6 +496,38 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def open_editor_mode(self):
+        current_tab_id = self._tabs.currentIndex()
+        table_view = self._signal_item_widgets[current_tab_id].view()
+        selected_ids = table_view.selectionModel().selectedIndexes()
+        if not selected_ids:
+            return
+        index = selected_ids[0]
+        model = index.model()
+        current_text = model.data(index, Qt.EditRole) or ""
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Editor mode")
+        dlg.setModal(True)
+
+        layout = QVBoxLayout(dlg)
+        text_edit = QTextEdit(dlg)
+        text_edit.setPlainText(current_text)
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, dlg
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec() == QDialog.Accepted:
+            new_text = text_edit.toPlainText()
+            model.setData(index, new_text, Qt.EditRole)
+
+
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
@@ -509,6 +552,9 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.delete_contents)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.find_replace)
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_FileDialogDetailedView")), "Editor mode", self.open_editor_mode)
+
         context_menu.popup(event.globalPos())
 
     def export_scsv(self, file_path=None):
@@ -647,9 +693,9 @@ class MTSignalConfigurator(QWidget):
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
                 model_idx = self.model.createIndex(idx, status_col_idx)
-                row_type, name, p = _row_predicate(row, aliases, self._model.blueprint)
+                row_type, name, p, depends_on = _row_predicate(row, aliases, self._model.blueprint)
 
-                for var_name in p.var_map.keys():
+                for var_name in depends_on:
                     if var_name in duplicates:
                         sinfo = StatusInfo()
                         sinfo.result = Result.INVALID
@@ -668,7 +714,7 @@ class MTSignalConfigurator(QWidget):
                         continue
 
                     logger.debug(f"Is a mixed alias")
-                    for k in p.var_map.keys():
+                    for k in depends_on:
                         try:
                             alias_idx = aliases.index(k)
                             if alias_idx == idx:
