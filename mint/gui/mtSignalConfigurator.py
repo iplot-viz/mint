@@ -453,8 +453,19 @@ class MTSignalConfigurator(QWidget):
             contents[row][column] = value
             columns.add(column)
             rows.add(row)
-        total_columns = max(columns) - min(columns) + 1
-        total_rows = max(rows) - min(rows) + 1
+
+        if columns:
+            cmin, cmax = min(columns), max(columns)
+            selectable_in_span = 0
+            for c in range(cmin, cmax + 1):
+                # Si la columna no es seleccionable (p.ej. 'Status'), no cuenta para la “rectangularidad”
+                if self._model.flags(self._model.createIndex(0, c)) & Qt.ItemFlag.ItemIsSelectable:
+                    selectable_in_span += 1
+            total_columns = selectable_in_span
+        else:
+            total_columns = 0
+
+        total_rows = max(rows) - min(rows) + 1 if rows else 0
         if total_columns != len(columns) or total_rows != len(rows):
             show_popup_msg("Can't copy data", "Only rectangular selection is available")
             self.ready.emit()
