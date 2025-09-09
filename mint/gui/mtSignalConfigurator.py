@@ -458,7 +458,7 @@ class MTSignalConfigurator(QWidget):
             cmin, cmax = min(columns), max(columns)
             selectable_in_span = 0
             for c in range(cmin, cmax + 1):
-                # If the column is not selectable (e.g. 'Status'), it does not count towards rectangularity
+                # If the column is not selectable (e.g. 'Status'), it does not count towards "rectangularity"
                 if self._model.flags(self._model.createIndex(0, c)) & Qt.ItemFlag.ItemIsSelectable:
                     selectable_in_span += 1
             total_columns = selectable_in_span
