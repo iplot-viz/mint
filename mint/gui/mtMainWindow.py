@@ -695,16 +695,16 @@ class MTMainWindow(IplotQtMainWindow):
         canvas.rows = max_row
         canvas.plots = [[] for _ in range(canvas.cols)]
 
-        for colnum, rows in plan.items():
+        for col, rows in plan.items():
             for row in range(1, max(rows.keys()) + 1):
                 plot = None
                 if row not in rows.keys():
-                    self.canvas.add_plot(None, col=colnum - 1)
+                    self.canvas.add_plot(None, col=col - 1)
                     continue
 
                 plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
                 if len(plot_types) > 1 or any(value not in self.plot_classes.keys() for value in plot_types):
-                    self.canvas.add_plot(None, col=colnum - 1)
+                    self.canvas.add_plot(None, col=col - 1)
                     continue
 
                 x_axis_transformed = False
@@ -746,7 +746,7 @@ class MTMainWindow(IplotQtMainWindow):
                     x_axis.end = rows[row][3][1]
 
                 plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row][0],
-                                                        col_span=rows[row][1])
+                                                        col_span=rows[row][1], row=row, col=col)
                 for stack, signals in rows[row][2].items():
                     for signal in signals:
                         if signal.stream_valid:
@@ -757,7 +757,7 @@ class MTMainWindow(IplotQtMainWindow):
                 if canvas.streaming and not plot.signals:
                     plot = None
 
-                self.canvas.add_plot(plot, col=colnum - 1)
+                self.canvas.add_plot(plot, col=col - 1)
 
     def on_timeout(self):
         self.build()
