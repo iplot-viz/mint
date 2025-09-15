@@ -3,13 +3,14 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
+import weakref
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 import json
 import os
-import copy
 import pkgutil
 import socket
 import typing
@@ -319,6 +320,9 @@ class MTMainWindow(IplotQtMainWindow):
         return workspace
 
     def import_dict(self, input_dict: dict):
+        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        ParserHelper.env.clear()
+        self.canvasStack.currentWidget()._parser.clear()
         self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
@@ -344,7 +348,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
-        ParserHelper.env.clear()  # Removes any previously aliased signals.
+
         self.indicate_ready()
         self.sigCfgWidget.set_status_message("Update signals ..")
         self.sigCfgWidget.begin_build()
@@ -370,7 +374,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-            plot.parent = self.canvas
+            plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -385,7 +389,7 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
-            new_signal.parent = plot
+            new_signal.parent = weakref.ref(plot)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
@@ -553,6 +557,9 @@ class MTMainWindow(IplotQtMainWindow):
         super().closeEvent(event)
 
     def build(self, stream=False):
+        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        ParserHelper.env.clear()
+        self.canvasStack.currentWidget()._parser.clear()
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.time_window() * 1000000000
@@ -632,22 +639,6 @@ class MTMainWindow(IplotQtMainWindow):
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
                 plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
 
-        # import collections
-        # ord = collections.OrderedDict(sorted(plan.items()))
-        # new_plan = {}
-        # col_sp = 1
-        # for x, y in ord.items():
-        #     ord2 = collections.OrderedDict(sorted(y.items()))
-        #     row_sp = 1
-        #     rows = {}
-        #     next_col_sp = 1
-        #     for z, k in ord2.items():
-        #         rows[z + row_sp - 1] = k
-        #         row_sp = k[0]
-        #         next_col_sp = max(next_col_sp, k[1])
-        #     new_plan[x + col_sp - 1] = rows
-        #     col_sp = next_col_sp
-
         self.indicate_busy('Retrieving data...')
 
         # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
@@ -659,7 +650,7 @@ class MTMainWindow(IplotQtMainWindow):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
-        old_canvas = copy.deepcopy(self.canvas)
+        old_canvas = self.canvas.to_dict()
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
