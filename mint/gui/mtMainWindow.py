@@ -645,11 +645,6 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.indicate_busy('Retrieving data...')
 
-        def _ignore_plotdataitem(obj, memo):
-            return None  # ❗Devuelve el mismo objeto sin copiar
-
-        copy._deepcopy_dispatch[PlotDataItem] = _ignore_plotdataitem
-
         # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
