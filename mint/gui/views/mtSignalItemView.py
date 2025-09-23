@@ -117,5 +117,5 @@ class MTSignalItemView(QWidget):
                         QEvent.Type.StyleChange,
                         QEvent.Type.ThemeChange) or (cs and e.type() == cs):
             ss = self._view.styleSheet()
-            self._view.setStyleSheet("")  # unpolish
-            self._view.setStyleSheet(ss)  # polish
+            self._view.setStyleSheet("")
+            self._view.setStyleSheet(ss)
