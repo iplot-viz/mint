@@ -85,23 +85,25 @@ class MTSignalItemView(QWidget):
         options = dict()
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
-            if column_name != MTSignalsModel.ROWUID_COLNAME:
-                act = self._actions[column]
-                if isinstance(act, QWidgetAction):
-                    dw = act.defaultWidget()
-                    if isinstance(dw, QAbstractButton):
-                        options.update({column_name: dw.isChecked()})
+            if column_name == MTSignalsModel.ROWUID_COLNAME:
+                continue
+            act = self._actions[column]
+            if isinstance(act, QWidgetAction):
+                dw = act.defaultWidget()
+                if isinstance(dw, QAbstractButton):
+                    options.update({column_name: dw.isChecked()})
         return options
 
     def import_dict(self, options: dict):
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
-            if column_name != MTSignalsModel.ROWUID_COLNAME:
-                act = self._actions[column]
-                if isinstance(act, QWidgetAction):
-                    dw = act.defaultWidget()
-                    if isinstance(dw, QAbstractButton):
-                        dw.setChecked(options.get(column_name, True))
+            if column_name == MTSignalsModel.ROWUID_COLNAME:
+                continue
+            act = self._actions[column]
+            if isinstance(act, QWidgetAction):
+                dw = act.defaultWidget()
+                if isinstance(dw, QAbstractButton):
+                    dw.setChecked(options.get(column_name, True))
 
     def export_json(self):
         return json.dumps(self.export_dict())
