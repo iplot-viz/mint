@@ -419,6 +419,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Compute statistics when importing workspace
         if path:
             self.canvasStack.currentWidget().stats(self.canvas)
+        self.drop_history()  # clean zoom history
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
@@ -524,7 +525,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.prefWindow.treeView.selectionModel().select(self.prefWindow.treeView.model().index(0, 0),
                                                              QItemSelectionModel.Select)
 
-        self.drop_history()  # clean zoom history; is this best place?
+        self.drop_history()  # clean zoom history
         self.start_auto_refresh()
         self.indicate_ready()
 
