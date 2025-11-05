@@ -586,11 +586,13 @@ class MTMainWindow(IplotQtMainWindow):
         da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
         plan = dict()
 
-        for waypt in self.sigCfgWidget.build(**da_params):
-            existing = None
+        # Get signals in order to preserve markers
+        previous_signals = {sig.uid : sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
 
+        for waypt in self.sigCfgWidget.build(**da_params):
             if not waypt.func and not waypt.args:
                 continue
+
             if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
@@ -600,6 +602,7 @@ class MTMainWindow(IplotQtMainWindow):
             signal = waypt.func(*waypt.args, **waypt.kwargs)
             if not signal.label:
                 continue
+
             signal.data_access_enabled = False if self.canvas.streaming else True
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
@@ -620,6 +623,11 @@ class MTMainWindow(IplotQtMainWindow):
 
             if signal.status_info.result == 'Fail':
                 continue
+
+            # Preserve markers
+            prev_signal = previous_signals.get(signal.uid)
+            if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
+                signal.markers_list = prev_signal.markers_list
 
             if waypt.col_num not in plan:
                 plan[waypt.col_num] = {}
