@@ -36,6 +36,7 @@ case $toolchain in
     # Graphics backend requirements
     try module load matplotlib/3.8.2-gfbf-2023b
     try module load VTK/9.3.0-foss-2023b
+    try module load PyQtGraph/0.13.7-foss-2023b
     ;;
 
   "intel")
@@ -43,6 +44,7 @@ case $toolchain in
     # Graphics backend requirements
     try module load matplotlib/3.8.2-iimkl-2023b
     try module load VTK/9.3.0-intel-2023b
+    try module load PyQtGraph/0.13.7-intel-2023b
     ;;
    *)
     echo "Unknown toolchain $toolchain"
