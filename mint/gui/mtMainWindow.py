@@ -624,24 +624,31 @@ class MTMainWindow(IplotQtMainWindow):
                 plan[waypt.col_num] = {}
 
             if waypt.row_num not in plan[waypt.col_num]:
-                plan[waypt.col_num][waypt.row_num] = [waypt.row_span, waypt.col_span, defaultdict(list),
-                                                      [waypt.ts_start, waypt.ts_end]]
+                plan[waypt.col_num][waypt.row_num] = {"row_span": waypt.row_span, "col_span": waypt.col_span,
+                                                      "signals": defaultdict(list),
+                                                      "ts_start": waypt.ts_start,
+                                                      "ts_end": waypt.ts_end,
+                                                      "x_axis_date": x_axis_date,
+                                                      "x_axis_follow": x_axis_follow,
+                                                      "x_axis_window": x_axis_window,
+                                                      "streaming": self.canvas.streaming
+                                                      }
 
             else:
                 existing = plan[waypt.col_num][waypt.row_num]
-                existing[0] = waypt.row_span if waypt.row_span > existing[0] else existing[0]
-                existing[1] = waypt.col_span if waypt.col_span > existing[1] else existing[1]
+                existing["row_span"] = waypt.row_span if waypt.row_span > existing["row_span"] else existing["row_span"]
+                existing["col_span"] = waypt.col_span if waypt.col_span > existing["col_span"] else existing["col_span"]
                 if waypt.ts_start is not None:
-                    if existing[3][0] is None or waypt.ts_start < existing[3][0]:
-                        existing[3][0] = waypt.ts_start
+                    if existing["ts_start"] is None or waypt.ts_start < existing["ts_start"]:
+                        existing["ts_start"] = waypt.ts_start
                 if waypt.ts_end is not None:
-                    if existing[3][1] is None or waypt.ts_end > existing[3][1]:
-                        existing[3][1] = waypt.ts_end
+                    if existing["ts_end"] is None or waypt.ts_end > existing["ts_end"]:
+                        existing["ts_end"] = waypt.ts_end
 
-            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            plan[waypt.col_num][waypt.row_num]["signals"][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
-            if plan[waypt.col_num][waypt.row_num][3][1] is None:
-                plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
+            if plan[waypt.col_num][waypt.row_num]["ts_end"] is None:
+                plan[waypt.col_num][waypt.row_num]["ts_end"] = signal.data_xrange[1]
 
         self.indicate_busy('Retrieving data...')
 
@@ -674,8 +681,8 @@ class MTMainWindow(IplotQtMainWindow):
         max_row = 0
         for col, row_plots in plan.items():
             for row, plot in row_plots.items():
-                max_col = max(max_col, col + plot[1] - 1)
-                max_row = max(max_row, row + plot[0] - 1)
+                max_col = max(max_col, col + plot["col_span"] - 1)
+                max_row = max(max_row, row + plot["row_span"] - 1)
 
         canvas.cols = max_col
         canvas.rows = max_row
@@ -683,18 +690,18 @@ class MTMainWindow(IplotQtMainWindow):
 
         for col, rows in plan.items():
             for row in range(1, max(rows.keys()) + 1):
-                plot = None
                 if row not in rows.keys():
                     self.canvas.add_plot(None, col=col - 1)
                     continue
 
-                plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
+                plot_types = list(
+                    set(signal.plot_type for signals in rows[row]["signals"].values() for signal in signals))
                 if len(plot_types) > 1 or any(value not in self.plot_classes.keys() for value in plot_types):
                     self.canvas.add_plot(None, col=col - 1)
                     continue
 
                 x_axis_transformed = False
-                for signals in rows[row][2].values():
+                for signals in rows[row]["signals"].values():
                     for signal in signals:
                         if signal.x_expr != '${self}.time':
                             x_axis_transformed = True
@@ -702,7 +709,7 @@ class MTMainWindow(IplotQtMainWindow):
 
                 if not canvas.streaming:
                     signal_x_is_date = False
-                    for stack, signals in rows[row][2].items():
+                    for stack, signals in rows[row]["signals"].items():
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
@@ -710,15 +717,15 @@ class MTMainWindow(IplotQtMainWindow):
                                     if len(x_data) > 0:  # Create a separate function to detect dates
                                         signal_x_is_date |= bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
                                 else:
-                                    if rows[row][3][0] is not None:
+                                    if rows[row]["ts_start"] is not None:
                                         signal_x_is_date |= bool(
-                                            rows[row][3][0] > (1 << 53) and rows[row][3][-1] < (1 << 62))
+                                            rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
                             except (IndexError, ValueError) as _:
                                 signal_x_is_date = False
                 else:
                     signal_x_is_date = True
 
-                y_axes = [LinearAxis() for _ in range(len(rows[row][2].items()))]
+                y_axes = [LinearAxis() for _ in range(len(rows[row]["signals"].items()))]
 
                 x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                     window=x_axis_window)
@@ -726,14 +733,14 @@ class MTMainWindow(IplotQtMainWindow):
                 # In case of processed signals, the limits are not set until the drawn_fn occurs
                 # In the other hand, for no processed signals and for pulses the limits are set as follows:
                 if not x_axis_transformed:
-                    x_axis.original_begin = rows[row][3][0]
-                    x_axis.original_end = rows[row][3][1]
-                    x_axis.begin = rows[row][3][0]
-                    x_axis.end = rows[row][3][1]
+                    x_axis.original_begin = rows[row]["ts_start"]
+                    x_axis.original_end = rows[row]["ts_end"]
+                    x_axis.begin = rows[row]["ts_start"]
+                    x_axis.end = rows[row]["ts_end"]
 
-                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row][0],
-                                                        col_span=rows[row][1], row=row, col=col)
-                for stack, signals in rows[row][2].items():
+                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
+                                                        col_span=rows[row]["col_span"], row=row, col=col)
+                for stack, signals in rows[row]["signals"].items():
                     for signal in signals:
                         if signal.stream_valid:
                             plot.add_signal(signal, stack=stack)
