@@ -12,7 +12,8 @@ def create_app(argv=None) -> (QApplication, Namespace):
         argv = []
     parser = ArgumentParser(description='MINT application')
     parser.add_argument('--impl', metavar='canvas_impl',
-                        help='Use canvas implementation (matplotlib/pyqt...)', default="matplotlib")
+                        help='Use canvas implementation (matplotlib/pyqt/vtk)', choices=['matplotlib', 'pyqt', 'vtk'],
+                        default="matplotlib")
     parser.add_argument('--use-fallback-samples', dest='use_fallback_samples', action='store_true', default=False)
     parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
                         help='Load blueprint from .json file', default=None)
