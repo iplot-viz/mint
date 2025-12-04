@@ -401,6 +401,8 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            if not plot:
+                continue
             plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
