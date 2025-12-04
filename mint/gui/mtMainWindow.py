@@ -323,13 +323,18 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_ready()
         return workspace
 
-    def validate_imported_canvas(self, ):
+    def validate_imported_canvas(self):
         for col in self.canvas.plots:
             for plot in col:
                 if plot:
                     remove_key = []
                     for key, values in plot.signals.items():
-                        plot.signals[key] = [signal for signal in values if signal is not None]
+                        plot.signals[key] = [
+                            signal for signal in values
+                            if signal is not None
+                               and callable(getattr(signal, 'parent', None))
+                               and signal.parent() is not None
+                        ]
                         if len(plot.signals[key]) == 0:
                             remove_key.append(key)
 
@@ -337,7 +342,7 @@ class MTMainWindow(IplotQtMainWindow):
                         plot.signals.pop(key)
 
                     if not plot.signals.keys():
-                        # Plot sin señales
+                        # Plot without signals, remove it from the canvas
                         col.remove(plot)
 
     def import_dict(self, input_dict: dict):
