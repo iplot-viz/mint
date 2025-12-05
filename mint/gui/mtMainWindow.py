@@ -325,15 +325,14 @@ class MTMainWindow(IplotQtMainWindow):
 
     def validate_imported_canvas(self):
         for col in self.canvas.plots:
-            for plot in col:
+            for idx_plot, plot in enumerate(col):
                 if plot:
                     remove_key = []
                     for key, values in plot.signals.items():
                         plot.signals[key] = [
                             signal for signal in values
                             if signal is not None
-                               and callable(getattr(signal, 'parent', None))
-                               and signal.parent() is not None
+                               or signal.parent is not None
                         ]
                         if len(plot.signals[key]) == 0:
                             remove_key.append(key)
@@ -341,9 +340,8 @@ class MTMainWindow(IplotQtMainWindow):
                     for key in remove_key:
                         plot.signals.pop(key)
 
-                    if not plot.signals.keys():
-                        # Plot without signals, remove it from the canvas
-                        col.remove(plot)
+                    if not plot.signals.keys() or plot.parent == None:
+                        col[idx_plot] = None
 
     def import_dict(self, input_dict: dict):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
