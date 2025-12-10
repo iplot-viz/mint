@@ -100,7 +100,7 @@ class MTDataRangeSelector(QWidget):
         mode = self.accessModes[self.stack.currentIndex()].mode
         return mode in [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.RELATIVE_TIME]
 
-    def get_pulse_number(self) -> List[int]:
+    def get_pulse_number(self) -> List[str]:
         """Extracts pulse numbers if present in time_model """
         model = self.accessModes[self.stack.currentIndex()]
         if model.mode == MTGenericAccessMode.PULSE_NUMBER:
