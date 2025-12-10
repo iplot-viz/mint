@@ -36,7 +36,6 @@ from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
-from mint.tools.table_parser import is_non_empty_string
 
 from iplotLogging import setupLogger
 

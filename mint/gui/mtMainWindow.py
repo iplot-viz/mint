@@ -20,9 +20,9 @@ from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, 
 from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
-from pyqtgraph import PlotDataItem
 
 from iplotDataAccess.dataAccess import DataAccess
+from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
@@ -37,6 +37,7 @@ from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
+from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
@@ -121,6 +122,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.graphicsArea.layout().addWidget(self.toolBar)
         self.graphicsArea.layout().addWidget(self.canvasStack)
         self.streamerCfgWidget = MTStreamConfigurator(self)
+        self.exportCfgWidget = MTExportConfigurator(self)
         self.aboutMINT = MTAbout(self)
         self.setAcceptDrops(True)
 
@@ -177,11 +179,14 @@ class MTMainWindow(IplotQtMainWindow):
         self.drawBtn.setIcon(QIcon(pxmap))
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(QIcon(pxmap))
+        self.exportBtn = QPushButton("Export")
+        self.exportBtn.setIcon(QIcon(pxmap))
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
         self.daWidgetButtons.layout().addWidget(self.streamBtn)
         self.daWidgetButtons.layout().addWidget(self.drawBtn)
+        self.daWidgetButtons.layout().addWidget(self.exportBtn)
 
         self.dataAccessWidget = QWidget(self)
         self.dataAccessWidget.setLayout(QVBoxLayout())
@@ -200,8 +205,10 @@ class MTMainWindow(IplotQtMainWindow):
         # Setup connections
         self.drawBtn.clicked.connect(self.draw_clicked)
         self.streamBtn.clicked.connect(self.stream_clicked)
+        self.exportBtn.clicked.connect(self.export_clicked)
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
+        self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
@@ -537,6 +544,11 @@ class MTMainWindow(IplotQtMainWindow):
         else:
             self.streamerCfgWidget.show()
 
+    def export_clicked(self):
+        """This function shows the export dialog and then creates a file with the correspondence format that contains
+        info of the whole canvas"""
+        self.exportCfgWidget.show()
+
     def stream_callback(self, signal):
         self.canvasStack.currentWidget()._parser.process_ipl_signal(signal)
 
@@ -556,6 +568,54 @@ class MTMainWindow(IplotQtMainWindow):
 
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
+
+    def on_export_started(self, data: dict):
+        self.exportCfgWidget.hide()
+        logger.warning(f"Export will be performed using the global time settings. Custom time and processing columns "
+                       f"will not be applied")
+
+        ts, te = self.dataRangeSelector.get_time_range()
+        pulse_number = self.dataRangeSelector.get_pulse_number()
+        export_format = data['format']
+        chunks = data['chunks']
+        output_path = data['output_path']
+
+        table = self.sigCfgWidget.model.export_information()
+        self.indicate_busy('Exporting canvas information...')
+
+        if table.empty:
+            logger.warning("No data available to export")
+            self.indicate_ready()
+            return
+
+        for ds_name, group in table.groupby('DS'):
+            filename = f"{ds_name}.csv"
+            export_group = group[['Variable', 'Comment']]
+            export_group.to_csv(filename, index=False, sep=',', header=False)
+            conn = self.da.ds_list[ds_name]
+
+            if conn.source_type != "CODAC_UDA":
+                logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
+                continue
+
+            # Check for pulse
+            if pulse_number is not None:
+                result = conn.get_pulse_info(pulse_number[0])
+                ts_str = f"{pd.to_datetime(result.timeFrom)}"
+                te_str = f"{pd.to_datetime(result.timeTo)}"
+            else:
+                ts_str = f"{pd.to_datetime(ts)}"
+                te_str = f"{pd.to_datetime(te)}"
+
+            # Use of export data script
+            valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format, startTime=ts_str,
+                                 endTime=te_str, outputFolder=output_path, chunkS=chunks)
+            if valid:
+                logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+            else:
+                logger.info(f"Export failed for data source: {ds_name}")
+
+        self.indicate_ready()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()
@@ -587,7 +647,7 @@ class MTMainWindow(IplotQtMainWindow):
         plan = dict()
 
         # Get signals in order to preserve markers
-        previous_signals = {sig.uid : sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
+        previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
 
         for waypt in self.sigCfgWidget.build(**da_params):
             if not waypt.func and not waypt.args:

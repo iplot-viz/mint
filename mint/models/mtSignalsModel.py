@@ -813,3 +813,22 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table.drop(columns=['_empty_flag'], inplace=True)
         self.layoutChanged.emit()
+
+    def export_information(self):
+        # Discard if the stack is empty or processing columns are used
+        table = self._table[
+            (self._table['Stack'] != "") &
+            (self._table[['x', 'y', 'z']] == "").all(axis=1) &
+            (self._table[['StartTime', 'EndTime']] == "").all(axis=1)
+            ]
+
+        # Filter column variable for processing due to for the moment is discarded
+        p = Parser()
+        mask = []
+        for val in table['Variable']:
+            p.set_expression(val)
+            mask.append(not p.is_valid)
+
+        filter_table = table[mask]
+
+        return filter_table
