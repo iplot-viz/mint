@@ -1,7 +1,7 @@
 ## Description
 
 This project contains example usage of the iterplot libary in a Qt application. 
-The Qt application allows to select a set of UDA variables and the plot them using either matplotlib or VTK graphics library.
+The Qt application allows to select a set of UDA variables and the plot them using either matplotlib or PyQtGraph graphics library.
 Following features are currently supported:
 
 * Plotting multiple graphs in a row/column layout

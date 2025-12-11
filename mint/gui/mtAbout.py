@@ -31,6 +31,7 @@ packages = [
     'requests',
     'scipy',
     'sseclient-py',
+    'pyqtgraph',
     'vtk'
 ]
 aliases = {'sseclient-py': 'sseclient'}
