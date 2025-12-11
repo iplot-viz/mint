@@ -330,6 +330,23 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_ready()
         return workspace
 
+    def validate_imported_canvas(self):
+        for col in self.canvas.plots:
+            for idx_plot, plot in enumerate(col):
+                if plot:
+                    remove_key = []
+                    for key, values in plot.signals.items():
+                        plot.signals[key] = [signal for signal in values if
+                                             signal is not None or signal.parent is not None]
+                        if len(plot.signals[key]) == 0:
+                            remove_key.append(key)
+
+                    for key in remove_key:
+                        plot.signals.pop(key)
+
+                    if not plot.signals.keys() or plot.parent is None:
+                        col[idx_plot] = None
+
     def import_dict(self, input_dict: dict):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
@@ -369,6 +386,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.qtcanvas._marker_window.clear_info()
 
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
+        valid_signal = False
         for i, waypt in enumerate(path):
             self.sigCfgWidget.set_status_message(f"Updating {waypt} ..")
             self.sigCfgWidget.set_progress(int(i * 100 / path_len))
@@ -378,13 +396,15 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
-            # Check if signal name is valid
+            # Check if signal name is valid (Correct signal name and signal has data)
             signal_valid = waypt.func(*waypt.args, **waypt.kwargs)
             self.sigCfgWidget.model.update_signal_data(waypt.idx, signal_valid, True)
             if signal_valid.status_info.result == 'Fail':
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            if not plot:
+                continue
             plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
@@ -403,6 +423,13 @@ class MTMainWindow(IplotQtMainWindow):
             new_signal.parent = weakref.ref(plot)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
+            # Check if new signal is valid
+            if new_signal.status_info.result == 'Fail':
+                plot.signals[waypt.stack_num][waypt.signal_stack_id] = None
+                continue
+
+            # Indicate valid signal
+            valid_signal = True
 
             # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
@@ -410,6 +437,12 @@ class MTMainWindow(IplotQtMainWindow):
             # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
             if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
+
+        if not valid_signal:
+            # This means that there are not valid signals to create
+            self.canvas.plots = [[]]
+        else:
+            self.validate_imported_canvas()
 
         self.sigCfgWidget.set_progress(99)
 
