@@ -20,7 +20,7 @@ setuptools.setup(
     author_email="jaswant.panchumarti@iter.org",
     description="A Python Qt application for ITER Data Visualtization using the iplotlib framework",
     long_description=long_description,
-    url="https://git.iter.org/scm/vis/mint.git",
+    url="https://github.com/iplot-viz/mint.git",
     project_urls={
         "Bug Tracker": "https://jira.iter.org/browse/IDV-241?jql=project%20%3D%20IDV%20AND%20component%20%3D%20MINT",
     },
