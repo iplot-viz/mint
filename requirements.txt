@@ -1,6 +1,0 @@
-iplotlogging>=0.2.1
-iplotlib>=0.6.0
-iplotWidgets
-iplotDataAccess>=0.4.0
-iplotProcessing>=0.4.0
-psutil>=5.8.0
