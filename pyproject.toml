@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "mint"
 description = "A Python Qt application for ITER Data Visualtization using the iplotlib framework"
 authors = [
-    { name = "Lana Abadie", email = "lana.abadie@iter.org" },
+    { name = "ITER Organization", email = "jscabanilla@minsait.com" },
 ]
 maintainers = [
     { name = "Jhon Steeven Cabanilla Alvarado", email = "jscabanilla@minsait.com" },
     { name = "Pablo Martin Villares", email = "pmartin@minsait.com" },
-    { name = "Mario Gómez Ballesteros", email = "mgomezb@minsait.com" },
+    { name = "Mario Gomez Ballesteros", email = "mgomezb@minsait.com" },
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
@@ -23,11 +23,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "iplotLogging >= 0.2.1",
-    "iplotlib >= 0.5.0",
-    "iplotDataAccess >= 0.4.0",
-    "iplotWidgets",
-    "iplotProcessing >= 0.4.0",
+    "iplotLogging >= 1.2.0",
+    "iplotlib >= 1.3.2",
+    "iplotDataAccess >= 1.3.1",
+    "iplotWidgets >= 1.3.0",
+    "iplotProcessing >= 1.1.5",
     "psutil >= 5.8.0",
 ]
 dynamic = ["version"]
