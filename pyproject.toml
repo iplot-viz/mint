@@ -3,7 +3,7 @@ requires = ["setuptools>=42.0", "wheel", "versioneer[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mint"
+name = "iter-mint"
 description = "A Python Qt application for ITER Data Visualtization using the iplotlib framework"
 authors = [
     { name = "ITER Organization", email = "jscabanilla@minsait.com" },
