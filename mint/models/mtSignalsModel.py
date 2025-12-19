@@ -389,7 +389,7 @@ class MTSignalsModel(QAbstractItemModel):
                     # If variable is not valid we have two cases:
                     #   1) Incorrect name
                     #   2) No data in that interval
-                    index = self._table.index[self._table['Variable'] == signal.name].tolist()
+                    index = self._table.index[self._table['uid'] == signal.uid].tolist()
                     self._table_fails.loc[index, 'Variable'] = 1
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
@@ -731,7 +731,14 @@ class MTSignalsModel(QAbstractItemModel):
                                     logger.warning(f"Invalid alias: the alias '{value}' is already present in the list "
                                                    f"of aliases in the table row [{table_row}]")
                             else:
-                                fls[column_name] = 0
+                                # Check if there is variable name
+                                if inp['Variable'] == "" and any(inp[exp] != "" for exp in ["x", "y", "z"]):
+                                    fls[column_name] = 1
+                                    logger.warning(
+                                        f"An alias must be specified when no variable is provided in order to"
+                                        f" perform the query correctly. Check the table row [{table_row}]")
+                                else:
+                                    fls[column_name] = 0
 
                         # X - Y - Z
                         elif column_name == 'x' or column_name == 'y' or column_name == 'z':
@@ -813,3 +820,22 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table.drop(columns=['_empty_flag'], inplace=True)
         self.layoutChanged.emit()
+
+    def export_information(self):
+        # Discard if the stack is empty or processing columns are used
+        table = self._table[
+            (self._table['Stack'] != "") &
+            (self._table[['x', 'y', 'z']] == "").all(axis=1) &
+            (self._table[['StartTime', 'EndTime']] == "").all(axis=1)
+            ]
+
+        # Filter column variable for processing due to for the moment is discarded
+        p = Parser()
+        mask = []
+        for val in table['Variable']:
+            p.set_expression(val)
+            mask.append(not p.is_valid)
+
+        filter_table = table[mask]
+
+        return filter_table
