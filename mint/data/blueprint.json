@@ -86,6 +86,13 @@
         "type_name": "str",
         "default": "PlotXY"
     },
+    "OutputDatatype": {
+        "label": "Output Datatype",
+        "code_name": "output_datatype",
+        "no_construct": true,
+        "type_name": "str",
+        "default": ""
+    },
     "Status": {
         "code_name": "status_info",
         "no_construct": true,

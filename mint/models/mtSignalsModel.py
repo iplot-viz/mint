@@ -240,7 +240,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-4].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-5].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -312,7 +312,7 @@ class MTSignalsModel(QAbstractItemModel):
         df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
 
         # Check if last row is empty
-        if self._table.empty or self._table.iloc[-1:, 1:-4].any(axis=1).bool():
+        if self._table.empty or self._table.iloc[-1:, 1:-5].any(axis=1).bool():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
             self.insertRows(len(self._table), 1, QModelIndex())
             self._table_fails = pd.concat([self._table_fails, df_fails], ignore_index=True)
@@ -393,6 +393,19 @@ class MTSignalsModel(QAbstractItemModel):
                     self._table_fails.loc[index, 'Variable'] = 1
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
+
+            # Update Output Datatype column after data is fetched
+            output_dtype_col = mtBP.get_column_name(self._blueprint, 'OutputDatatype')
+            if output_dtype_col in self._table.columns:
+                dtype_idx = self.createIndex(row_idx, self._table.columns.get_loc(output_dtype_col))
+                output_dtype_str = self._get_signal_output_datatype(signal)
+                self.setData(dtype_idx, output_dtype_str, Qt.ItemDataRole.DisplayRole)
+
+    def _get_signal_output_datatype(self, signal: IplotSignalAdapter) -> str:
+        """Get a string representation of the signal's output data type."""
+        if hasattr(signal, 'y_data') and signal.y_data is not None and len(signal.y_data) > 0:
+            return f"{signal.y_data.dtype}"
+        return ""
 
     @contextmanager
     def init_create_signals(self):
