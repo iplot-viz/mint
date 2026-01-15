@@ -137,6 +137,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
+        self.qtcanvas.signalShiftRequested.connect(self._on_signal_shift_requested)
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -234,6 +235,59 @@ class MTMainWindow(IplotQtMainWindow):
         box.setWindowTitle("Table Build Failed")
         box.setText(message)
         box.exec_()
+
+    def _on_signal_shift_requested(self, signal_uid: str, dx: float, dy: float):
+        """Handle signal shift request: duplicate row with shifted x/y expressions and redraw."""
+        logger.info(f"Signal shift requested: uid={signal_uid}, dx={dx}, dy={dy}")
+
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+
+        # Find row by UID
+        uid_matches = df.index[df['uid'] == signal_uid].tolist()
+        if not uid_matches:
+            logger.warning(f"Signal UID {signal_uid} not found in table")
+            return
+
+        row_idx = uid_matches[0]
+
+        # Get defaults from blueprint
+        bp = getattr(model, 'blueprint', None) or getattr(model, '_blueprint', None) or {}
+        default_x = (bp.get('x') or {}).get('default') or '${self}.time'
+        default_y = (bp.get('y') or {}).get('default') or '${self}.data_store[1]'
+
+        # Get current expressions
+        current_x = df.at[row_idx, 'x'] or default_x
+        current_y = df.at[row_idx, 'y'] or default_y
+
+        # Calculate new expressions
+        new_x = f"({current_x}) + {dx}" if dx != 0 else current_x
+        new_y = f"({current_y}) + {dy}" if dy != 0 else current_y
+
+        # Duplicate the row: insert new row after current
+        new_row_idx = row_idx + 1
+        model.insertRows(new_row_idx, 1, QModelIndex())
+
+        # Copy all values from original row to new row
+        for col_idx, col_name in enumerate(df.columns):
+            original_value = df.at[row_idx, col_name]
+            if col_name == 'uid':
+                continue  # uid is auto-generated
+            elif col_name == 'x':
+                model.setData(model.createIndex(new_row_idx, col_idx), new_x, Qt.ItemDataRole.EditRole)
+            elif col_name == 'y':
+                model.setData(model.createIndex(new_row_idx, col_idx), new_y, Qt.ItemDataRole.EditRole)
+            elif col_name == 'Alias':
+                # Append "_shifted" to alias to distinguish
+                new_alias = f"{original_value}_shifted" if original_value else ""
+                model.setData(model.createIndex(new_row_idx, col_idx), new_alias, Qt.ItemDataRole.EditRole)
+            elif col_name not in ['Status', 'Output Datatype']:
+                model.setData(model.createIndex(new_row_idx, col_idx), original_value, Qt.ItemDataRole.EditRole)
+
+        logger.info(f"Created shifted copy at row {new_row_idx}")
+
+        # Redraw
+        self.draw_clicked()
 
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
