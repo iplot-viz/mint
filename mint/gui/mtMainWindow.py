@@ -236,17 +236,48 @@ class MTMainWindow(IplotQtMainWindow):
         box.setText(message)
         box.exec_()
 
-    def _on_signal_shift_requested(self, signal_uid: str, dx: float, dy: float):
-        """Handle signal shift request: duplicate row with shifted x/y expressions and redraw."""
-        logger.info(f"Signal shift requested: uid={signal_uid}, dx={dx}, dy={dy}")
+    def _on_signal_shift_requested(self, signal_uid: str, signal_name: str, data_source: str,
+                                      pulse_nb: str, dx: float, dy: float, duplicate: bool):
+        """Handle signal shift request: create shifted signal, optionally keeping original."""
+        logger.info(f"Signal shift requested: uid={signal_uid}, name={signal_name}, ds={data_source}, "
+                    f"pulse={pulse_nb}, dx={dx}, dy={dy}, duplicate={duplicate}")
 
         model = self.sigCfgWidget.model
         df = model.get_dataframe()
 
-        # Find row by UID
+        # Find row by UID first
         uid_matches = df.index[df['uid'] == signal_uid].tolist()
+
         if not uid_matches:
-            logger.warning(f"Signal UID {signal_uid} not found in table")
+            # Fallback: search by Variable (name), DataSource and PulseId
+            # This handles the case where UID is regenerated for pulse access
+            logger.info(f"UID not found, searching by name='{signal_name}', DS='{data_source}', pulse='{pulse_nb}'")
+            ds_col = 'DS'  # Column name in table
+            var_col = 'Variable'  # Column name in table
+            pulse_col = 'PulseId'  # Column name in table
+
+            if ds_col in df.columns and var_col in df.columns:
+                # First try with pulse match
+                if pulse_nb and pulse_col in df.columns:
+                    # PulseId in table can be a string like "123" or list-like "[123, 456]"
+                    matches = df.index[
+                        (df[var_col] == signal_name) &
+                        (df[ds_col] == data_source) &
+                        (df[pulse_col].astype(str).str.contains(pulse_nb, regex=False))
+                    ].tolist()
+                    if matches:
+                        uid_matches = matches
+                        logger.info(f"Found row by name+DS+pulse: {uid_matches[0]}")
+
+                # If no pulse match, try just name+DS
+                if not uid_matches:
+                    matches = df.index[(df[var_col] == signal_name) & (df[ds_col] == data_source)].tolist()
+                    if matches:
+                        uid_matches = matches
+                        logger.info(f"Found row by name+DS: {uid_matches[0]}")
+
+        if not uid_matches:
+            logger.warning(f"Signal not found in table: uid={signal_uid}, name={signal_name}, ds={data_source}")
             return
 
         row_idx = uid_matches[0]
@@ -264,7 +295,17 @@ class MTMainWindow(IplotQtMainWindow):
         new_x = f"({current_x}) + {dx}" if dx != 0 else current_x
         new_y = f"({current_y}) + {dy}" if dy != 0 else current_y
 
-        # Duplicate the row: insert new row after current
+        # Get original values we need to copy
+        original_stack = df.at[row_idx, 'Stack']
+        original_pulse = df.at[row_idx, 'PulseId'] if 'PulseId' in df.columns else ''
+
+        if not duplicate:
+            # Clear the stack of the original signal so it won't be drawn
+            stack_col_idx = df.columns.get_loc('Stack')
+            model.setData(model.createIndex(row_idx, stack_col_idx), '', Qt.ItemDataRole.EditRole)
+            logger.info(f"Cleared stack of original signal at row {row_idx}")
+
+        # Insert new row after current
         new_row_idx = row_idx + 1
         model.insertRows(new_row_idx, 1, QModelIndex())
 
@@ -273,6 +314,9 @@ class MTMainWindow(IplotQtMainWindow):
             original_value = df.at[row_idx, col_name]
             if col_name == 'uid':
                 continue  # uid is auto-generated
+            elif col_name == 'Stack':
+                # Use original stack value for the new shifted signal
+                model.setData(model.createIndex(new_row_idx, col_idx), original_stack, Qt.ItemDataRole.EditRole)
             elif col_name == 'x':
                 model.setData(model.createIndex(new_row_idx, col_idx), new_x, Qt.ItemDataRole.EditRole)
             elif col_name == 'y':
@@ -281,12 +325,15 @@ class MTMainWindow(IplotQtMainWindow):
                 # Append "_shifted" to alias to distinguish
                 new_alias = f"{original_value}_shifted" if original_value else ""
                 model.setData(model.createIndex(new_row_idx, col_idx), new_alias, Qt.ItemDataRole.EditRole)
+            elif col_name == 'PulseId':
+                # Copy pulse ID for relative time access
+                model.setData(model.createIndex(new_row_idx, col_idx), original_pulse, Qt.ItemDataRole.EditRole)
             elif col_name not in ['Status', 'Output Datatype']:
                 model.setData(model.createIndex(new_row_idx, col_idx), original_value, Qt.ItemDataRole.EditRole)
 
-        logger.info(f"Created shifted copy at row {new_row_idx}")
+        logger.info(f"Created shifted signal at row {new_row_idx}")
 
-        # Redraw
+        # Redraw (TODO: consider redrawing only the affected plot, not entire canvas)
         self.draw_clicked()
 
     def detach(self):
