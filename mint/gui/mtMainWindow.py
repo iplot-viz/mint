@@ -285,7 +285,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Get defaults from blueprint
         bp = getattr(model, 'blueprint', None) or getattr(model, '_blueprint', None) or {}
         default_x = (bp.get('x') or {}).get('default') or '${self}.time'
-        default_y = (bp.get('y') or {}).get('default') or '${self}.data_store[1]'
+        default_y = (bp.get('y') or {}).get('default') or '${self}.data'
 
         # Get current expressions
         current_x = df.at[row_idx, 'x'] or default_x
@@ -299,11 +299,36 @@ class MTMainWindow(IplotQtMainWindow):
         original_stack = df.at[row_idx, 'Stack']
         original_pulse = df.at[row_idx, 'PulseId'] if 'PulseId' in df.columns else ''
 
-        if not duplicate:
-            # Clear the stack of the original signal so it won't be drawn
-            stack_col_idx = df.columns.get_loc('Stack')
-            model.setData(model.createIndex(row_idx, stack_col_idx), '', Qt.ItemDataRole.EditRole)
-            logger.info(f"Cleared stack of original signal at row {row_idx}")
+        # Detect multi-pulse from global PulseId selector
+        global_pulses = self.dataRangeSelector.get_pulse_number()
+        is_multi_pulse = global_pulses and len(global_pulses) > 1
+
+        # Determine the shifted pulse (from the signal name which includes pulse info)
+        shifted_pulse = pulse_nb if pulse_nb else (global_pulses[0] if global_pulses else '')
+
+        # Find the other pulse(s) - all pulses except the shifted one
+        other_pulses = [p for p in (global_pulses or []) if p != shifted_pulse]
+
+        if is_multi_pulse:
+            pulse_col_idx = df.columns.get_loc('PulseId') if 'PulseId' in df.columns else None
+            if pulse_col_idx is not None:
+                if not duplicate:
+                    # "Pisar": Original row gets only the non-shifted pulse, keeps stack
+                    other_pulse_str = ','.join(other_pulses) if other_pulses else ''
+                    model.setData(model.createIndex(row_idx, pulse_col_idx), other_pulse_str, Qt.ItemDataRole.EditRole)
+                    logger.info(f"Updated original row {row_idx} with non-shifted pulse(s): {other_pulse_str}")
+                else:
+                    # "Duplicate": Original row gets all pulses from global selector
+                    all_pulses_str = ','.join(global_pulses)
+                    model.setData(model.createIndex(row_idx, pulse_col_idx), all_pulses_str, Qt.ItemDataRole.EditRole)
+                    logger.info(f"Updated original row {row_idx} with all pulses: {all_pulses_str}")
+        else:
+            # Single pulse or absolute time
+            if not duplicate:
+                # Clear the stack of the original signal so it won't be drawn
+                stack_col_idx = df.columns.get_loc('Stack')
+                model.setData(model.createIndex(row_idx, stack_col_idx), '', Qt.ItemDataRole.EditRole)
+                logger.info(f"Cleared stack of original signal at row {row_idx}")
 
         # Insert new row after current
         new_row_idx = row_idx + 1
@@ -326,8 +351,8 @@ class MTMainWindow(IplotQtMainWindow):
                 new_alias = f"{original_value}_shifted" if original_value else ""
                 model.setData(model.createIndex(new_row_idx, col_idx), new_alias, Qt.ItemDataRole.EditRole)
             elif col_name == 'PulseId':
-                # Copy pulse ID for relative time access
-                model.setData(model.createIndex(new_row_idx, col_idx), original_pulse, Qt.ItemDataRole.EditRole)
+                # New row gets only the shifted pulse
+                model.setData(model.createIndex(new_row_idx, col_idx), shifted_pulse, Qt.ItemDataRole.EditRole)
             elif col_name not in ['Status', 'Output Datatype']:
                 model.setData(model.createIndex(new_row_idx, col_idx), original_value, Qt.ItemDataRole.EditRole)
 
@@ -808,7 +833,7 @@ class MTMainWindow(IplotQtMainWindow):
                     te != signal.ts_end,
                     signal.envelope,
                     signal.x_expr != '${self}.time',
-                    signal.y_expr != '${self}.data_store[1]',
+                    signal.y_expr != '${self}.data',
                     signal.z_expr != '${self}.data_store[2]',
                     len(signal.children) > 1  # Only support one level processing
                 )
