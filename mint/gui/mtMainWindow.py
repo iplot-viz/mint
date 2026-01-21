@@ -347,8 +347,8 @@ class MTMainWindow(IplotQtMainWindow):
             elif col_name == 'y':
                 model.setData(model.createIndex(new_row_idx, col_idx), new_y, Qt.ItemDataRole.EditRole)
             elif col_name == 'Alias':
-                # Append "_shifted" to alias to distinguish
-                new_alias = f"{original_value}_shifted" if original_value else ""
+                # Append "_shifted" to alias to distinguish, always set "shifted" if original is empty
+                new_alias = f"{original_value}_shifted" if original_value else "shifted"
                 model.setData(model.createIndex(new_row_idx, col_idx), new_alias, Qt.ItemDataRole.EditRole)
             elif col_name == 'PulseId':
                 # New row gets only the shifted pulse
