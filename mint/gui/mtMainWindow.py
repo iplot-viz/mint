@@ -337,7 +337,7 @@ class MTMainWindow(IplotQtMainWindow):
                     remove_key = []
                     for key, values in plot.signals.items():
                         plot.signals[key] = [signal for signal in values if
-                                             signal is not None or signal.parent is not None]
+                                             signal is not None and signal.parent is not None]
                         if len(plot.signals[key]) == 0:
                             remove_key.append(key)
 
