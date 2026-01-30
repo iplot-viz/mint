@@ -191,7 +191,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            if self._table.columns[index.column()] != 'Status':
+            if self._table.columns[index.column()] != 'Status' and self._table.columns[index.column()] != 'Output Datatype':
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
