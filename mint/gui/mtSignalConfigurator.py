@@ -65,7 +65,8 @@ NEAT_VIEW = {
         "z": True,
         "Extremities": True,
         "Plot type": True,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     },
     DA_VIEW_NAME: {
         "DS": True,
@@ -83,7 +84,8 @@ NEAT_VIEW = {
         "z": False,
         "Extremities": False,
         "Plot type": False,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     },
     PLAYOUT_VIEW_NAME: {
         "DS": True,
@@ -101,7 +103,8 @@ NEAT_VIEW = {
         "z": False,
         "Extremities": False,
         "Plot type": True,
-        "Status": True
+        "Status": True,
+        "Output Datatype": False
     },
     PROC_VIEW_NAME: {
         "DS": True,
@@ -119,7 +122,8 @@ NEAT_VIEW = {
         "z": True,
         "Extremities": False,
         "Plot type": False,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     }
 }
 
@@ -570,7 +574,7 @@ class MTSignalConfigurator(QWidget):
     def export_scsv(self, file_path=None):
         try:
             self.busy.emit()
-            df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
+            df = self._model.get_dataframe().drop(labels=['Status', 'Output Datatype', 'uid'], axis=1)
             logger.info(f"Saved signal set: {file_path}")
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
@@ -698,7 +702,8 @@ class MTSignalConfigurator(QWidget):
 
         error_msgs = []
         graph = defaultdict(list)
-        status_col_idx = self.model.columnCount(QModelIndex()) - 1
+        column_names = list(mtBp.get_column_names(self._model.blueprint))
+        status_col_idx = column_names.index("Status")
         with self._model.activate_fast_mode():
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
