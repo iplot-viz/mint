@@ -19,7 +19,7 @@ from typing import List
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget
+    QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
@@ -142,9 +142,14 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
             continue
         try:
             p.set_expression(expression)
-            depends_on.add(p.get_var_expression(expression)[0])
             # Check if the expression only uses the row's alias or 'self'
-            is_simple &= all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            is_simple &= expr
+            if not expr:
+                result_dependencies = p.get_var_expression(expression)
+                for res in result_dependencies:
+                    depends_on.add(res)
+
         except InvalidExpression:
             pass
 
@@ -156,15 +161,17 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
 
     # True: name does not consist of any pre-defined aliases
     if p.is_valid:
-        result_dependencies = p.get_var_expression(name)
-        for res in result_dependencies:
-            depends_on.add(res)
         is_simple &= all([var not in aliases for var in list(p.var_map.keys())])
+        if not is_simple:
+            result_dependencies = p.get_var_expression(name)
+            for res in result_dependencies:
+                depends_on.add(res)
 
     if is_simple:
         return RowAliasType.Simple, name, p, depends_on
     else:
         return RowAliasType.Mixed, name, p, depends_on
+
 
 class MTSignalConfigurator(QWidget):
     progressChanged = Signal(float)
@@ -457,8 +464,19 @@ class MTSignalConfigurator(QWidget):
             contents[row][column] = value
             columns.add(column)
             rows.add(row)
-        total_columns = max(columns) - min(columns) + 1
-        total_rows = max(rows) - min(rows) + 1
+
+        if columns:
+            cmin, cmax = min(columns), max(columns)
+            selectable_in_span = 0
+            for c in range(cmin, cmax + 1):
+                # If the column is not selectable (e.g. 'Status'), it does not count towards "rectangularity"
+                if self._model.flags(self._model.createIndex(0, c)) & Qt.ItemFlag.ItemIsSelectable:
+                    selectable_in_span += 1
+            total_columns = selectable_in_span
+        else:
+            total_columns = 0
+
+        total_rows = max(rows) - min(rows) + 1 if rows else 0
         if total_columns != len(columns) or total_rows != len(rows):
             show_popup_msg("Can't copy data", "Only rectangular selection is available")
             self.ready.emit()
@@ -489,6 +507,37 @@ class MTSignalConfigurator(QWidget):
 
         self._find_replace_dialog.show()
 
+    def open_editor_mode(self):
+        current_tab_id = self._tabs.currentIndex()
+        table_view = self._signal_item_widgets[current_tab_id].view()
+        selected_ids = table_view.selectionModel().selectedIndexes()
+        if not selected_ids:
+            return
+        index = selected_ids[0]
+        model = index.model()
+        current_text = model.data(index, Qt.EditRole) or ""
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Editor mode")
+        dlg.setModal(True)
+
+        layout = QVBoxLayout(dlg)
+        text_edit = QTextEdit(dlg)
+        text_edit.setPlainText(current_text)
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, dlg
+        )
+        layout.addWidget(buttons)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec() == QDialog.Accepted:
+            new_text = text_edit.toPlainText()
+            model.setData(index, new_text, Qt.EditRole)
+
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
@@ -513,6 +562,9 @@ class MTSignalConfigurator(QWidget):
             getattr(QStyle, "SP_DialogResetButton")), "Clear cells", self.delete_contents)
         context_menu.addAction(self.style().standardIcon(
             getattr(QStyle, "SP_FileDialogContentsView")), "Find and Replace", self.find_replace)
+        context_menu.addAction(self.style().standardIcon(
+            getattr(QStyle, "SP_FileDialogDetailedView")), "Editor mode", self.open_editor_mode)
+
         context_menu.popup(event.globalPos())
 
     def export_scsv(self, file_path=None):
@@ -676,7 +728,6 @@ class MTSignalConfigurator(QWidget):
                         try:
                             alias_idx = aliases.index(k)
                             if alias_idx == idx:
-                                continue
                                 sinfo = StatusInfo()
                                 sinfo.result = Result.INVALID
                                 sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"

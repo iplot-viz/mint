@@ -64,6 +64,7 @@ class MTSignalItemView(QWidget):
     def toggle_column(self, column: int, state: bool):
         if state:
             self._view.showColumn(column)
+            self._view.resizeColumnsToContents()
         else:
             self._view.hideColumn(column)
 

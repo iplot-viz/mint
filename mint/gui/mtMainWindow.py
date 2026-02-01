@@ -3,13 +3,14 @@
 # Author: Piotr Mazur
 # Changelog:
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
+
+import weakref
 from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 import json
 import os
-import copy
 import pkgutil
 import socket
 import typing
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
     QSplitter, QVBoxLayout, QWidget
 
 from iplotDataAccess.dataAccess import DataAccess
+from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider
@@ -35,6 +37,7 @@ from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
+from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
@@ -120,6 +123,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.graphicsArea.layout().addWidget(self.toolBar)
         self.graphicsArea.layout().addWidget(self.canvasStack)
         self.streamerCfgWidget = MTStreamConfigurator(self)
+        self.exportCfgWidget = MTExportConfigurator(self)
         self.aboutMINT = MTAbout(self)
         self.setAcceptDrops(True)
 
@@ -173,11 +177,14 @@ class MTMainWindow(IplotQtMainWindow):
         self.drawBtn.setIcon(QIcon(pxmap))
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(QIcon(pxmap))
+        self.exportBtn = QPushButton("Export")
+        self.exportBtn.setIcon(QIcon(pxmap))
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
         self.daWidgetButtons.layout().addWidget(self.streamBtn)
         self.daWidgetButtons.layout().addWidget(self.drawBtn)
+        self.daWidgetButtons.layout().addWidget(self.exportBtn)
 
         self.dataAccessWidget = QWidget(self)
         self.dataAccessWidget.setLayout(QVBoxLayout())
@@ -196,8 +203,10 @@ class MTMainWindow(IplotQtMainWindow):
         # Setup connections
         self.drawBtn.clicked.connect(self.draw_clicked)
         self.streamBtn.clicked.connect(self.stream_clicked)
+        self.exportBtn.clicked.connect(self.export_clicked)
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
+        self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
@@ -320,6 +329,9 @@ class MTMainWindow(IplotQtMainWindow):
         return workspace
 
     def import_dict(self, input_dict: dict):
+        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        ParserHelper.env.clear()
+        self.canvasStack.currentWidget()._parser.clear()
         self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
@@ -345,7 +357,7 @@ class MTMainWindow(IplotQtMainWindow):
 
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
-        ParserHelper.env.clear()  # Removes any previously aliased signals.
+
         self.indicate_ready()
         self.sigCfgWidget.set_status_message("Update signals ..")
         self.sigCfgWidget.begin_build()
@@ -371,7 +383,7 @@ class MTMainWindow(IplotQtMainWindow):
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-            plot.parent = self.canvas
+            plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
             params = dict()
@@ -386,7 +398,7 @@ class MTMainWindow(IplotQtMainWindow):
                 params['uid'] = waypt.kwargs['uid']
 
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
-            new_signal.parent = plot
+            new_signal.parent = weakref.ref(plot)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
 
@@ -412,6 +424,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Compute statistics when importing workspace
         if path:
             self.canvasStack.currentWidget().stats(self.canvas)
+        self.drop_history()  # clean zoom history
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
@@ -517,7 +530,7 @@ class MTMainWindow(IplotQtMainWindow):
             self.prefWindow.treeView.selectionModel().select(self.prefWindow.treeView.model().index(0, 0),
                                                              QItemSelectionModel.Select)
 
-        self.drop_history()  # clean zoom history; is this best place?
+        self.drop_history()  # clean zoom history
         self.start_auto_refresh()
         self.indicate_ready()
 
@@ -528,6 +541,11 @@ class MTMainWindow(IplotQtMainWindow):
             self.streamerCfgWidget.stop()
         else:
             self.streamerCfgWidget.show()
+
+    def export_clicked(self):
+        """This function shows the export dialog and then creates a file with the correspondence format that contains
+        info of the whole canvas"""
+        self.exportCfgWidget.show()
 
     def stream_callback(self, signal):
         self.canvasStack.currentWidget()._parser.process_ipl_signal(signal)
@@ -549,11 +567,62 @@ class MTMainWindow(IplotQtMainWindow):
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
 
+    def on_export_started(self, data: dict):
+        self.exportCfgWidget.hide()
+        logger.warning(f"Export will be performed using the global time settings. Custom time and processing columns "
+                       f"will not be applied")
+
+        ts, te = self.dataRangeSelector.get_time_range()
+        pulse_number = self.dataRangeSelector.get_pulse_number()
+        export_format = data['format']
+        chunks = data['chunks']
+        output_path = data['output_path']
+
+        table = self.sigCfgWidget.model.export_information()
+        self.indicate_busy('Exporting canvas information...')
+
+        if table.empty:
+            logger.warning("No data available to export")
+            self.indicate_ready()
+            return
+
+        for ds_name, group in table.groupby('DS'):
+            filename = f"{ds_name}.csv"
+            export_group = group[['Variable', 'Comment']]
+            export_group.to_csv(filename, index=False, sep=',', header=False)
+            conn = self.da.ds_list[ds_name]
+
+            if conn.source_type != "CODAC_UDA":
+                logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
+                continue
+
+            # Check for pulse
+            if pulse_number is not None:
+                result = conn.get_pulse_info(pulse_number[0])
+                ts_str = f"{pd.to_datetime(result.timeFrom)}"
+                te_str = f"{pd.to_datetime(result.timeTo)}"
+            else:
+                ts_str = f"{pd.to_datetime(ts)}"
+                te_str = f"{pd.to_datetime(te)}"
+
+            # Use of export data script
+            valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format, startTime=ts_str,
+                                 endTime=te_str, outputFolder=output_path, chunkS=chunks)
+            if valid:
+                logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+            else:
+                logger.info(f"Export failed for data source: {ds_name}")
+
+        self.indicate_ready()
+
     def closeEvent(self, event: QCloseEvent) -> None:
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
     def build(self, stream=False):
+        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        ParserHelper.env.clear()
+        self.canvasStack.currentWidget()._parser.clear()
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.time_window() * 1000000000
@@ -575,11 +644,13 @@ class MTMainWindow(IplotQtMainWindow):
         da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
         plan = dict()
 
-        for waypt in self.sigCfgWidget.build(**da_params):
-            existing = None
+        # Get signals in order to preserve markers
+        previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
 
+        for waypt in self.sigCfgWidget.build(**da_params):
             if not waypt.func and not waypt.args:
                 continue
+
             if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not stream:
@@ -589,6 +660,7 @@ class MTMainWindow(IplotQtMainWindow):
             signal = waypt.func(*waypt.args, **waypt.kwargs)
             if not signal.label:
                 continue
+
             signal.data_access_enabled = False if self.canvas.streaming else True
             signal.hi_precision_data = True if self.canvas.streaming else False
             if not stream:
@@ -609,6 +681,11 @@ class MTMainWindow(IplotQtMainWindow):
 
             if signal.status_info.result == 'Fail':
                 continue
+
+            # Preserve markers
+            prev_signal = previous_signals.get(signal.uid)
+            if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
+                signal.markers_list = prev_signal.markers_list
 
             if waypt.col_num not in plan:
                 plan[waypt.col_num] = {}
@@ -633,22 +710,6 @@ class MTMainWindow(IplotQtMainWindow):
             if plan[waypt.col_num][waypt.row_num][3][1] is None:
                 plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
 
-        # import collections
-        # ord = collections.OrderedDict(sorted(plan.items()))
-        # new_plan = {}
-        # col_sp = 1
-        # for x, y in ord.items():
-        #     ord2 = collections.OrderedDict(sorted(y.items()))
-        #     row_sp = 1
-        #     rows = {}
-        #     next_col_sp = 1
-        #     for z, k in ord2.items():
-        #         rows[z + row_sp - 1] = k
-        #         row_sp = k[0]
-        #         next_col_sp = max(next_col_sp, k[1])
-        #     new_plan[x + col_sp - 1] = rows
-        #     col_sp = next_col_sp
-
         self.indicate_busy('Retrieving data...')
 
         # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
@@ -660,16 +721,13 @@ class MTMainWindow(IplotQtMainWindow):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
-        # old_canvas = copy.deepcopy(self.canvas)
         old_canvas = self.canvas.to_dict()
 
         self.build_canvas(self.canvas, plan, x_axis_date, x_axis_follow, x_axis_window)
 
         self.indicate_busy('Applying preferences...')
-
         # Merge with previous preferences
         self.canvas.merge(old_canvas)
-        # self.canvas.set_properties(old_canvas)
 
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
