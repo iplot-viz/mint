@@ -211,7 +211,8 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider", "PlotImage"], self)
+        self._pt_delegate = MTPlotTypeDelegate(
+            ["PlotXY", "PlotContour", "PlotXYWithSlider", "PlotContourWithSlider", "PlotImage"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -541,7 +542,6 @@ class MTSignalConfigurator(QWidget):
             new_text = text_edit.toPlainText()
             model.setData(index, new_text, Qt.EditRole)
 
-
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
@@ -804,8 +804,8 @@ class MTSignalConfigurator(QWidget):
             if group["Stack"].values[0].count(".") > 1 and not all(types == 'PlotXY'):
                 return True
 
-            # Rule #2: A PlotContour stack cannot contain more than one signal
-            if all(types == 'PlotContour') and len(types) > 1:
+            # Rule #2: A PlotContour or PlotContourWithSlider stack cannot contain more than one signal
+            if (all(types == 'PlotContour') or all(types == 'PlotContourWithSlider')) and len(types) > 1:
                 return True
 
             # Rule #3: Mixing different plot types in the same stack is not allowed

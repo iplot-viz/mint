@@ -25,7 +25,7 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotImage
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -68,6 +68,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.plot_classes = {"PlotXY": PlotXY,
                              "PlotContour": PlotContour,
                              "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotContourWithSlider": PlotContourWithSlider,
                              "PlotImage": PlotImage}
         self.appVersion = app_version
         self.dragItem = None
@@ -363,7 +364,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Remove previous slider references
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         main_canvas = input_dict.get('main_canvas')
@@ -757,12 +758,12 @@ class MTMainWindow(IplotQtMainWindow):
 
         self.indicate_busy('Retrieving data...')
 
-        # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
+        # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
