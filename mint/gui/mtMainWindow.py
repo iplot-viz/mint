@@ -25,7 +25,7 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -65,7 +65,10 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider}
+        self.plot_classes = {"PlotXY": PlotXY,
+                             "PlotContour": PlotContour,
+                             "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotImage": PlotImage}
         self.appVersion = app_version
         self.dragItem = None
         try:

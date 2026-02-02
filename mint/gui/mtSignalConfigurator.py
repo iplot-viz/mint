@@ -211,7 +211,7 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider"], self)
+        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider", "PlotImage"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
