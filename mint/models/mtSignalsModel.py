@@ -466,7 +466,8 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
-            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider':
+            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider' or \
+                    signal_params['plot_type'] == 'PlotImage':
                 signal_class = SignalXY
             elif signal_params['plot_type'] == 'PlotContour' or signal_params['plot_type'] == 'PlotContourWithSlider':
                 signal_class = SignalContour
