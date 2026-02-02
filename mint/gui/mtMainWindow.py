@@ -25,7 +25,7 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -65,7 +65,11 @@ class MTMainWindow(IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider}
+        self.plot_classes = {"PlotXY": PlotXY,
+                             "PlotContour": PlotContour,
+                             "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotContourWithSlider": PlotContourWithSlider,
+                             "PlotImage": PlotImage}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -132,6 +136,9 @@ class MTMainWindow(IplotQtMainWindow):
         elif impl.lower() == "vtk":
             from iplotlib.impl.vtk.qt import QtVTKCanvas
             self.qtcanvas = QtVTKCanvas(canvas=self.canvas, parent=self.canvasStack)
+        elif impl.lower() == "pyqt":
+            from iplotlib.impl.pyqtgraph.qt import QtPyQtGraphCanvas
+            self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
 
@@ -327,6 +334,23 @@ class MTMainWindow(IplotQtMainWindow):
         self.indicate_ready()
         return workspace
 
+    def validate_imported_canvas(self):
+        for col in self.canvas.plots:
+            for idx_plot, plot in enumerate(col):
+                if plot:
+                    remove_key = []
+                    for key, values in plot.signals.items():
+                        plot.signals[key] = [signal for signal in values if
+                                             signal is not None and signal.parent is not None]
+                        if len(plot.signals[key]) == 0:
+                            remove_key.append(key)
+
+                    for key in remove_key:
+                        plot.signals.pop(key)
+
+                    if not plot.signals.keys() or plot.parent is None:
+                        col[idx_plot] = None
+
     def import_dict(self, input_dict: dict):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
@@ -340,7 +364,7 @@ class MTMainWindow(IplotQtMainWindow):
         # Remove previous slider references
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         main_canvas = input_dict.get('main_canvas')
@@ -366,6 +390,7 @@ class MTMainWindow(IplotQtMainWindow):
         self.qtcanvas._marker_window.clear_info()
 
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
+        valid_signal = False
         for i, waypt in enumerate(path):
             self.sigCfgWidget.set_status_message(f"Updating {waypt} ..")
             self.sigCfgWidget.set_progress(int(i * 100 / path_len))
@@ -375,13 +400,15 @@ class MTMainWindow(IplotQtMainWindow):
                 self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 continue
 
-            # Check if signal name is valid
+            # Check if signal name is valid (Correct signal name and signal has data)
             signal_valid = waypt.func(*waypt.args, **waypt.kwargs)
             self.sigCfgWidget.model.update_signal_data(waypt.idx, signal_valid, True)
             if signal_valid.status_info.result == 'Fail':
                 continue
 
             plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
+            if not plot:
+                continue
             plot.parent = weakref.ref(self.canvas)
             old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
 
@@ -400,6 +427,13 @@ class MTMainWindow(IplotQtMainWindow):
             new_signal.parent = weakref.ref(plot)
 
             self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
+            # Check if new signal is valid
+            if new_signal.status_info.result == 'Fail':
+                plot.signals[waypt.stack_num][waypt.signal_stack_id] = None
+                continue
+
+            # Indicate valid signal
+            valid_signal = True
 
             # Replace signal
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
@@ -407,6 +441,12 @@ class MTMainWindow(IplotQtMainWindow):
             # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
             if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
+
+        if not valid_signal:
+            # This means that there are not valid signals to create
+            self.canvas.plots = [[]]
+        else:
+            self.validate_imported_canvas()
 
         self.sigCfgWidget.set_progress(99)
 
@@ -690,33 +730,40 @@ class MTMainWindow(IplotQtMainWindow):
                 plan[waypt.col_num] = {}
 
             if waypt.row_num not in plan[waypt.col_num]:
-                plan[waypt.col_num][waypt.row_num] = [waypt.row_span, waypt.col_span, defaultdict(list),
-                                                      [waypt.ts_start, waypt.ts_end]]
+                plan[waypt.col_num][waypt.row_num] = {"row_span": waypt.row_span, "col_span": waypt.col_span,
+                                                      "signals": defaultdict(list),
+                                                      "ts_start": waypt.ts_start,
+                                                      "ts_end": waypt.ts_end,
+                                                      "x_axis_date": x_axis_date,
+                                                      "x_axis_follow": x_axis_follow,
+                                                      "x_axis_window": x_axis_window,
+                                                      "streaming": self.canvas.streaming
+                                                      }
 
             else:
                 existing = plan[waypt.col_num][waypt.row_num]
-                existing[0] = waypt.row_span if waypt.row_span > existing[0] else existing[0]
-                existing[1] = waypt.col_span if waypt.col_span > existing[1] else existing[1]
+                existing["row_span"] = waypt.row_span if waypt.row_span > existing["row_span"] else existing["row_span"]
+                existing["col_span"] = waypt.col_span if waypt.col_span > existing["col_span"] else existing["col_span"]
                 if waypt.ts_start is not None:
-                    if existing[3][0] is None or waypt.ts_start < existing[3][0]:
-                        existing[3][0] = waypt.ts_start
+                    if existing["ts_start"] is None or waypt.ts_start < existing["ts_start"]:
+                        existing["ts_start"] = waypt.ts_start
                 if waypt.ts_end is not None:
-                    if existing[3][1] is None or waypt.ts_end > existing[3][1]:
-                        existing[3][1] = waypt.ts_end
+                    if existing["ts_end"] is None or waypt.ts_end > existing["ts_end"]:
+                        existing["ts_end"] = waypt.ts_end
 
-            plan[waypt.col_num][waypt.row_num][2][waypt.stack_num].append(signal)
+            plan[waypt.col_num][waypt.row_num]["signals"][waypt.stack_num].append(signal)
             # Set end time to avoid None values for EndTime in case of pulses
-            if plan[waypt.col_num][waypt.row_num][3][1] is None:
-                plan[waypt.col_num][waypt.row_num][3][1] = signal.data_xrange[1]
+            if plan[waypt.col_num][waypt.row_num]["ts_end"] is None:
+                plan[waypt.col_num][waypt.row_num]["ts_end"] = signal.data_xrange[1]
 
         self.indicate_busy('Retrieving data...')
 
-        # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
+        # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
@@ -740,27 +787,27 @@ class MTMainWindow(IplotQtMainWindow):
         max_row = 0
         for col, row_plots in plan.items():
             for row, plot in row_plots.items():
-                max_col = max(max_col, col + plot[1] - 1)
-                max_row = max(max_row, row + plot[0] - 1)
+                max_col = max(max_col, col + plot["col_span"] - 1)
+                max_row = max(max_row, row + plot["row_span"] - 1)
 
         canvas.cols = max_col
         canvas.rows = max_row
         canvas.plots = [[] for _ in range(canvas.cols)]
 
-        for colnum, rows in plan.items():
+        for col, rows in plan.items():
             for row in range(1, max(rows.keys()) + 1):
-                plot = None
                 if row not in rows.keys():
-                    self.canvas.add_plot(None, col=colnum - 1)
+                    self.canvas.add_plot(None, col=col - 1)
                     continue
 
-                plot_types = list(set(signal.plot_type for signals in rows[row][2].values() for signal in signals))
+                plot_types = list(
+                    set(signal.plot_type for signals in rows[row]["signals"].values() for signal in signals))
                 if len(plot_types) > 1 or any(value not in self.plot_classes.keys() for value in plot_types):
-                    self.canvas.add_plot(None, col=colnum - 1)
+                    self.canvas.add_plot(None, col=col - 1)
                     continue
 
                 x_axis_transformed = False
-                for signals in rows[row][2].values():
+                for signals in rows[row]["signals"].values():
                     for signal in signals:
                         if signal.x_expr != '${self}.time':
                             x_axis_transformed = True
@@ -768,22 +815,23 @@ class MTMainWindow(IplotQtMainWindow):
 
                 if not canvas.streaming:
                     signal_x_is_date = False
-                    for stack, signals in rows[row][2].items():
+                    for stack, signals in rows[row]["signals"].items():
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
                                 if x_axis_transformed:
-                                    if len(x_data) > 0:
-                                        signal_x_is_date |= bool(min(x_data) > (1 << 53))
+                                    if len(x_data) > 0:  # Create a separate function to detect dates
+                                        signal_x_is_date |= bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
                                 else:
-                                    if rows[row][3][0] is not None:
-                                        signal_x_is_date |= bool(rows[row][3][0] > (1 << 53))
+                                    if rows[row]["ts_start"] is not None:
+                                        signal_x_is_date |= bool(
+                                            rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
                             except (IndexError, ValueError) as _:
                                 signal_x_is_date = False
                 else:
                     signal_x_is_date = True
 
-                y_axes = [LinearAxis() for _ in range(len(rows[row][2].items()))]
+                y_axes = [LinearAxis() for _ in range(len(rows[row]["signals"].items()))]
 
                 x_axis = LinearAxis(is_date=x_axis_date and signal_x_is_date, follow=x_axis_follow,
                                     window=x_axis_window)
@@ -791,14 +839,14 @@ class MTMainWindow(IplotQtMainWindow):
                 # In case of processed signals, the limits are not set until the drawn_fn occurs
                 # In the other hand, for no processed signals and for pulses the limits are set as follows:
                 if not x_axis_transformed:
-                    x_axis.original_begin = rows[row][3][0]
-                    x_axis.original_end = rows[row][3][1]
-                    x_axis.begin = rows[row][3][0]
-                    x_axis.end = rows[row][3][1]
+                    x_axis.original_begin = rows[row]["ts_start"]
+                    x_axis.original_end = rows[row]["ts_end"]
+                    x_axis.begin = rows[row]["ts_start"]
+                    x_axis.end = rows[row]["ts_end"]
 
-                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row][0],
-                                                        col_span=rows[row][1])
-                for stack, signals in rows[row][2].items():
+                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
+                                                        col_span=rows[row]["col_span"], row=row, col=col)
+                for stack, signals in rows[row]["signals"].items():
                     for signal in signals:
                         if signal.stream_valid:
                             plot.add_signal(signal, stack=stack)
@@ -808,7 +856,7 @@ class MTMainWindow(IplotQtMainWindow):
                 if canvas.streaming and not plot.signals:
                     plot = None
 
-                self.canvas.add_plot(plot, col=colnum - 1)
+                self.canvas.add_plot(plot, col=col - 1)
 
     def on_timeout(self):
         self.build()

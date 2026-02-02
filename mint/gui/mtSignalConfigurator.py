@@ -36,7 +36,6 @@ from mint.gui.views.mtDataSourcesDelegate import MTPlotTypeDelegate
 from mint.models import MTSignalsModel
 from mint.models.mtSignalsModel import Waypoint
 from mint.models.utils import mtBlueprintParser as mtBp
-from mint.tools.table_parser import is_non_empty_string
 
 from iplotLogging import setupLogger
 
@@ -66,7 +65,8 @@ NEAT_VIEW = {
         "z": True,
         "Extremities": True,
         "Plot type": True,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     },
     DA_VIEW_NAME: {
         "DS": True,
@@ -84,7 +84,8 @@ NEAT_VIEW = {
         "z": False,
         "Extremities": False,
         "Plot type": False,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     },
     PLAYOUT_VIEW_NAME: {
         "DS": True,
@@ -102,7 +103,8 @@ NEAT_VIEW = {
         "z": False,
         "Extremities": False,
         "Plot type": True,
-        "Status": True
+        "Status": True,
+        "Output Datatype": False
     },
     PROC_VIEW_NAME: {
         "DS": True,
@@ -120,7 +122,8 @@ NEAT_VIEW = {
         "z": True,
         "Extremities": False,
         "Plot type": False,
-        "Status": True
+        "Status": True,
+        "Output Datatype": True
     }
 }
 
@@ -208,7 +211,8 @@ class MTSignalConfigurator(QWidget):
         #  MTSignalItemView(PROC_VIEW_NAME, view_type=QTreeView, parent=self)]
 
         self._ds_delegate = MTDataSourcesDelegate(data_sources, self)
-        self._pt_delegate = MTPlotTypeDelegate(["PlotXY", "PlotContour", "PlotXYWithSlider"], self)
+        self._pt_delegate = MTPlotTypeDelegate(
+            ["PlotXY", "PlotContour", "PlotXYWithSlider", "PlotContourWithSlider", "PlotImage"], self)
         self._tabs = QTabWidget(parent=self)
         self._tabs.setMovable(True)
 
@@ -538,7 +542,6 @@ class MTSignalConfigurator(QWidget):
             new_text = text_edit.toPlainText()
             model.setData(index, new_text, Qt.EditRole)
 
-
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
         self.selectPulseDialog.show()
@@ -571,7 +574,7 @@ class MTSignalConfigurator(QWidget):
     def export_scsv(self, file_path=None):
         try:
             self.busy.emit()
-            df = self._model.get_dataframe().drop(labels=['Status', 'uid'], axis=1)
+            df = self._model.get_dataframe().drop(labels=['Status', 'Output Datatype', 'uid'], axis=1)
             logger.info(f"Saved signal set: {file_path}")
             return df.to_csv(file_path, index=False, sep=";")
         except Exception as e:
@@ -699,7 +702,8 @@ class MTSignalConfigurator(QWidget):
 
         error_msgs = []
         graph = defaultdict(list)
-        status_col_idx = self.model.columnCount(QModelIndex()) - 1
+        column_names = list(mtBp.get_column_names(self._model.blueprint))
+        status_col_idx = column_names.index("Status")
         with self._model.activate_fast_mode():
             for idx, row in df.iterrows():
                 logger.debug(f"Row: {idx}")
@@ -800,8 +804,8 @@ class MTSignalConfigurator(QWidget):
             if group["Stack"].values[0].count(".") > 1 and not all(types == 'PlotXY'):
                 return True
 
-            # Rule #2: A PlotContour stack cannot contain more than one signal
-            if all(types == 'PlotContour') and len(types) > 1:
+            # Rule #2: A PlotContour or PlotContourWithSlider stack cannot contain more than one signal
+            if (all(types == 'PlotContour') or all(types == 'PlotContourWithSlider')) and len(types) > 1:
                 return True
 
             # Rule #3: Mixing different plot types in the same stack is not allowed

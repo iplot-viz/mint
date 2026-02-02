@@ -5,9 +5,9 @@ import json
 from typing import Optional, Type, Union
 from functools import partial
 
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt, QEvent
 from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QTableView, QTreeView, QVBoxLayout, QWidget, \
-    QWidgetAction
+    QWidgetAction, QAbstractButton
 
 from mint.models.mtSignalsModel import MTSignalsModel
 
@@ -15,12 +15,22 @@ from mint.models.mtSignalsModel import MTSignalsModel
 class MTSignalItemView(QWidget):
     def __init__(self, title='SignalView',
                  view_type: Union[Type[QTableView], Type[QTreeView]] = QTableView,
-                 parent: Optional[QWidget] = None, f: Qt.WindowFlags = Qt.WindowType.Widget):
+                 parent: Optional[QWidget] = None, f: Qt.WindowType = Qt.WindowType.Widget):
         super().__init__(parent=parent, f=f)
         self.setWindowTitle(title)
         self.setLayout(QVBoxLayout())
 
         self._view = view_type(parent=self)
+
+        self._view.setStyleSheet("""
+            QTableView, QTreeView { background: palette(Base); gridline-color: palette(Mid); }
+            QTableView::viewport, QTreeView::viewport { background: palette(Base); }
+            QTableView::item, QTreeView::item { color: #000; }
+            QTableView::item:selected, QTreeView::item:selected { background: #0078D4; color: #000; }
+            QHeaderView::section { background: palette(Window); color: palette(WindowText); border: 0; padding: 3px 6px; }
+            QTableCornerButton::section { background: palette(Window); border: 0; }
+        """)
+
         self._menu = QMenu('', self)
         self._actions = []  # to avoid unexpected deletion of c++ actions
 
@@ -75,22 +85,39 @@ class MTSignalItemView(QWidget):
         options = dict()
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
-            if column_name != MTSignalsModel.ROWUID_COLNAME:
-                act = self._actions[column]
-                if isinstance(act, QWidgetAction):
-                    options.update({column_name: act.defaultWidget().isChecked()})
+            if column_name == MTSignalsModel.ROWUID_COLNAME:
+                continue
+            act = self._actions[column]
+            if isinstance(act, QWidgetAction):
+                dw = act.defaultWidget()
+                if isinstance(dw, QAbstractButton):
+                    options.update({column_name: dw.isChecked()})
         return options
 
     def import_dict(self, options: dict):
         for column in range(self.model().columnCount(QModelIndex())):
             column_name = self.model().headerData(column, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole)
-            if column_name != MTSignalsModel.ROWUID_COLNAME:
-                act = self._actions[column]
-                if isinstance(act, QWidgetAction):
-                    act.defaultWidget().setChecked(options.get(column_name, True))
+            if column_name == MTSignalsModel.ROWUID_COLNAME:
+                continue
+            act = self._actions[column]
+            if isinstance(act, QWidgetAction):
+                dw = act.defaultWidget()
+                if isinstance(dw, QAbstractButton):
+                    dw.setChecked(options.get(column_name, True))
 
     def export_json(self):
         return json.dumps(self.export_dict())
 
     def import_json(self, input_file):
         self.import_dict(json.loads(input_file))
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        cs = getattr(QEvent.Type, 'ColorSchemeChange', None)
+        if e.type() in (QEvent.Type.ApplicationPaletteChange,
+                        QEvent.Type.PaletteChange,
+                        QEvent.Type.StyleChange,
+                        QEvent.Type.ThemeChange) or (cs and e.type() == cs):
+            ss = self._view.styleSheet()
+            self._view.setStyleSheet("")
+            self._view.setStyleSheet(ss)
