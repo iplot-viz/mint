@@ -523,6 +523,7 @@ class MTSignalConfigurator(QWidget):
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Editor mode")
+        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowMaximizeButtonHint)
         dlg.setModal(False)
 
         layout = QVBoxLayout(dlg)
