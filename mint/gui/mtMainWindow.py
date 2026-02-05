@@ -366,20 +366,11 @@ class MTMainWindow(IplotQtMainWindow):
         # Hide original signal if not duplicating (don't remove from plot.signals to avoid cache issues)
         original_plot = original_signal.parent() if hasattr(original_signal, 'parent') and original_signal.parent else None
         if not duplicate and original_plot:
-            # Get impl_plot for legend update
             orig_impl_plot = w._parser._signal_impl_plot_lut.get(original_signal.uid)
 
-            # Hide lines
-            if hasattr(original_signal, 'lines') and original_signal.lines:
-                for line in original_signal.lines:
-                    if hasattr(line, 'set_visible'):  # matplotlib
-                        line.set_visible(False)
-                    elif hasattr(line, 'setVisible'):  # pyqtgraph
-                        line.setVisible(False)
-
-                # Remove from legend (pyqtgraph)
-                if orig_impl_plot and hasattr(orig_impl_plot, 'legend') and orig_impl_plot.legend:
-                    orig_impl_plot.legend.removeItem(original_signal.lines[0])
+            w._parser.set_signal_visible(original_signal, False)
+            if orig_impl_plot:
+                w._parser.remove_signal_from_legend(orig_impl_plot, original_signal)
 
         created_signal = None
         affected_plot = None
@@ -422,6 +413,8 @@ class MTMainWindow(IplotQtMainWindow):
             impl_plot = impl_plots[stack_num - 1] if stack_num <= len(impl_plots) else impl_plots[0]
             w._parser._signal_impl_plot_lut[created_signal.uid] = impl_plot
             w._parser.process_ipl_signal(created_signal)
+            if hasattr(w._parser, 'register_dynamic_signal'):
+                w._parser.register_dynamic_signal(impl_plot, affected_plot, created_signal)
 
             # Expand Y limits if shifted signal falls outside current view
             if dy != 0:
