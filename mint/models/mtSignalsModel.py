@@ -191,7 +191,7 @@ class MTSignalsModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            if self._table.columns[index.column()] != 'Status':
+            if self._table.columns[index.column()] != 'Status' and self._table.columns[index.column()] != 'Output Datatype':
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
@@ -240,7 +240,7 @@ class MTSignalsModel(QAbstractItemModel):
         return success
 
     def get_dataframe(self):
-        filtered_rows = self._table[self._table.iloc[:, 1:-4].any(axis=1)]
+        filtered_rows = self._table[self._table.iloc[:, 1:-5].any(axis=1)]
         if not filtered_rows.empty:
             max_idx = filtered_rows.index[-1]
             return self._table[:max_idx + 1]
@@ -312,7 +312,7 @@ class MTSignalsModel(QAbstractItemModel):
         df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
 
         # Check if last row is empty
-        if self._table.empty or self._table.iloc[-1:, 1:-4].any(axis=1).bool():
+        if self._table.empty or self._table.iloc[-1:, 1:-5].any(axis=1).bool():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
             self.insertRows(len(self._table), 1, QModelIndex())
             self._table_fails = pd.concat([self._table_fails, df_fails], ignore_index=True)
@@ -394,6 +394,19 @@ class MTSignalsModel(QAbstractItemModel):
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
+            # Update Output Datatype column after data is fetched
+            output_dtype_col = mtBP.get_column_name(self._blueprint, 'OutputDatatype')
+            if output_dtype_col in self._table.columns:
+                dtype_idx = self.createIndex(row_idx, self._table.columns.get_loc(output_dtype_col))
+                output_dtype_str = self._get_signal_output_datatype(signal)
+                self.setData(dtype_idx, output_dtype_str, Qt.ItemDataRole.DisplayRole)
+
+    def _get_signal_output_datatype(self, signal: IplotSignalAdapter) -> str:
+        """Get a string representation of the signal's output data type."""
+        if hasattr(signal, 'y_data') and signal.y_data is not None and len(signal.y_data) > 0:
+            return f"{signal.y_data.dtype}"
+        return ""
+
     @contextmanager
     def init_create_signals(self):
         try:
@@ -454,9 +467,10 @@ class MTSignalsModel(QAbstractItemModel):
                 ts_start = signal_params.get('ts_start')
                 ts_end = signal_params.get('ts_end')
 
-            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider':
+            if signal_params['plot_type'] == 'PlotXY' or signal_params['plot_type'] == 'PlotXYWithSlider' or \
+                    signal_params['plot_type'] == 'PlotImage':
                 signal_class = SignalXY
-            elif signal_params['plot_type'] == 'PlotContour':
+            elif signal_params['plot_type'] == 'PlotContour' or signal_params['plot_type'] == 'PlotContourWithSlider':
                 signal_class = SignalContour
             else:
                 continue
@@ -674,7 +688,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 1
                                 logger.warning(
                                     f"Invalid stack in table row [{table_row}]: "
-                                    f"Plot of type PlotContour or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
+                                    f"Plot of type PlotContour, PlotContourWithSlider or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
                                     f"Mixing different plot types in the same stack is not allowed.")
                             else:
                                 if exp_stack.match(value):
@@ -758,10 +772,10 @@ class MTSignalsModel(QAbstractItemModel):
 
                         # Plot Type
                         elif column_name == 'Plot type':
-                            if value not in ['PlotXY', 'PlotContour', 'PlotXYWithSlider']:
+                            if value not in ['PlotXY', 'PlotContour', 'PlotXYWithSlider', 'PlotContourWithSlider']:
                                 fls[column_name] = 1
                                 logger.warning(f"Invalid plot type: '{value}' is not a valid plot type. Expected"
-                                               f" 'PlotXY' or 'PlotContour' or 'PlotXYWithSlider'")
+                                               f" 'PlotXY' or 'PlotContour' or 'PlotXYWithSlider' or 'PlotContourWithSlider'")
                             else:
                                 fls[column_name] = 0
 

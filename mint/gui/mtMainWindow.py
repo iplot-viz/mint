@@ -25,7 +25,7 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -68,7 +68,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             data_sources = []
         self.canvas = canvas
         self.da = da
-        self.plot_classes = {"PlotXY": PlotXY, "PlotContour": PlotContour, "PlotXYWithSlider": PlotXYWithSlider}
+        self.plot_classes = {"PlotXY": PlotXY,
+                             "PlotContour": PlotContour,
+                             "PlotXYWithSlider": PlotXYWithSlider,
+                             "PlotContourWithSlider": PlotContourWithSlider,
+                             "PlotImage": PlotImage}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -343,7 +347,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     remove_key = []
                     for key, values in plot.signals.items():
                         plot.signals[key] = [signal for signal in values if
-                                             signal is not None or signal.parent is not None]
+                                             signal is not None and signal.parent is not None]
                         if len(plot.signals[key]) == 0:
                             remove_key.append(key)
 
@@ -366,7 +370,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Remove previous slider references
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         main_canvas = input_dict.get('main_canvas')
@@ -760,12 +764,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.indicate_busy('Retrieving data...')
 
-        # For PlotXYWithSlider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
+        # For Plots with Slider, slider callback connections are not preserved after deepcopy. Therefore, we must clear
         # the slider references from the old canvas before rebuilding it. This prevents issues related to invalid
         # callback references during redrawing.
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider):
+                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
