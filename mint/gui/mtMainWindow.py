@@ -25,7 +25,6 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.commands.signal_shift import SignalShiftCommand
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
@@ -42,6 +41,7 @@ from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
+from mint.gui.shift_handlers import ShiftHandlerMixin
 
 from iplotLogging import setupLogger as setupLog
 
@@ -50,7 +50,7 @@ logger = setupLog.get_logger(__name__)
 
 
 
-class MTMainWindow(IplotQtMainWindow):
+class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def __init__(self,
                  canvas: Canvas,
@@ -140,7 +140,8 @@ class MTMainWindow(IplotQtMainWindow):
             self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
-        self.qtcanvas.signalShiftRequested.connect(self._on_signal_shift_requested)
+        self._connect_shift_signals()
+        self._init_shift_storage()
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -239,214 +240,6 @@ class MTMainWindow(IplotQtMainWindow):
         box.setText(message)
         box.exec_()
 
-    def _on_signal_shift_requested(self, signal_uid: str, signal_name: str, data_source: str,
-                                      pulse_nb: str, dx: float, dy: float, duplicate: bool):
-        """Handle signal shift request using existing data (no data access)."""
-        logger.info(f"Signal shift: uid={signal_uid}, dx={dx}, dy={dy}, duplicate={duplicate}")
-
-        model = self.sigCfgWidget.model
-        w = self.canvasStack.currentWidget()
-
-        # Find original signal in canvas first
-        original_signal = None
-        for col in self.canvas.plots:
-            for plot in col:
-                if not plot:
-                    continue
-                for sigs in plot.signals.values():
-                    for sig in sigs:
-                        if sig and getattr(sig, 'uid', None) == signal_uid:
-                            original_signal = sig
-                            break
-                    if original_signal:
-                        break
-                if original_signal:
-                    break
-            if original_signal:
-                break
-
-        if not original_signal:
-            logger.warning(f"Original signal not found in canvas: {signal_uid}")
-            return
-
-        # Get fresh dataframe from model
-        df = model.get_dataframe()
-
-        # Find source row in table using signal uid first, then by Variable/DS
-        row_idx = None
-        if 'uid' in df.columns:
-            matches = df.index[df['uid'] == signal_uid].tolist()
-            if matches:
-                row_idx = matches[0]
-
-        if row_idx is None and 'Variable' in df.columns and 'DS' in df.columns:
-            sig_name = getattr(original_signal, 'name', signal_name)
-            sig_ds = getattr(original_signal, 'data_source', data_source)
-            matches = df.index[(df['Variable'] == sig_name) & (df['DS'] == sig_ds)].tolist()
-            if matches:
-                row_idx = matches[0]
-
-        if row_idx is None:
-            logger.warning(f"Signal row not found in table for: {signal_name}, {data_source}")
-            return
-
-        # Compute shifted expressions for table
-        bp = getattr(model, 'blueprint', {}) or {}
-        default_x = (bp.get('x') or {}).get('default') or '${self}.time'
-        default_y = (bp.get('y') or {}).get('default') or '${self}.data'
-        current_x = df.at[row_idx, 'x'] or default_x
-        current_y = df.at[row_idx, 'y'] or default_y
-        new_x = f"({current_x}) + {dx}" if dx != 0 else current_x
-        new_y = f"({current_y}) + {dy}" if dy != 0 else current_y
-
-        # Get mode info
-        original_stack = df.at[row_idx, 'Stack']
-        # If original_stack is empty (signal was already "stepped on"), find a valid Stack from same Variable
-        if not original_stack and 'Variable' in df.columns and 'Stack' in df.columns:
-            var_name_for_stack = df.at[row_idx, 'Variable']
-            same_var_rows = df[df['Variable'] == var_name_for_stack]
-            valid_stacks = same_var_rows['Stack'].dropna()
-            valid_stacks = valid_stacks[valid_stacks != '']
-            if not valid_stacks.empty:
-                original_stack = valid_stacks.iloc[0]
-        logger.info(f"Original stack value: '{original_stack}' for row_idx={row_idx}")
-        global_pulses = self.dataRangeSelector.get_pulse_number()
-        is_pulse_mode = global_pulses and len(global_pulses) > 0
-        shifted_pulse = pulse_nb or (global_pulses[0] if global_pulses else '')
-        other_pulses = [p for p in (global_pulses or []) if p != shifted_pulse]
-
-        # Save original PulseId before modifying
-        original_pulse_id = df.at[row_idx, 'PulseId'] if 'PulseId' in df.columns else ''
-
-        # Modify original row if not duplicating
-        if not duplicate:
-            if 'Stack' in df.columns:
-                model.setData(model.createIndex(row_idx, df.columns.get_loc('Stack')), '', Qt.ItemDataRole.EditRole)
-            if is_pulse_mode and 'PulseId' in df.columns:
-                model.setData(model.createIndex(row_idx, df.columns.get_loc('PulseId')),
-                             ','.join(other_pulses) if other_pulses else '', Qt.ItemDataRole.EditRole)
-
-        # Generate unique alias - get fresh dataframe to see current state
-        fresh_df = model.get_dataframe()
-        var_name = fresh_df.at[row_idx, 'Variable'] if 'Variable' in fresh_df.columns else ''
-        base_alias = f"shifted_{var_name}" if var_name else "shifted"
-        # Filter out None and empty aliases
-        existing = [a for a in fresh_df['Alias'].tolist() if a] if 'Alias' in fresh_df.columns else []
-        new_alias = base_alias  # default
-        if base_alias in existing:
-            for i in range(2, 100):
-                candidate = f"shifted{i}_{var_name}" if var_name else f"shifted{i}"
-                if candidate not in existing:
-                    new_alias = candidate
-                    break
-        logger.info(f"Alias generation: base={base_alias}, existing={existing}, new_alias={new_alias}")
-
-        # Insert new row
-        new_row_idx = row_idx + 1
-        model.insertRows(new_row_idx, 1, QModelIndex())
-        for col_idx, col_name in enumerate(df.columns):
-            if col_name == 'uid':
-                continue
-            val = {'Stack': original_stack, 'x': new_x, 'y': new_y, 'Alias': new_alias,
-                   'PulseId': shifted_pulse}.get(col_name)
-            if val is None and col_name not in ['Status', 'Output Datatype']:
-                val = df.at[row_idx, col_name]
-            if val is not None:
-                model.setData(model.createIndex(new_row_idx, col_idx), val, Qt.ItemDataRole.EditRole)
-
-        # Create signal object for new row
-        ts, te = self.dataRangeSelector.get_time_range()
-        pulse_number = self.dataRangeSelector.get_pulse_number()
-        for key in mtBlueprintParser.get_keys_with_override(model.blueprint):
-            v = model.blueprint.get(key)
-            code_name = v.get('code_name')
-            v.update({'default': pulse_number if code_name == 'pulse_nb' else
-                     (ts if code_name == 'ts_start' else (te if code_name == 'ts_end' else None))})
-
-        # Hide original signal if not duplicating (don't remove from plot.signals to avoid cache issues)
-        original_plot = original_signal.parent() if hasattr(original_signal, 'parent') and original_signal.parent else None
-        if not duplicate and original_plot:
-            orig_impl_plot = w._parser._signal_impl_plot_lut.get(original_signal.uid)
-
-            w._parser.set_signal_visible(original_signal, False)
-            if orig_impl_plot:
-                w._parser.remove_signal_from_legend(orig_impl_plot, original_signal)
-
-        created_signal = None
-        affected_plot = None
-        stack_num = 1
-
-        for waypt in model.create_signals(new_row_idx, self.sigCfgWidget.invalid_stacks):
-            if not waypt.func or not waypt.stack_num:
-                continue
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-
-            # Inject shifted data from original signal (no data access needed)
-            from iplotProcessing.core import BufferObject
-            from iplotlib.interface.iplotSignalAdapter import Result
-            ox, oy = original_signal.x_data, original_signal.y_data
-            signal.x_data = BufferObject(ox + dx, unit=getattr(ox, 'unit', '')) if dx else ox
-            signal.y_data = BufferObject(oy + dy, unit=getattr(oy, 'unit', '')) if dy else oy
-            signal.z_data = original_signal.z_data
-            signal.data_store[0], signal.data_store[1], signal.data_store[2] = signal.x_data, signal.y_data, signal.z_data
-            signal.status_info.result = Result.SUCCESS
-            signal.status_info.num_points = len(signal.y_data)
-
-            model.update_signal_data(waypt.idx, signal, False)
-
-            plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]
-            if plot:
-                affected_plot = plot
-                stack_num = waypt.stack_num
-
-
-                signal.parent = weakref.ref(plot)
-                plot.add_signal(signal, stack=waypt.stack_num)
-                created_signal = signal
-
-        if not created_signal or not affected_plot:
-            return
-
-        # Process only the new signal (no rebuild)
-        impl_plots = w._parser._plot_impl_plot_lut.get(id(affected_plot), [])
-        if impl_plots:
-            impl_plot = impl_plots[stack_num - 1] if stack_num <= len(impl_plots) else impl_plots[0]
-            w._parser._signal_impl_plot_lut[created_signal.uid] = impl_plot
-            w._parser.process_ipl_signal(created_signal)
-            if hasattr(w._parser, 'register_dynamic_signal'):
-                w._parser.register_dynamic_signal(impl_plot, affected_plot, created_signal)
-
-            # Expand Y limits if shifted signal falls outside current view
-            if dy != 0:
-                y_min, y_max = w._parser.get_impl_y_axis_limits(impl_plot)
-                sig_y_min, sig_y_max = float(created_signal.y_data.min()), float(created_signal.y_data.max())
-                new_y_min = min(y_min, sig_y_min)
-                new_y_max = max(y_max, sig_y_max)
-                if new_y_min < y_min or new_y_max > y_max:
-                    w._parser.set_impl_y_axis_limits(impl_plot, (new_y_min, new_y_max))
-
-        # Register undo/redo command
-        cmd = SignalShiftCommand(
-            created_signal=created_signal,
-            original_signal=original_signal,
-            affected_plot=affected_plot,
-            stack_num=stack_num,
-            new_row_idx=new_row_idx,
-            original_row_idx=row_idx,
-            original_stack=original_stack,
-            original_pulse_id=original_pulse_id,
-            original_was_hidden=not duplicate,
-            model=model,
-            parser=w._parser,
-            main_window=self
-        )
-        w._parser._hm.done(cmd)
-        w.cmdDone.emit(cmd)
-
-        self.canvasStack.refreshLinks()
-        w.check_markers(self.canvas)
-        w.stats(self.canvas)
-        logger.info(f"Signal shift completed")
 
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
