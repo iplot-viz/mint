@@ -1,11 +1,12 @@
 # Description: Implements an absolute time model.
 # Author: Jaswant Sai Panchumarti
 
-
+import pandas as pd
 from PySide6.QtGui import QRegularExpressionValidator, QFontMetrics
-from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy
-from PySide6.QtCore import Qt, QRegularExpression, Signal
+from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy, QPushButton
+from PySide6.QtCore import Qt, QRegularExpression, Signal, QDateTime
 
+from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
@@ -63,12 +64,28 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.toTime.adjustSize()
         self.toTime.setFixedWidth(self.toTime.width() + 2)
 
+        # Pulse search widgets
+        self.pulseUsed = QLineEdit(parent=self.form)
+        self.pulseUsed.setReadOnly(True)
+        self.pulseUsed.setPlaceholderText("No pulse selected")
+        self.searchPulseBtn = QPushButton("Search", parent=self.form)
+        self.searchPulseBtn.clicked.connect(self.on_search_pulse)
+
+        self.selectPulseDialog = PulseBrowser()
+        self.selectPulseDialog.srch_finish.connect(self.fill_from_pulse)
+
         self.mapper.setOrientation(Qt.Vertical)
         self.mapper.addMapping(self.fromTime, 0)
         self.mapper.addMapping(self.toTime, 1)
         self.mapper.addMapping(self.fromTimeNs, 2)
         self.mapper.addMapping(self.toTimeNs, 3)
         self.mapper.toFirst()
+
+        # Create layout for pulse search row
+        pulseLayout = QHBoxLayout()
+        pulseLayout.addWidget(self.pulseUsed)
+        pulseLayout.addWidget(self.searchPulseBtn)
+        pulseLayout.setAlignment(Qt.AlignLeft)
 
         # Create layout for the "From time" row
         fromTimeLayout = QHBoxLayout()
@@ -89,6 +106,8 @@ class MTAbsoluteTime(MTGenericAccessMode):
         # Add the rows to the form layout
         self.form.layout().addRow(QLabel("From time", parent=self.form), fromTimeLayout)
         self.form.layout().addRow(QLabel("To time", parent=self.form), toTimeLayout)
+        self.form.layout().addRow(QLabel("From pulse", parent=self.form), pulseLayout)
+
 
     def properties(self):
         return {
@@ -112,3 +131,55 @@ class MTAbsoluteTime(MTGenericAccessMode):
             self.fromTimeNs.editingFinished.connect(self.handle_time_validation)
         elif self.sender() == self.toTimeNs:
             self.toTimeNs.setText(self.toTimeNs.text().ljust(9, '0'))
+
+    def on_search_pulse(self):
+        """Open the pulse browser dialog."""
+        self.selectPulseDialog.flag = "button"
+        self.selectPulseDialog.show()
+        self.selectPulseDialog.activateWindow()
+
+    def fill_from_pulse(self, pulses):
+        """Fill the timestamp fields from the selected pulse."""
+        if not pulses:
+            return
+        # Only use the first pulse
+        pulse = pulses[0]
+
+        # Get pulse info from the data source used in the pulse browser
+        ds = self.selectPulseDialog.get_current_source()
+
+        # Only UDA data sources support timeFrom/timeTo
+        if ds.source_type != "CODAC_UDA":
+            self.pulseUsed.setText(f"{pulse} (timestamps not available)")
+            return
+
+        pulse_info = ds.get_pulse_info(pulse_id=pulse)
+
+        if pulse_info is None:
+            self.pulseUsed.setText(f"{pulse} (not found)")
+            return
+
+        # Convert nanoseconds timestamps to QDateTime + nanoseconds part
+        time_from_ns = pulse_info.timeFrom
+        time_to_ns = pulse_info.timeTo
+
+        # Convert to pandas Timestamp for easy manipulation
+        ts_from = pd.Timestamp(time_from_ns)
+        ts_to = pd.Timestamp(time_to_ns)
+
+        # Create QDateTime (seconds precision)
+        qdt_from = QDateTime.fromString(ts_from.strftime("%Y-%m-%dT%H:%M:%S"), MTAbsoluteTime.TIME_FORMAT)
+        qdt_to = QDateTime.fromString(ts_to.strftime("%Y-%m-%dT%H:%M:%S"), MTAbsoluteTime.TIME_FORMAT)
+
+        # Extract nanoseconds part (nanoseconds within the second)
+        ns_from = str(ts_from.nanosecond).zfill(9)
+        ns_to = str(ts_to.nanosecond).zfill(9)
+
+        # Set the values in the UI
+        self.fromTime.setDateTime(qdt_from)
+        self.toTime.setDateTime(qdt_to)
+        self.fromTimeNs.setText(ns_from)
+        self.toTimeNs.setText(ns_to)
+
+        # Show the pulse used
+        self.pulseUsed.setText(pulse)

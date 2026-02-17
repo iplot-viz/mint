@@ -523,7 +523,8 @@ class MTSignalConfigurator(QWidget):
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Editor mode")
-        dlg.setModal(True)
+        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowMaximizeButtonHint)
+        dlg.setModal(False)
 
         layout = QVBoxLayout(dlg)
         text_edit = QTextEdit(dlg)
@@ -535,12 +536,16 @@ class MTSignalConfigurator(QWidget):
             Qt.Horizontal, dlg
         )
         layout.addWidget(buttons)
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
 
-        if dlg.exec() == QDialog.Accepted:
+        def on_accept():
             new_text = text_edit.toPlainText()
             model.setData(index, new_text, Qt.EditRole)
+            dlg.close()
+
+        buttons.accepted.connect(on_accept)
+        buttons.rejected.connect(dlg.close)
+
+        dlg.show()
 
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "table"
