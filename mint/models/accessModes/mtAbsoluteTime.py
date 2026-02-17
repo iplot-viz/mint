@@ -104,9 +104,10 @@ class MTAbsoluteTime(MTGenericAccessMode):
         toTimeLayout.setAlignment(Qt.AlignLeft)  # Align items to the left
 
         # Add the rows to the form layout
-        self.form.layout().addRow(QLabel("From pulse", parent=self.form), pulseLayout)
         self.form.layout().addRow(QLabel("From time", parent=self.form), fromTimeLayout)
         self.form.layout().addRow(QLabel("To time", parent=self.form), toTimeLayout)
+        self.form.layout().addRow(QLabel("From pulse", parent=self.form), pulseLayout)
+
 
     def properties(self):
         return {
