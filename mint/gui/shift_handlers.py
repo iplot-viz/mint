@@ -183,7 +183,9 @@ class ShiftHandlerMixin:
                 self._shift_original_exprs[pulse_key]['mother_pulse_updated'] = True
 
         if not stored_alias:
-            stored_alias = self._generate_unique_alias(model, var_name, 'shifted', pulse_id)
+            mother_alias = df.at[mother_row_idx, 'Alias'] if 'Alias' in df.columns else ''
+            stored_alias = self._generate_unique_alias(model, var_name, 'shifted', pulse_id,
+                                                       row_alias=mother_alias)
             self._shift_original_exprs[pulse_key]['alias'] = stored_alias
 
         original_signal.label = stored_alias
@@ -365,7 +367,8 @@ class ShiftHandlerMixin:
 
         new_x = self._format_offset_expr(base_x, dx) if abs(dx) > 1e-10 else (original_x or '')
         new_y = self._format_offset_expr(base_y, dy) if abs(dy) > 1e-10 else (original_y or '')
-        new_alias = self._generate_unique_alias(model, var_name, 'shifted')
+        row_alias = df.at[row_idx, 'Alias'] if 'Alias' in df.columns else ''
+        new_alias = self._generate_unique_alias(model, var_name, 'shifted', row_alias=row_alias)
 
         new_row_idx = row_idx + 1
         model.insertRows(new_row_idx, 1, QModelIndex())
@@ -423,22 +426,26 @@ class ShiftHandlerMixin:
                 return matches[0]
         return None
 
-    def _generate_unique_alias(self, model, var_name: str, prefix: str, pulse_id: str = None) -> str:
+    def _generate_unique_alias(self, model, var_name: str, prefix: str, pulse_id: str = None,
+                              row_alias: str = '') -> str:
         """Generate a unique alias for the shifted signal."""
         df = model.get_dataframe()
         existing = [a for a in df['Alias'].tolist() if a] if 'Alias' in df.columns else []
+        display_name = row_alias.strip() if row_alias and row_alias.strip() else (
+            var_name if '${' not in var_name else ''
+        )
         # Include pulse_id in alias when provided (multiple pulses case)
         if pulse_id:
-            base_alias = f"{prefix}_{var_name}_{pulse_id}" if var_name else f"{prefix}_{pulse_id}"
+            base_alias = f"{prefix}_{display_name}_{pulse_id}" if display_name else f"{prefix}_{pulse_id}"
         else:
-            base_alias = f"{prefix}_{var_name}" if var_name else prefix
+            base_alias = f"{prefix}_{display_name}" if display_name else prefix
         if base_alias not in existing:
             return base_alias
         for i in range(2, 100):
             if pulse_id:
-                candidate = f"{prefix}{i}_{var_name}_{pulse_id}" if var_name else f"{prefix}{i}_{pulse_id}"
+                candidate = f"{prefix}{i}_{display_name}_{pulse_id}" if display_name else f"{prefix}{i}_{pulse_id}"
             else:
-                candidate = f"{prefix}{i}_{var_name}" if var_name else f"{prefix}{i}"
+                candidate = f"{prefix}{i}_{display_name}" if display_name else f"{prefix}{i}"
             if candidate not in existing:
                 return candidate
         return base_alias
