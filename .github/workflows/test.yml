@@ -22,9 +22,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxcb-cursor0 xvfb
           python -m pip install --upgrade pip setuptools wheel
           pip install ".[test]"
 
       - name: Automated tests with Pytest
         run: |
-          pytest
+          xvfb-run pytest
