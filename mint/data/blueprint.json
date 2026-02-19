@@ -68,7 +68,7 @@
     "y": {
         "code_name": "y_expr",
         "type_name": "str",
-        "default": "${self}.data_store[1]"
+        "default": "${self}.data"
     },
     "z": {
         "code_name": "z_expr",
