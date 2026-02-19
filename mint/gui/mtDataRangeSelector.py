@@ -88,6 +88,9 @@ class MTDataRangeSelector(QWidget):
         item = self.accessModes[self.stack.currentIndex()]
         item.from_dict(input_dict)
 
+        # Always clear the pulse reference in Time Range mode
+        self.accessModes[0].clear_pulse()
+
     def select_page(self, page_id: int):
         self.stack.setCurrentIndex(page_id)
         self.modeChanged.emit()

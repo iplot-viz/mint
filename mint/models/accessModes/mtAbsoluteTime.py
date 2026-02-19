@@ -70,6 +70,8 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.pulseUsed.setPlaceholderText("No pulse selected")
         self.searchPulseBtn = QPushButton("Search", parent=self.form)
         self.searchPulseBtn.clicked.connect(self.on_search_pulse)
+        self.clearPulseBtn = QPushButton("Clear", parent=self.form)
+        self.clearPulseBtn.clicked.connect(self.clear_pulse)
 
         self.selectPulseDialog = PulseBrowser()
         self.selectPulseDialog.srch_finish.connect(self.fill_from_pulse)
@@ -85,6 +87,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         pulseLayout = QHBoxLayout()
         pulseLayout.addWidget(self.pulseUsed)
         pulseLayout.addWidget(self.searchPulseBtn)
+        pulseLayout.addWidget(self.clearPulseBtn)
         pulseLayout.setAlignment(Qt.AlignLeft)
 
         # Create layout for the "From time" row
@@ -123,6 +126,10 @@ class MTAbsoluteTime(MTGenericAccessMode):
                                            contents.get("ts_ns_start", "000000000"),
                                            contents.get("ts_ns_end", "000000000")])
         super().from_dict(contents)
+
+    def clear_pulse(self):
+        """Clear the pulse reference field."""
+        self.pulseUsed.setText("")
 
     def handle_time_validation(self):
         if self.sender() == self.fromTimeNs:
