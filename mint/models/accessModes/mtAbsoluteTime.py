@@ -134,12 +134,16 @@ class MTAbsoluteTime(MTGenericAccessMode):
 
     def on_search_pulse(self):
         """Open the pulse browser dialog."""
-        self.selectPulseDialog.flag = "button"
+        self.selectPulseDialog.flag = "time_range"
+        self.selectPulseDialog.set_selection_mode(single=True, require_timestamps=True)
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 
     def fill_from_pulse(self, pulses):
         """Fill the timestamp fields from the selected pulse."""
+        # Only process if opened from Time Range
+        if self.selectPulseDialog.flag != "time_range":
+            return
         if not pulses:
             return
         # Only use the first pulse
