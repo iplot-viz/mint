@@ -76,6 +76,9 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.selectPulseDialog = PulseBrowser()
         self.selectPulseDialog.srch_finish.connect(self.fill_from_pulse)
 
+        # Store time values before pulse selection so Clear can restore them
+        self._saved_time_before_pulse = None
+
         self.mapper.setOrientation(Qt.Vertical)
         self.mapper.addMapping(self.fromTime, 0)
         self.mapper.addMapping(self.toTime, 1)
@@ -128,8 +131,26 @@ class MTAbsoluteTime(MTGenericAccessMode):
         super().from_dict(contents)
 
     def clear_pulse(self):
-        """Clear the pulse reference field."""
+        """Clear the pulse reference field and restore the time fields to their pre-pulse state."""
         self.pulseUsed.setText("")
+
+        if self._saved_time_before_pulse is not None:
+            # Restore the time values that were present before the pulse was selected
+            saved = self._saved_time_before_pulse
+            self.fromTime.setDateTime(saved['from_time'])
+            self.toTime.setDateTime(saved['to_time'])
+            self.fromTimeNs.setText(saved['from_ns'])
+            self.toTimeNs.setText(saved['to_ns'])
+            # Update the underlying model
+            self.model.setStringList([
+                saved['from_time'].toString(MTAbsoluteTime.TIME_FORMAT) if not saved['from_time'].isNull() else '',
+                saved['to_time'].toString(MTAbsoluteTime.TIME_FORMAT) if not saved['to_time'].isNull() else '',
+                saved['from_ns'],
+                saved['to_ns']
+            ])
+            self.mapper.toFirst()
+            self._saved_time_before_pulse = None
+        # If no saved state, just clear the pulse text (times remain as they are)
 
     def handle_time_validation(self):
         if self.sender() == self.fromTimeNs:
@@ -187,6 +208,14 @@ class MTAbsoluteTime(MTGenericAccessMode):
         ns_to = str(ts_to.nanosecond).zfill(9)
 
         # Set the values in the UI
+        # Save current time values before overwriting so Clear can restore them
+        self._saved_time_before_pulse = {
+            'from_time': QDateTime(self.fromTime.dateTime()),
+            'to_time': QDateTime(self.toTime.dateTime()),
+            'from_ns': self.fromTimeNs.text(),
+            'to_ns': self.toTimeNs.text()
+        }
+
         self.fromTime.setDateTime(qdt_from)
         self.toTime.setDateTime(qdt_to)
         self.fromTimeNs.setText(ns_from)

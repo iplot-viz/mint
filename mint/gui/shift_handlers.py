@@ -42,6 +42,46 @@ class ShiftHandlerMixin:
             return f"({base_expr}) + {offset}"
         return f"({base_expr}) - {abs(offset)}"
 
+    def _update_signal_label_and_legend(self, signal_uid: str, label: str):
+        """Update signal label, line label and rebuild legend for a shifted signal."""
+        original_signal, original_plot = self._find_signal_in_canvas(signal_uid)
+        if not original_signal:
+            return
+        original_signal.label = label
+        if hasattr(original_signal, 'lines') and original_signal.lines:
+            line = original_signal.lines[0]
+            if hasattr(line, 'set_label'):
+                line.set_label(label)
+        w = self.canvasStack.currentWidget()
+        if w and original_plot:
+            impl_plot = w._parser._signal_impl_plot_lut.get(signal_uid)
+            if impl_plot:
+                w._parser.rebuild_legend(impl_plot, original_plot)
+
+    def _set_row_xy(self, model, row_idx: int, new_x: str, new_y: str):
+        """Set x/y expression values on a model row."""
+        df = model.get_dataframe()
+        if 'x' in df.columns:
+            model.setData(model.createIndex(row_idx, df.columns.get_loc('x')), new_x, 2)
+        if 'y' in df.columns:
+            model.setData(model.createIndex(row_idx, df.columns.get_loc('y')), new_y, 2)
+
+    def _build_offset_expressions_from(self, model, original_x: str, original_y: str,
+                                        total_dx: float, total_dy: float):
+        """Build x/y offset expressions from explicit originals (no tracking lookup)."""
+        bp = getattr(model, 'blueprint', {}) or {}
+        default_x = (bp.get('x') or {}).get('default') or '${self}.time'
+        default_y = (bp.get('y') or {}).get('default') or '${self}.data'
+        base_x = original_x if original_x else default_x
+        base_y = original_y if original_y else default_y
+        new_x = self._format_offset_expr(base_x, total_dx) if abs(total_dx) > 1e-10 else (original_x or '')
+        new_y = self._format_offset_expr(base_y, total_dy) if abs(total_dy) > 1e-10 else (original_y or '')
+        return new_x, new_y
+
+    # ------------------------------------------------------------------
+    # Shift applied / undone handlers (direct drag, no pulse isolation)
+    # ------------------------------------------------------------------
+
     def _on_signal_shift_applied(self, signal_uid: str, dx: float, dy: float, source: str):
         """Update table expressions when inline shift is applied."""
         model = self.sigCfgWidget.model
@@ -54,7 +94,8 @@ class ShiftHandlerMixin:
         if signal_uid not in self._shift_original_exprs:
             self._shift_original_exprs[signal_uid] = {
                 'x': df.at[row_idx, 'x'] if 'x' in df.columns else '',
-                'y': df.at[row_idx, 'y'] if 'y' in df.columns else ''
+                'y': df.at[row_idx, 'y'] if 'y' in df.columns else '',
+                'original_alias': df.at[row_idx, 'Alias'] if 'Alias' in df.columns else ''
             }
             self._shift_accumulated[signal_uid] = {'dx': 0.0, 'dy': 0.0}
 
@@ -65,12 +106,20 @@ class ShiftHandlerMixin:
             self._shift_accumulated[signal_uid]['dx'],
             self._shift_accumulated[signal_uid]['dy']
         )
+        self._set_row_xy(model, row_idx, new_x, new_y)
 
+        # Set alias on the inline row so the shifted signal is identifiable
         df = model.get_dataframe()
-        if 'x' in df.columns:
-            model.setData(model.createIndex(row_idx, df.columns.get_loc('x')), new_x, 2)
-        if 'y' in df.columns:
-            model.setData(model.createIndex(row_idx, df.columns.get_loc('y')), new_y, 2)
+        if 'Alias' in df.columns:
+            current_alias = df.at[row_idx, 'Alias']
+            original_alias = self._shift_original_exprs[signal_uid].get('original_alias', '')
+            # Only generate alias if the row doesn't already have a shifted alias
+            if not current_alias or current_alias == original_alias:
+                var_name = df.at[row_idx, 'Variable'] if 'Variable' in df.columns else ''
+                shifted_alias = self._generate_unique_alias(model, var_name, 'shifted',
+                                                            row_alias=original_alias)
+                model.setData(model.createIndex(row_idx, df.columns.get_loc('Alias')), shifted_alias, 2)
+                self._update_signal_label_and_legend(signal_uid, shifted_alias)
 
     def _on_signal_shift_undone(self, signal_uid: str, dx: float, dy: float, source: str):
         """Revert table expressions when inline shift is undone."""
@@ -90,12 +139,18 @@ class ShiftHandlerMixin:
             self._shift_accumulated.get(signal_uid, {}).get('dx', 0.0),
             self._shift_accumulated.get(signal_uid, {}).get('dy', 0.0)
         )
+        self._set_row_xy(model, row_idx, new_x, new_y)
 
-        df = model.get_dataframe()
-        if 'x' in df.columns:
-            model.setData(model.createIndex(row_idx, df.columns.get_loc('x')), new_x, 2)
-        if 'y' in df.columns:
-            model.setData(model.createIndex(row_idx, df.columns.get_loc('y')), new_y, 2)
+        # Restore original alias when offset goes back to zero
+        remaining_dx = self._shift_accumulated.get(signal_uid, {}).get('dx', 0.0)
+        remaining_dy = self._shift_accumulated.get(signal_uid, {}).get('dy', 0.0)
+        if abs(remaining_dx) < 1e-10 and abs(remaining_dy) < 1e-10:
+            if signal_uid in self._shift_original_exprs:
+                df = model.get_dataframe()
+                if 'Alias' in df.columns:
+                    original_alias = self._shift_original_exprs[signal_uid].get('original_alias', '')
+                    model.setData(model.createIndex(row_idx, df.columns.get_loc('Alias')), original_alias, 2)
+                    self._update_signal_label_and_legend(signal_uid, original_alias)
 
     def _on_signal_shift_pulse_applied(self, signal_uid: str, pulse_id: str, dx: float, dy: float, source: str):
         """Create or update dedicated row when pulse mode shift is applied."""
@@ -121,18 +176,65 @@ class ShiftHandlerMixin:
         if mother_key not in self._shift_mother_original_pulse_id:
             self._shift_mother_original_pulse_id[mother_key] = row_pulse_id
 
-        # Use the true original for pulse counting
+        # Use the true original for reference
         true_original_pulse_id = self._shift_mother_original_pulse_id[mother_key]
-        pulse_count = self._count_active_pulses(true_original_pulse_id, global_pulses)
 
-        # Single pulse: use inline mode (modify expressions directly)
+        # Count pulses based on CURRENT mother state, not the original.
+        # If previous shifts already extracted pulses, the mother may now have fewer.
+        current_mother_pulse_id = df.at[mother_row_idx, 'PulseId'] if 'PulseId' in df.columns else ''
+        pulse_key = f"{signal_uid}_{pulse_id}"
+        already_tracked = pulse_key in self._shift_original_exprs
+
+        if already_tracked and not self._shift_original_exprs[pulse_key].get('inline_mode', False):
+            # This pulse already has an active dedicated row, keep using multi-pulse path
+            pulse_count = 2  # force multi-pulse path
+        else:
+            # Count from current mother state to decide inline vs new row
+            pulse_count = self._count_active_pulses(current_mother_pulse_id, global_pulses)
+
+        # Single pulse remaining: use inline mode (modify mother row directly)
         if pulse_count <= 1:
-            self._on_signal_shift_applied(signal_uid, dx, dy, source)
+            # Register tracking under pulse_key so undo can find it
+            if pulse_key not in self._shift_original_exprs:
+                self._shift_original_exprs[pulse_key] = {
+                    'x': df.at[mother_row_idx, 'x'] if 'x' in df.columns else '',
+                    'y': df.at[mother_row_idx, 'y'] if 'y' in df.columns else '',
+                    'stack': df.at[mother_row_idx, 'Stack'] if 'Stack' in df.columns else '',
+                    'original_label': getattr(original_signal, 'label', '') or getattr(original_signal, 'name', ''),
+                    'alias': '',
+                    'mother_pulse_updated': False,
+                    'inline_mode': True,
+                    'var_name': var_name,
+                    'ds_name': ds_name
+                }
+                self._shift_accumulated[pulse_key] = {'dx': 0.0, 'dy': 0.0}
+
+            self._shift_accumulated[pulse_key]['dx'] += dx
+            self._shift_accumulated[pulse_key]['dy'] += dy
+            total_dx = self._shift_accumulated[pulse_key]['dx']
+            total_dy = self._shift_accumulated[pulse_key]['dy']
+
+            new_x, new_y = self._build_offset_expressions(model, pulse_key, total_dx, total_dy)
+            self._set_row_xy(model, mother_row_idx, new_x, new_y)
+
+            # Set alias on the inline row
+            df = model.get_dataframe()
+            if 'Alias' in df.columns:
+                stored_alias = self._shift_original_exprs[pulse_key].get('alias', '')
+                if not stored_alias:
+                    mother_alias = df.at[mother_row_idx, 'Alias'] if 'Alias' in df.columns else ''
+                    stored_alias = self._generate_unique_alias(model, var_name, 'shifted', pulse_id,
+                                                               row_alias=mother_alias)
+                    self._shift_original_exprs[pulse_key]['alias'] = stored_alias
+                model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), stored_alias, 2)
+
+            # Update signal label and legend
+            stored_alias = self._shift_original_exprs[pulse_key].get('alias', '')
+            if stored_alias:
+                self._update_signal_label_and_legend(signal_uid, stored_alias)
             return
 
         # Multiple pulses: create dedicated row
-        pulse_key = f"{signal_uid}_{pulse_id}"
-
         if pulse_key not in self._shift_original_exprs:
             effective_pulse_id = row_pulse_id
             if not effective_pulse_id:
@@ -149,6 +251,7 @@ class ShiftHandlerMixin:
                 'original_label': getattr(original_signal, 'label', '') or getattr(original_signal, 'name', ''),
                 'alias': '',
                 'mother_pulse_updated': False,
+                'inline_mode': False,
                 'var_name': var_name,
                 'ds_name': ds_name
             }
@@ -188,25 +291,14 @@ class ShiftHandlerMixin:
                                                        row_alias=mother_alias)
             self._shift_original_exprs[pulse_key]['alias'] = stored_alias
 
-        original_signal.label = stored_alias
-        if hasattr(original_signal, 'lines') and original_signal.lines:
-            line = original_signal.lines[0]
-            if hasattr(line, 'set_label'):
-                line.set_label(stored_alias)
+        self._update_signal_label_and_legend(signal_uid, stored_alias)
 
         if existing_row is not None:
-            df = model.get_dataframe()
-            if 'y' in df.columns:
-                model.setData(model.createIndex(existing_row, df.columns.get_loc('y')), new_y, 2)
-            if 'x' in df.columns:
-                model.setData(model.createIndex(existing_row, df.columns.get_loc('x')), new_x, 2)
+            self._set_row_xy(model, existing_row, new_x, new_y)
         else:
             self._create_shifted_row(model, original_signal, signal_uid, pulse_id,
                                      stored_alias, new_x, new_y, pulse_key)
 
-        impl_plot = w._parser._signal_impl_plot_lut.get(signal_uid)
-        if impl_plot and original_plot:
-            w._parser.rebuild_legend(impl_plot, original_plot)
 
     def _on_signal_shift_pulse_undone(self, signal_uid: str, pulse_id: str,
                                        previous_dx: float, previous_dy: float):
@@ -218,75 +310,114 @@ class ShiftHandlerMixin:
         original_signal, original_plot = self._find_signal_in_canvas(signal_uid)
         tracking = self._shift_original_exprs.get(pulse_key, {})
         stored_alias = tracking.get('alias', '')
+        is_inline = tracking.get('inline_mode', False)
 
         if pulse_key in self._shift_accumulated:
             self._shift_accumulated[pulse_key] = {'dx': previous_dx, 'dy': previous_dy}
 
         is_final_undo = abs(previous_dx) < 1e-10 and abs(previous_dy) < 1e-10
 
-        if is_final_undo:
-            if stored_alias:
-                df = model.get_dataframe()
-                row_to_delete = self._find_row_by_alias(df, stored_alias)
-                if row_to_delete is not None:
-                    if hasattr(model, 'aliases') and stored_alias in model.aliases:
-                        model.aliases.remove(stored_alias)
-                    model.removeRows(row_to_delete, 1, QModelIndex())
+        if is_inline:
+            # Inline mode: revert changes on the mother row directly
+            df = model.get_dataframe()
+            mother_row_idx = self._find_row_by_uid_or_variable(df, signal_uid, original_signal) if original_signal else None
 
-            if original_signal:
-                df = model.get_dataframe()
-                mother_row_idx = self._find_row_by_uid_or_variable(df, signal_uid, original_signal)
-                if mother_row_idx is not None and 'PulseId' in df.columns:
-                    var_name = tracking.get('var_name', '')
-                    ds_name = tracking.get('ds_name', '')
-                    mother_key = (var_name, ds_name)
+            if is_final_undo:
+                # Restore original x/y expressions
+                if mother_row_idx is not None:
+                    self._set_row_xy(model, mother_row_idx, tracking.get('x', ''), tracking.get('y', ''))
+                    # Restore original alias
+                    df = model.get_dataframe()
+                    if 'Alias' in df.columns:
+                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), '', 2)
 
-                    # Check if there are other active shifts for this mother
-                    other_active_shifts = False
-                    for k, v in self._shift_original_exprs.items():
-                        if k != pulse_key and v.get('mother_pulse_updated', False):
-                            # Check if it's the same mother by comparing stored var_name
-                            if v.get('var_name') == var_name and v.get('ds_name') == ds_name:
-                                other_active_shifts = True
-                                break
-
-                    if not other_active_shifts and mother_key in self._shift_mother_original_pulse_id:
-                        # No other shifts, restore true original
-                        true_original = self._shift_mother_original_pulse_id[mother_key]
-                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('PulseId')), true_original, 2)
+                # Clean up mother original pulse id if no other shifts remain
+                var_name = tracking.get('var_name', '')
+                ds_name = tracking.get('ds_name', '')
+                mother_key = (var_name, ds_name)
+                if mother_key in self._shift_mother_original_pulse_id:
+                    other_active = any(
+                        v.get('mother_pulse_updated', False)
+                        and v.get('var_name') == var_name
+                        and v.get('ds_name') == ds_name
+                        for k, v in self._shift_original_exprs.items()
+                        if k != pulse_key
+                    )
+                    if not other_active:
                         del self._shift_mother_original_pulse_id[mother_key]
-                    else:
-                        # Other shifts exist, re-add this pulse to current mother PulseId list
-                        current_pulse_id = df.at[mother_row_idx, 'PulseId']
-                        restored = self._add_pulse_to_list(current_pulse_id, pulse_id)
-                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('PulseId')), restored, 2)
 
+                if pulse_key in self._shift_original_exprs:
+                    self._shift_original_exprs[pulse_key]['mother_pulse_updated'] = False
+            else:
+                # Partial undo: update expressions with remaining offset
+                new_x, new_y = self._build_offset_expressions(model, pulse_key, previous_dx, previous_dy)
+                if mother_row_idx is not None:
+                    self._set_row_xy(model, mother_row_idx, new_x, new_y)
+        else:
+            # Multi-pulse mode: dedicated row exists
+            if is_final_undo:
+                if stored_alias:
+                    df = model.get_dataframe()
+                    row_to_delete = self._find_row_by_alias(df, stored_alias)
+                    if row_to_delete is not None:
+                        if hasattr(model, 'aliases') and stored_alias in model.aliases:
+                            model.aliases.remove(stored_alias)
+                        model.removeRows(row_to_delete, 1, QModelIndex())
+
+                if original_signal:
+                    df = model.get_dataframe()
+                    mother_row_idx = self._find_row_by_uid_or_variable(df, signal_uid, original_signal)
+                    if mother_row_idx is not None and 'PulseId' in df.columns:
+                        var_name = tracking.get('var_name', '')
+                        ds_name = tracking.get('ds_name', '')
+                        mother_key = (var_name, ds_name)
+
+                        # Check if there are other active shifts for this mother
+                        other_active_shifts = any(
+                            v.get('mother_pulse_updated', False)
+                            and v.get('var_name') == var_name
+                            and v.get('ds_name') == ds_name
+                            for k, v in self._shift_original_exprs.items()
+                            if k != pulse_key
+                        )
+
+                        if not other_active_shifts and mother_key in self._shift_mother_original_pulse_id:
+                            # No other shifts, restore true original
+                            true_original = self._shift_mother_original_pulse_id[mother_key]
+                            model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('PulseId')), true_original, 2)
+                            del self._shift_mother_original_pulse_id[mother_key]
+                        else:
+                            # Other shifts exist, re-add this pulse to current mother PulseId list
+                            current_pulse_id = df.at[mother_row_idx, 'PulseId']
+                            restored = self._add_pulse_to_list(current_pulse_id, pulse_id)
+                            model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('PulseId')), restored, 2)
+
+                if pulse_key in self._shift_original_exprs:
+                    self._shift_original_exprs[pulse_key]['mother_pulse_updated'] = False
+            else:
+                new_x, new_y = self._build_offset_expressions(model, pulse_key, previous_dx, previous_dy)
+                if stored_alias:
+                    df = model.get_dataframe()
+                    existing_row = self._find_row_by_alias(df, stored_alias)
+                    if existing_row is not None:
+                        self._set_row_xy(model, existing_row, new_x, new_y)
+
+        # Common: restore label on final undo, rebuild legend always
+        if is_final_undo:
             original_label = tracking.get('original_label', '')
             if original_signal and original_label:
-                original_signal.label = original_label
-                if hasattr(original_signal, 'lines') and original_signal.lines:
-                    line = original_signal.lines[0]
-                    if hasattr(line, 'set_label'):
-                        line.set_label(original_label)
-
-            if pulse_key in self._shift_original_exprs:
-                self._shift_original_exprs[pulse_key]['mother_pulse_updated'] = False
-        else:
-            new_x, new_y = self._build_offset_expressions(model, pulse_key, previous_dx, previous_dy)
-
-            if stored_alias:
-                df = model.get_dataframe()
-                existing_row = self._find_row_by_alias(df, stored_alias)
-                if existing_row is not None:
-                    if 'y' in df.columns:
-                        model.setData(model.createIndex(existing_row, df.columns.get_loc('y')), new_y, 2)
-                    if 'x' in df.columns:
-                        model.setData(model.createIndex(existing_row, df.columns.get_loc('x')), new_x, 2)
-
-        if original_signal and w and original_plot:
-            impl_plot = w._parser._signal_impl_plot_lut.get(signal_uid)
-            if impl_plot:
-                w._parser.rebuild_legend(impl_plot, original_plot)
+                self._update_signal_label_and_legend(signal_uid, original_label)
+            # Clean up tracking so future shifts re-evaluate inline vs multi-pulse
+            self._shift_original_exprs.pop(pulse_key, None)
+            self._shift_accumulated.pop(pulse_key, None)
+        elif original_signal:
+            # Partial undo: just rebuild legend with current state
+            w = self.canvasStack.currentWidget()
+            original_signal_ref, original_plot = self._find_signal_in_canvas(signal_uid)
+            if w and original_plot:
+                impl_plot = w._parser._signal_impl_plot_lut.get(signal_uid)
+                if impl_plot:
+                    w._parser.rebuild_legend(impl_plot, original_plot)
 
         self.canvasStack.refreshLinks()
 
@@ -359,14 +490,7 @@ class ShiftHandlerMixin:
         original_y = df.at[row_idx, 'y'] if 'y' in df.columns else ''
         original_stack = df.at[row_idx, 'Stack'] if 'Stack' in df.columns else ''
 
-        bp = getattr(model, 'blueprint', {}) or {}
-        default_x = (bp.get('x') or {}).get('default') or '${self}.time'
-        default_y = (bp.get('y') or {}).get('default') or '${self}.data'
-        base_x = original_x if original_x else default_x
-        base_y = original_y if original_y else default_y
-
-        new_x = self._format_offset_expr(base_x, dx) if abs(dx) > 1e-10 else (original_x or '')
-        new_y = self._format_offset_expr(base_y, dy) if abs(dy) > 1e-10 else (original_y or '')
+        new_x, new_y = self._build_offset_expressions_from(model, original_x, original_y, dx, dy)
         row_alias = df.at[row_idx, 'Alias'] if 'Alias' in df.columns else ''
         new_alias = self._generate_unique_alias(model, var_name, 'shifted', row_alias=row_alias)
 
@@ -386,7 +510,7 @@ class ShiftHandlerMixin:
             elif col_name == 'Stack':
                 val = original_stack
             elif col_name not in ['Status', 'Output Datatype']:
-                val = df.at[row_idx, col_idx]
+                val = df.at[row_idx, col_name]
             else:
                 continue
             if val is not None:
@@ -555,17 +679,13 @@ class ShiftHandlerMixin:
         return None
 
     def _build_offset_expressions(self, model, key: str, total_dx: float, total_dy: float):
-        """Build x/y expressions with the accumulated offset."""
-        bp = getattr(model, 'blueprint', {}) or {}
-        default_x = (bp.get('x') or {}).get('default') or '${self}.time'
-        default_y = (bp.get('y') or {}).get('default') or '${self}.data'
-        original_x = self._shift_original_exprs[key].get('x', '')
-        original_y = self._shift_original_exprs[key].get('y', '')
-        base_x = original_x if original_x else default_x
-        base_y = original_y if original_y else default_y
-        new_x = self._format_offset_expr(base_x, total_dx) if abs(total_dx) > 1e-10 else (original_x or '')
-        new_y = self._format_offset_expr(base_y, total_dy) if abs(total_dy) > 1e-10 else (original_y or '')
-        return new_x, new_y
+        """Build x/y expressions with the accumulated offset (reads originals from tracking)."""
+        tracking = self._shift_original_exprs.get(key)
+        if tracking is None:
+            return '', ''
+        original_x = tracking.get('x', '')
+        original_y = tracking.get('y', '')
+        return self._build_offset_expressions_from(model, original_x, original_y, total_dx, total_dy)
 
     def _create_shifted_row(self, model, signal, signal_uid: str, pulse_id: str,
                             alias: str, new_x: str, new_y: str, pulse_key: str):
@@ -575,7 +695,10 @@ class ShiftHandlerMixin:
         if mother_row_idx is None:
             return
 
-        original_stack = self._shift_original_exprs[pulse_key].get('stack', '')
+        # Read Stack directly from the current mother row (most up-to-date)
+        mother_stack = df.at[mother_row_idx, 'Stack'] if 'Stack' in df.columns else ''
+        # Fall back to tracking dict if mother has empty stack but tracking stored one
+        original_stack = mother_stack if mother_stack else self._shift_original_exprs.get(pulse_key, {}).get('stack', '')
         new_row_idx = mother_row_idx + 1
         model.insertRows(new_row_idx, 1, QModelIndex())
 
