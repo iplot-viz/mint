@@ -94,11 +94,15 @@ class MTPulseId(MTGenericAccessMode):
         super().from_dict(contents)
 
     def on_search_pulse(self):
-        self.selectPulseDialog.flag = "button"
+        self.selectPulseDialog.flag = "pulse_id"
+        self.selectPulseDialog.set_selection_mode(single=False, require_timestamps=False)
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 
     def append_pulse(self, pulses):
+        # Only process if opened from PulseId
+        if self.selectPulseDialog.flag != "pulse_id":
+            return
         cur_pulses = self.pulseNumber.text()
         pulse_set = set(cur_pulses.replace(" ", "").split(",")) if cur_pulses else set()
 

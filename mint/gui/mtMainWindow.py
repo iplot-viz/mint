@@ -41,13 +41,16 @@ from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
+from mint.gui.shift_handlers import ShiftHandlerMixin
 
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
 
 
-class MTMainWindow(IplotQtMainWindow):
+
+
+class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def __init__(self,
                  canvas: Canvas,
@@ -141,6 +144,8 @@ class MTMainWindow(IplotQtMainWindow):
             self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
+        self._connect_shift_signals()
+        self._init_shift_storage()
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -238,6 +243,7 @@ class MTMainWindow(IplotQtMainWindow):
         box.setWindowTitle("Table Build Failed")
         box.setText(message)
         box.exec_()
+
 
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
@@ -711,7 +717,7 @@ class MTMainWindow(IplotQtMainWindow):
                     te != signal.ts_end,
                     signal.envelope,
                     signal.x_expr != '${self}.time',
-                    signal.y_expr != '${self}.data_store[1]',
+                    signal.y_expr != '${self}.data',
                     signal.z_expr != '${self}.data_store[2]',
                     len(signal.children) > 1  # Only support one level processing
                 )

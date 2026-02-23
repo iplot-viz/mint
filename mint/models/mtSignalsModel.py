@@ -411,6 +411,7 @@ class MTSignalsModel(QAbstractItemModel):
     def init_create_signals(self):
         try:
             self._signal_stack_ids.clear()
+            self.aliases.clear()
             yield None
         finally:
             self._signal_stack_ids.clear()
