@@ -435,7 +435,7 @@ class ShiftHandlerMixin:
         if not original_signal:
             return
 
-        if getattr(original_signal, 'envelope', False):
+        if original_signal.envelope:
             logger.warning("Shift is not supported for envelope signals.")
             return
 
