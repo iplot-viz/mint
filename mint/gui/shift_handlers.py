@@ -4,6 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex
 
+import iplotLogging.setupLogger as Sl
+
+logger = Sl.get_logger(__name__)
+
 if TYPE_CHECKING:
     from iplotlib.core.canvas import Canvas
 
@@ -429,6 +433,10 @@ class ShiftHandlerMixin:
 
         original_signal, original_plot = self._find_signal_in_canvas(signal_uid)
         if not original_signal:
+            return
+
+        if getattr(original_signal, 'envelope', False):
+            logger.warning("Shift is not supported for envelope signals.")
             return
 
         if duplicate:
