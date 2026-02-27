@@ -114,7 +114,6 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.form.layout().addRow(QLabel("To time", parent=self.form), toTimeLayout)
         self.form.layout().addRow(QLabel("From pulse", parent=self.form), pulseLayout)
 
-
     def properties(self):
         return {
             "ts_start": self.model.stringList()[0].split(".")[0],
@@ -122,6 +121,12 @@ class MTAbsoluteTime(MTGenericAccessMode):
             "ts_ns_start": self.model.stringList()[2],
             "ts_ns_end": self.model.stringList()[3]
         }
+
+    def set_valid_date(self, valid: bool):
+        color = "white" if valid else "red"
+        style = f"QDateTimeEdit {{background : {color}; }}"
+        self.toTime.setStyleSheet(style)
+        self.fromTime.setStyleSheet(style)
 
     def from_dict(self, contents: dict):
         self.mapper.model().setStringList([contents.get("ts_start"),
