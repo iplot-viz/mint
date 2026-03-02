@@ -216,6 +216,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
+        self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
@@ -608,6 +609,21 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
 
+    def export_file(self):
+        file, export_filter = QFileDialog.getSaveFileName(self,
+                                                          "Export file as ..",
+                                                          dir=self._data_export_dir,
+                                                          filter="Parquet (*.parquet);;HDF5 (*.hdf5)")
+        if not file:
+            return
+
+        ext = export_filter.split("*.")[-1].rstrip(")")
+        if not file.endswith(f'.{ext}'):
+            file += f'.{ext}'
+
+        self._data_export_dir = os.path.dirname(file)
+        self.exportCfgWidget.ui.pathLineEdit.setText(file)
+
     def on_export_started(self, data: dict):
         self.exportCfgWidget.hide()
         logger.warning(f"Export will be performed using the global time settings. Custom time and processing columns "
@@ -615,15 +631,29 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         ts, te = self.dataRangeSelector.get_time_range()
         pulse_number = self.dataRangeSelector.get_pulse_number()
-        export_format = data['format']
+        export_format = data['format'].split(".")[-1]
         chunks = data['chunks']
         output_path = data['output_path']
 
-        table = self.sigCfgWidget.model.export_information()
+        if not output_path or export_format not in ["parquet", "hdf5"]:
+            self.show_popup_msg("Invalid export configuration",
+                                "Please provide a valid output path and select a supported export format (parquet or hdf5)",
+                                QMessageBox.Icon.Critical)
+            self.exportCfgWidget.ui.pathLineEdit.clear()
+            self.indicate_ready()
+            return
+
+        table, errors = self.sigCfgWidget.model.export_information()
         self.indicate_busy('Exporting canvas information...')
 
-        if table.empty:
+        if table.empty or errors:
             logger.warning("No data available to export")
+            self.show_popup_msg("No data available to export",
+                                "Data export requires:\n"
+                                "- No active processing\n"
+                                "- Non-empty stacks\n"
+                                "- No custom time", QMessageBox.Icon.Critical)
+            self.exportCfgWidget.ui.pathLineEdit.clear()
             self.indicate_ready()
             return
 
@@ -637,23 +667,44 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
                 continue
 
-            # Check for pulse
+            # Pulse mode
             if pulse_number is not None:
-                result = conn.get_pulse_info(pulse_number[0])
-                ts_str = f"{pd.to_datetime(result.timeFrom)}"
-                te_str = f"{pd.to_datetime(result.timeTo)}"
-            else:
-                ts_str = f"{pd.to_datetime(ts)}"
-                te_str = f"{pd.to_datetime(te)}"
+                for pulse in pulse_number:
+                    result = conn.get_pulse_info(pulse)
+                    ts_str = f"{result.timeFrom}"
+                    te_str = f"{result.timeTo}"
+                    ts_iso = pd.to_datetime(result.timeFrom).isoformat()
 
-            # Use of export data script
-            valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format, startTime=ts_str,
-                                 endTime=te_str, outputFolder=output_path, chunkS=chunks)
-            if valid:
-                logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
-            else:
-                logger.info(f"Export failed for data source: {ds_name}")
+                    original_path = Path(output_path)
+                    valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
+                    new_path = original_path.with_name(valid_name)
 
+                    # Use of export data script
+                    valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                         startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                    if valid:
+                        logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                    else:
+                        logger.info(f"Export failed for data source: {ds_name}")
+            else:
+                ts_str = f"{ts}"
+                te_str = f"{te}"
+
+                original_path = Path(output_path)
+                valid_name = f"{ds_name}_{original_path.stem}{original_path.suffix}"
+                new_path = original_path.with_name(valid_name)
+
+                # Use of export data script
+                valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                     startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                if valid:
+                    logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                else:
+                    logger.info(f"Export failed for data source: {ds_name}")
+
+        self.show_popup_msg("Export completed",
+                            "The data export process finished successfully", QMessageBox.Icon.Information)
+        self.exportCfgWidget.ui.pathLineEdit.clear()
         self.indicate_ready()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -897,3 +948,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 columns=['DS', 'Variable', 'Stack'])
         self.sigCfgWidget.append_dataframe(new_data)
         self.draw_clicked()
+
+    def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
+        box = QMessageBox()
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.exec_()

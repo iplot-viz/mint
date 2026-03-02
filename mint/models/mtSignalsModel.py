@@ -838,19 +838,22 @@ class MTSignalsModel(QAbstractItemModel):
 
     def export_information(self):
         # Discard if the stack is empty or processing columns are used
-        table = self._table[
-            (self._table['Stack'] != "") &
-            (self._table[['x', 'y', 'z']] == "").all(axis=1) &
-            (self._table[['StartTime', 'EndTime']] == "").all(axis=1)
-            ]
+        signal_table = self._table[self._table['Stack'] != ""]
+        errors = []
+
+        # Active processing
+        if not (signal_table[['x', 'y', 'z']] == "").all(axis=1).all():
+            errors.append("No active processing")
+
+        # Modified dates
+        if not (self._table[['StartTime', 'EndTime']] == "").all(axis=1).all():
+            errors.append("StartTime/EndTime must not be modified")
 
         # Filter column variable for processing due to for the moment is discarded
         p = Parser()
-        mask = []
-        for val in table['Variable']:
+        for val in signal_table['Variable']:
             p.set_expression(val)
-            mask.append(not p.is_valid)
+            if p.is_valid:
+                errors.append("Invalid expression")
 
-        filter_table = table[mask]
-
-        return filter_table
+        return signal_table, errors
