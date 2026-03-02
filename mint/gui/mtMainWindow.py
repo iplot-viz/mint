@@ -48,8 +48,6 @@ from iplotLogging import setupLogger as setupLog
 logger = setupLog.get_logger(__name__)
 
 
-
-
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def __init__(self,
@@ -218,6 +216,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
+        self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
         self.resize(1920, 1080)
 
@@ -237,13 +236,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     @staticmethod
     def on_table_abort(message):
         logger.error(message)
-
         box = QMessageBox()
         box.setIcon(QMessageBox.Icon.Critical)
         box.setWindowTitle("Table Build Failed")
         box.setText(message)
         box.exec_()
-
 
     def detach(self):
         if self.toolBar.detachAction.text() == 'Detach':
@@ -612,6 +609,21 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
 
+    def export_file(self):
+        file, export_filter = QFileDialog.getSaveFileName(self,
+                                                          "Export file as ..",
+                                                          dir=self._data_export_dir,
+                                                          filter="Parquet (*.parquet);;HDF5 (*.hdf5)")
+        if not file:
+            return
+
+        ext = export_filter.split("*.")[-1].rstrip(")")
+        if not file.endswith(f'.{ext}'):
+            file += f'.{ext}'
+
+        self._data_export_dir = os.path.dirname(file)
+        self.exportCfgWidget.ui.pathLineEdit.setText(file)
+
     def on_export_started(self, data: dict):
         self.exportCfgWidget.hide()
         logger.warning(f"Export will be performed using the global time settings. Custom time and processing columns "
@@ -619,15 +631,29 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         ts, te = self.dataRangeSelector.get_time_range()
         pulse_number = self.dataRangeSelector.get_pulse_number()
-        export_format = data['format']
+        export_format = data['format'].split(".")[-1]
         chunks = data['chunks']
         output_path = data['output_path']
 
-        table = self.sigCfgWidget.model.export_information()
+        if not output_path or export_format not in ["parquet", "hdf5"]:
+            self.show_popup_msg("Invalid export configuration",
+                                "Please provide a valid output path and select a supported export format (parquet or hdf5)",
+                                QMessageBox.Icon.Critical)
+            self.exportCfgWidget.ui.pathLineEdit.clear()
+            self.indicate_ready()
+            return
+
+        table, errors = self.sigCfgWidget.model.export_information()
         self.indicate_busy('Exporting canvas information...')
 
-        if table.empty:
+        if table.empty or errors:
             logger.warning("No data available to export")
+            self.show_popup_msg("No data available to export",
+                                "Data export requires:\n"
+                                "- No active processing\n"
+                                "- Non-empty stacks\n"
+                                "- No custom time", QMessageBox.Icon.Critical)
+            self.exportCfgWidget.ui.pathLineEdit.clear()
             self.indicate_ready()
             return
 
@@ -641,23 +667,44 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
                 continue
 
-            # Check for pulse
+            # Pulse mode
             if pulse_number is not None:
-                result = conn.get_pulse_info(pulse_number[0])
-                ts_str = f"{pd.to_datetime(result.timeFrom)}"
-                te_str = f"{pd.to_datetime(result.timeTo)}"
-            else:
-                ts_str = f"{pd.to_datetime(ts)}"
-                te_str = f"{pd.to_datetime(te)}"
+                for pulse in pulse_number:
+                    result = conn.get_pulse_info(pulse)
+                    ts_str = f"{result.timeFrom}"
+                    te_str = f"{result.timeTo}"
+                    ts_iso = pd.to_datetime(result.timeFrom).isoformat()
 
-            # Use of export data script
-            valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format, startTime=ts_str,
-                                 endTime=te_str, outputFolder=output_path, chunkS=chunks)
-            if valid:
-                logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
-            else:
-                logger.info(f"Export failed for data source: {ds_name}")
+                    original_path = Path(output_path)
+                    valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
+                    new_path = original_path.with_name(valid_name)
 
+                    # Use of export data script
+                    valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                         startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                    if valid:
+                        logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                    else:
+                        logger.info(f"Export failed for data source: {ds_name}")
+            else:
+                ts_str = f"{ts}"
+                te_str = f"{te}"
+
+                original_path = Path(output_path)
+                valid_name = f"{ds_name}_{original_path.stem}{original_path.suffix}"
+                new_path = original_path.with_name(valid_name)
+
+                # Use of export data script
+                valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                     startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                if valid:
+                    logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                else:
+                    logger.info(f"Export failed for data source: {ds_name}")
+
+        self.show_popup_msg("Export completed",
+                            "The data export process finished successfully", QMessageBox.Icon.Information)
+        self.exportCfgWidget.ui.pathLineEdit.clear()
         self.indicate_ready()
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -684,6 +731,19 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         else:
             ts, te = self.dataRangeSelector.get_time_range()
 
+        # Check dates
+        mode = self.dataRangeSelector.accessModes[1 if pulse_number else 0]
+        valid = True
+        if te != '' and ts != '' and te <= ts:
+            valid = False
+            mode.set_valid_date(False)
+            start = pd.to_datetime(ts) if pulse_number is None else ts
+            end = pd.to_datetime(te) if pulse_number is None else te
+            logger.warning(f"Chronology error. EndTime: {end} must be later than StartTime: {start}")
+            # self.on_table_abort()
+        else:
+            mode.set_valid_date(True)
+
         self.canvas.auto_refresh = refresh_interval
 
         da_params = dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number)
@@ -692,75 +752,78 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Get signals in order to preserve markers
         previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
 
-        for waypt in self.sigCfgWidget.build(**da_params):
-            if not waypt.func and not waypt.args:
-                continue
+        if valid:
+            for waypt in self.sigCfgWidget.build(**da_params):
+                if not waypt.func and not waypt.args:
+                    continue
 
-            if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
+                if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
+                    signal = waypt.func(*waypt.args, **waypt.kwargs)
+                    if not stream:
+                        self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+                    continue
+
                 signal = waypt.func(*waypt.args, **waypt.kwargs)
+                if not signal.label:
+                    continue
+
+                signal.data_access_enabled = False if self.canvas.streaming else True
+                signal.hi_precision_data = True if self.canvas.streaming else False
                 if not stream:
                     self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-                continue
+                else:
+                    # In the case of streaming, only simple variables are kept
+                    conditions = (
+                        ts != signal.ts_start,
+                        te != signal.ts_end,
+                        signal.envelope,
+                        signal.x_expr != '${self}.time',
+                        signal.y_expr != '${self}.data',
+                        signal.z_expr != '${self}.data_store[2]',
+                        len(signal.children) > 1  # Only support one level processing
+                    )
+                    if any(conditions):
+                        signal.stream_valid = False
 
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-            if not signal.label:
-                continue
+                if signal.status_info.result == 'Fail':
+                    continue
 
-            signal.data_access_enabled = False if self.canvas.streaming else True
-            signal.hi_precision_data = True if self.canvas.streaming else False
-            if not stream:
-                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
-            else:
-                # In the case of streaming, only simple variables are kept
-                conditions = (
-                    ts != signal.ts_start,
-                    te != signal.ts_end,
-                    signal.envelope,
-                    signal.x_expr != '${self}.time',
-                    signal.y_expr != '${self}.data',
-                    signal.z_expr != '${self}.data_store[2]',
-                    len(signal.children) > 1  # Only support one level processing
-                )
-                if any(conditions):
-                    signal.stream_valid = False
+                # Preserve markers
+                prev_signal = previous_signals.get(signal.uid)
+                if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
+                    signal.markers_list = prev_signal.markers_list
 
-            if signal.status_info.result == 'Fail':
-                continue
+                if waypt.col_num not in plan:
+                    plan[waypt.col_num] = {}
 
-            # Preserve markers
-            prev_signal = previous_signals.get(signal.uid)
-            if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
-                signal.markers_list = prev_signal.markers_list
+                if waypt.row_num not in plan[waypt.col_num]:
+                    plan[waypt.col_num][waypt.row_num] = {"row_span": waypt.row_span, "col_span": waypt.col_span,
+                                                          "signals": defaultdict(list),
+                                                          "ts_start": waypt.ts_start,
+                                                          "ts_end": waypt.ts_end,
+                                                          "x_axis_date": x_axis_date,
+                                                          "x_axis_follow": x_axis_follow,
+                                                          "x_axis_window": x_axis_window,
+                                                          "streaming": self.canvas.streaming
+                                                          }
 
-            if waypt.col_num not in plan:
-                plan[waypt.col_num] = {}
+                else:
+                    existing = plan[waypt.col_num][waypt.row_num]
+                    existing["row_span"] = waypt.row_span if waypt.row_span > existing["row_span"] else existing[
+                        "row_span"]
+                    existing["col_span"] = waypt.col_span if waypt.col_span > existing["col_span"] else existing[
+                        "col_span"]
+                    if waypt.ts_start is not None:
+                        if existing["ts_start"] is None or waypt.ts_start < existing["ts_start"]:
+                            existing["ts_start"] = waypt.ts_start
+                    if waypt.ts_end is not None:
+                        if existing["ts_end"] is None or waypt.ts_end > existing["ts_end"]:
+                            existing["ts_end"] = waypt.ts_end
 
-            if waypt.row_num not in plan[waypt.col_num]:
-                plan[waypt.col_num][waypt.row_num] = {"row_span": waypt.row_span, "col_span": waypt.col_span,
-                                                      "signals": defaultdict(list),
-                                                      "ts_start": waypt.ts_start,
-                                                      "ts_end": waypt.ts_end,
-                                                      "x_axis_date": x_axis_date,
-                                                      "x_axis_follow": x_axis_follow,
-                                                      "x_axis_window": x_axis_window,
-                                                      "streaming": self.canvas.streaming
-                                                      }
-
-            else:
-                existing = plan[waypt.col_num][waypt.row_num]
-                existing["row_span"] = waypt.row_span if waypt.row_span > existing["row_span"] else existing["row_span"]
-                existing["col_span"] = waypt.col_span if waypt.col_span > existing["col_span"] else existing["col_span"]
-                if waypt.ts_start is not None:
-                    if existing["ts_start"] is None or waypt.ts_start < existing["ts_start"]:
-                        existing["ts_start"] = waypt.ts_start
-                if waypt.ts_end is not None:
-                    if existing["ts_end"] is None or waypt.ts_end > existing["ts_end"]:
-                        existing["ts_end"] = waypt.ts_end
-
-            plan[waypt.col_num][waypt.row_num]["signals"][waypt.stack_num].append(signal)
-            # Set end time to avoid None values for EndTime in case of pulses
-            if plan[waypt.col_num][waypt.row_num]["ts_end"] is None:
-                plan[waypt.col_num][waypt.row_num]["ts_end"] = signal.data_xrange[1]
+                plan[waypt.col_num][waypt.row_num]["signals"][waypt.stack_num].append(signal)
+                # Set end time to avoid None values for EndTime in case of pulses
+                if plan[waypt.col_num][waypt.row_num]["ts_end"] is None:
+                    plan[waypt.col_num][waypt.row_num]["ts_end"] = signal.data_xrange[1]
 
         self.indicate_busy('Retrieving data...')
 
@@ -885,3 +948,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 columns=['DS', 'Variable', 'Stack'])
         self.sigCfgWidget.append_dataframe(new_data)
         self.draw_clicked()
+
+    def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
+        box = QMessageBox()
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(message)
+        box.exec_()

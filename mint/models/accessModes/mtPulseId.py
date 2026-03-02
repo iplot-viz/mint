@@ -84,6 +84,12 @@ class MTPulseId(MTGenericAccessMode):
             "t_end": self.model.stringList()[3]
         }
 
+    def set_valid_date(self, valid: bool):
+        color = "white" if valid else "red"
+        style = f"QLineEdit {{background : {color}; }}"
+        self.startTime.setStyleSheet(style)
+        self.endTime.setStyleSheet(style)
+
     def from_dict(self, contents: dict):
         self.mapper.model().setStringList(
             [",".join(contents.get("pulse_nb") or []),

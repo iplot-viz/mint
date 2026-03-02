@@ -4,6 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex
 
+import iplotLogging.setupLogger as Sl
+
+logger = Sl.get_logger(__name__)
+
 if TYPE_CHECKING:
     from iplotlib.core.canvas import Canvas
 
@@ -431,6 +435,10 @@ class ShiftHandlerMixin:
         if not original_signal:
             return
 
+        if original_signal.envelope:
+            logger.warning("Shift is not supported for envelope signals.")
+            return
+
         if duplicate:
             self._handle_dist_duplicate(model, original_signal, signal_uid, dx, dy)
             self.canvasStack.refreshLinks()
@@ -537,7 +545,7 @@ class ShiftHandlerMixin:
         return None, None
 
     def _find_row_by_uid_or_variable(self, df, signal_uid: str, signal=None):
-        """Find row index by uid, falling back to Variable/DS match."""
+        """Find row index by uid, falling back to Variable/DS/PulseId match."""
         if 'uid' in df.columns:
             matches = df.index[df['uid'] == signal_uid].tolist()
             if matches:
@@ -545,9 +553,23 @@ class ShiftHandlerMixin:
         if signal and 'Variable' in df.columns and 'DS' in df.columns:
             sig_name = getattr(signal, 'name', '')
             sig_ds = getattr(signal, 'data_source', '')
-            matches = df.index[(df['Variable'] == sig_name) & (df['DS'] == sig_ds)].tolist()
-            if matches:
-                return matches[0]
+            var_ds_matches = df.index[(df['Variable'] == sig_name) & (df['DS'] == sig_ds)].tolist()
+
+            # If multiple rows match Variable/DS, use pulse_nb to find the correct one
+            if len(var_ds_matches) > 1 and 'PulseId' in df.columns:
+                sig_pulse = str(getattr(signal, 'pulse_nb', '') or '').strip()
+                if sig_pulse:
+                    for idx in var_ds_matches:
+                        row_pulse_id = str(df.at[idx, 'PulseId'] or '').strip()
+                        # Check if the signal's pulse is contained in this row's PulseId
+                        if sig_pulse in row_pulse_id.split(',') or sig_pulse == row_pulse_id:
+                            return idx
+                        # Also check for pulse
+                        if any(p.strip().endswith(f'@{sig_pulse}') for p in row_pulse_id.split(',')):
+                            return idx
+
+            if var_ds_matches:
+                return var_ds_matches[0]
         return None
 
     def _generate_unique_alias(self, model, var_name: str, prefix: str, pulse_id: str = None,
