@@ -76,6 +76,8 @@ class MTSignalsModel(QAbstractItemModel):
         self._table = pd.DataFrame(columns=column_names)
         self._table_fails = pd.DataFrame(columns=column_names)
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        self._alias_list = set()
+        self._alias_checked = False
 
         self.data_sources = AppDataAccess.da.get_connected_data_source_names()
         self.aliases = []
@@ -154,7 +156,6 @@ class MTSignalsModel(QAbstractItemModel):
             return False
 
         if col_name != 'Comment':
-
             # Filter actual and literal newline/tab on interactive edit
             if not self._fast_mode and isinstance(value, str):
                 # replace real CR/LF and tabs
@@ -191,7 +192,8 @@ class MTSignalsModel(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if index.isValid():
-            if self._table.columns[index.column()] != 'Status' and self._table.columns[index.column()] != 'Output Datatype':
+            if self._table.columns[index.column()] != 'Status' and self._table.columns[
+                index.column()] != 'Output Datatype':
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
@@ -363,6 +365,19 @@ class MTSignalsModel(QAbstractItemModel):
     def import_json(self, input_file):
         self.import_dict(json.loads(input_file))
 
+    def check_alias_fetch(self):
+        self._alias_checked = True
+
+        table = self._table[self._table['Stack'] != ""]
+        p = Parser()
+        for row in range(table.shape[0]):
+            for col in ['Variable', 'x', 'y', 'z']:
+                variable = p.get_var_expression(table.iloc[row][col])
+                if variable:
+                    for var in variable:
+                        if var != 'self':
+                            self._alias_list.add(var)
+
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
@@ -370,15 +385,19 @@ class MTSignalsModel(QAbstractItemModel):
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
             if fetch_data:
+                if not self._alias_checked:
+                    self.check_alias_fetch()
+
                 # Read alias and stack from the table row
                 alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
                 stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
                 alias = self._table.at[row_idx, alias_col]
                 stack_val = self._table.at[row_idx, stack_col]
 
-                # Skip query if alias or stack is missing
-                if not alias and not stack_val:
-                    logger.debug(f"Row {row_idx}: skip query (missing alias and stack)")
+                # Skip query if alias and stack is missing
+                # Skip rows with no stack unless their alias is used in another row's processing
+                if not stack_val and alias not in self._alias_list:
+                    logger.debug(f"Row {row_idx} skipped (no stack and alias {alias} is not referenced)")
                     return
 
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
@@ -838,22 +857,32 @@ class MTSignalsModel(QAbstractItemModel):
 
     def export_information(self):
         # Discard if the stack is empty or processing columns are used
-        signal_table = self._table[self._table['Stack'] != ""]
+        table = self._table[self._table['Stack'] != ""]
         errors = []
 
-        # Active processing
-        if not (signal_table[['x', 'y', 'z']] == "").all(axis=1).all():
-            errors.append("No active processing")
+        # Active processing check
+        if not (table[['x', 'y', 'z']] == "").all(axis=1).all():
+            errors.append("Processing in x/y/z columns is not supported for export")
 
-        # Modified dates
-        if not (self._table[['StartTime', 'EndTime']] == "").all(axis=1).all():
-            errors.append("StartTime/EndTime must not be modified")
+        # Modified dates check
+        if not (table[['StartTime', 'EndTime']] == "").all(axis=1).all():
+            errors.append("Custom StartTime/EndTime is not supported for export")
+
+        # Filter table
+        filter_table = table[
+            (table[['x', 'y', 'z']] == "").all(axis=1) &
+            (table[['StartTime', 'EndTime']] == "").all(axis=1)
+            ]
 
         # Filter column variable for processing due to for the moment is discarded
         p = Parser()
-        for val in signal_table['Variable']:
+        mask = []
+        for val in filter_table['Variable']:
             p.set_expression(val)
             if p.is_valid:
-                errors.append("Invalid expression")
+                errors.append("Processing expression in Variable column is not supported for export")
+            mask.append(not p.is_valid)
 
-        return signal_table, errors
+        result_table = filter_table[mask]
+
+        return result_table, errors

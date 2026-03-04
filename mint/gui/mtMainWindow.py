@@ -392,6 +392,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Clear markers table before importing new signals
         self.qtcanvas._marker_window.clear_info()
 
+        # Clear alias list to check for fetches row
+        self.sigCfgWidget.model._alias_list.clear()
+        self.sigCfgWidget.model._alias_checked = False
+
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         valid_signal = False
         for i, waypt in enumerate(path):
@@ -613,7 +617,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file, export_filter = QFileDialog.getSaveFileName(self,
                                                           "Export file as ..",
                                                           dir=self._data_export_dir,
-                                                          filter="Parquet (*.parquet);;HDF5 (*.hdf5)")
+                                                          filter="HDF5 (*.hdf5);;Parquet (*.parquet)")
         if not file:
             return
 
@@ -646,13 +650,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         table, errors = self.sigCfgWidget.model.export_information()
         self.indicate_busy('Exporting canvas information...')
 
-        if table.empty or errors:
-            logger.warning("No data available to export")
-            self.show_popup_msg("No data available to export",
-                                "Data export requires:\n"
-                                "- No active processing\n"
-                                "- Non-empty stacks\n"
-                                "- No custom time", QMessageBox.Icon.Critical)
+        if table.empty:
+            error_details = "\n".join(f"- {e}" for e in errors)
+            logger.warning("Export failed: no data available to export")
+            self.show_popup_msg("Export failed: no data available to export",
+                                f"No data could be exported due to:\n{error_details}",
+                                QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
             self.indicate_ready()
             return
@@ -674,6 +677,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     ts_str = f"{result.timeFrom}"
                     te_str = f"{result.timeTo}"
                     ts_iso = pd.to_datetime(result.timeFrom).isoformat()
+                    ts_iso = ts_iso.replace(':', '-')
 
                     original_path = Path(output_path)
                     valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
@@ -702,8 +706,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 else:
                     logger.info(f"Export failed for data source: {ds_name}")
 
-        self.show_popup_msg("Export completed",
-                            "The data export process finished successfully", QMessageBox.Icon.Information)
+        if errors:
+            error_details = "\n".join(f"- {e}" for e in errors)
+            logger.warning("Export completed with issues:\n%s", error_details)
+            self.show_popup_msg("Export completed with issues",
+                                f"The following conditions prevented a full export:\n{error_details}",
+                                QMessageBox.Icon.Information)
+        else:
+            self.show_popup_msg("Export completed",
+                                "The data export process finished successfully", QMessageBox.Icon.Information)
         self.exportCfgWidget.ui.pathLineEdit.clear()
         self.indicate_ready()
 
@@ -751,6 +762,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Get signals in order to preserve markers
         previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
+
+        # Clear alias list to check for fetches row
+        self.sigCfgWidget.model._alias_list.clear()
+        self.sigCfgWidget.model._alias_checked = False
 
         if valid:
             for waypt in self.sigCfgWidget.build(**da_params):
