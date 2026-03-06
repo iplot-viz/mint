@@ -144,6 +144,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
         self._connect_shift_signals()
         self._init_shift_storage()
+        self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
+            self._on_rows_about_to_be_removed)
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -358,6 +360,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
+
+        # Clear shift tracking since workspace import replaces the entire signal table.
+        self._init_shift_storage()
+
         self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
@@ -726,6 +732,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
+
+        # Clear shift tracking so stale state from previous canvas does not
+        # interfere with future shift operations (UIDs are regenerated on each build).
+        self._init_shift_storage()
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.time_window() * 1000000000
