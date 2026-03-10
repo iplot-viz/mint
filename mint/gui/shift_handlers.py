@@ -232,6 +232,7 @@ class ShiftHandlerMixin:
                     'stack': df.at[mother_row_idx, 'Stack'] if 'Stack' in df.columns else '',
                     'original_label': getattr(original_signal, 'label', '') or getattr(original_signal, 'name', ''),
                     'alias': '',
+                    'original_alias': df.at[mother_row_idx, 'Alias'] if 'Alias' in df.columns else '',
                     'mother_pulse_updated': False,
                     'inline_mode': True,
                     'var_name': var_name,
@@ -366,7 +367,8 @@ class ShiftHandlerMixin:
                     # Restore original alias
                     df = model.get_dataframe()
                     if 'Alias' in df.columns:
-                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), '', 2)
+                        original_alias = tracking.get('original_alias', '')
+                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), original_alias, 2)
 
                 # Clean up mother original pulse id if no other shifts remain
                 var_name = tracking.get('var_name', '')
