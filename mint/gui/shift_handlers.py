@@ -1,5 +1,6 @@
 """Signal shift handlers for DIST dialog and drag operations."""
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex
@@ -619,6 +620,12 @@ class ShiftHandlerMixin:
         display_name = row_alias.strip() if row_alias and row_alias.strip() else (
             var_name if '${' not in var_name else ''
         )
+        # Strip existing shifted prefixes
+        if display_name:
+            display_name = re.sub(r'^(shifted\d*_)+', '', display_name)
+            # Strip trailing pulse_id
+            if pulse_id and display_name.endswith(f'_{pulse_id}'):
+                display_name = display_name[:-len(f'_{pulse_id}')]
         # Include pulse_id in alias when provided (multiple pulses case)
         if pulse_id:
             base_alias = f"{prefix}_{display_name}_{pulse_id}" if display_name else f"{prefix}_{pulse_id}"
