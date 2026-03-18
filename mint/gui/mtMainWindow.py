@@ -909,21 +909,28 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                 if not canvas.streaming:
                     signal_x_is_date = False
+                    has_date = False
+                    has_non_date = False
                     for stack, signals in rows[row]["signals"].items():
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
-                                if x_axis_transformed:
-                                    if len(x_data) > 0:  # Create a separate function to detect dates
-                                        signal_x_is_date |= bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
-                                else:
-                                    if rows[row]["ts_start"] is not None:
-                                        signal_x_is_date |= bool(
-                                            rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
+                                if len(x_data) > 0:
+                                    sig_is_date = bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
+                                    signal_x_is_date |= sig_is_date
+                                    if sig_is_date:
+                                        has_date = True
+                                    else:
+                                        has_non_date = True
+                                elif not x_axis_transformed and rows[row]["ts_start"] is not None:
+                                    signal_x_is_date |= bool(
+                                        rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
                             except (IndexError, ValueError) as _:
                                 signal_x_is_date = False
+                    mixed_time_bases = has_date and has_non_date
                 else:
                     signal_x_is_date = True
+                    mixed_time_bases = False
 
                 y_axes = [LinearAxis() for _ in range(len(rows[row]["signals"].items()))]
 
@@ -938,12 +945,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     x_axis.begin = rows[row]["ts_start"]
                     x_axis.end = rows[row]["ts_end"]
 
-                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
-                                                        col_span=rows[row]["col_span"], row=row, col=col)
-                for stack, signals in rows[row]["signals"].items():
-                    for signal in signals:
-                        if signal.stream_valid:
-                            plot.add_signal(signal, stack=stack)
+                if mixed_time_bases:
+                    logger.warning(f"Plot at row {row}, col {col} contains signals with mixed time bases "
+                                   f"(absolute and relative timestamps). Signals will not be drawn.")
+                    plot = None
+                else:
+                    plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
+                                                            col_span=rows[row]["col_span"], row=row, col=col)
+                    for stack, signals in rows[row]["signals"].items():
+                        for signal in signals:
+                            if signal.stream_valid:
+                                plot.add_signal(signal, stack=stack)
 
                 # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
                 # is not added to the Canvas and None is added instead.
