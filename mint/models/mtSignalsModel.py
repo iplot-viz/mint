@@ -394,7 +394,6 @@ class MTSignalsModel(QAbstractItemModel):
                 alias = self._table.at[row_idx, alias_col]
                 stack_val = self._table.at[row_idx, stack_col]
 
-                # Skip query if alias and stack is missing
                 # Skip rows with no stack unless their alias is used in another row's processing
                 if not stack_val and alias not in self._alias_list:
                     logger.debug(f"Row {row_idx} skipped (no stack and alias {alias} is not referenced)")
