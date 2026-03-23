@@ -221,10 +221,13 @@ class MTAbsoluteTime(MTGenericAccessMode):
             'to_ns': self.toTimeNs.text()
         }
 
-        self.fromTime.setDateTime(qdt_from)
-        self.toTime.setDateTime(qdt_to)
-        self.fromTimeNs.setText(ns_from)
-        self.toTimeNs.setText(ns_to)
+        self.model.setStringList([
+            qdt_from.toString(MTAbsoluteTime.TIME_FORMAT),
+            qdt_to.toString(MTAbsoluteTime.TIME_FORMAT),
+            ns_from,
+            ns_to
+        ])
+        self.mapper.toFirst()
 
         # Show the pulse used
         self.pulseUsed.setText(pulse)

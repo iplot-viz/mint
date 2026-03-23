@@ -1,5 +1,6 @@
 """Signal shift handlers for DIST dialog and drag operations."""
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex
@@ -37,6 +38,7 @@ class ShiftHandlerMixin:
         self._shift_original_exprs = {}
         self._shift_accumulated = {}
         self._shift_mother_original_pulse_id = {}  # Key: (Variable, DS) -> original PulseId
+        self._shift_undo_in_progress = False  # Guard to skip row-removal handler during undo
 
     def _format_offset_expr(self, base_expr: str, offset: float) -> str:
         """Format expression with offset, using subtraction for negative values."""
@@ -189,6 +191,31 @@ class ShiftHandlerMixin:
         pulse_key = f"{signal_uid}_{pulse_id}"
         already_tracked = pulse_key in self._shift_original_exprs
 
+        # Validate that tracked shifted row still exists in the table.
+        # If the user manually deleted the shifted row, the tracking is stale.
+        if already_tracked:
+            _trk = self._shift_original_exprs[pulse_key]
+            _stored_alias = _trk.get('alias', '')
+            _is_inline = _trk.get('inline_mode', False)
+
+            if not _is_inline and _stored_alias:
+                df_check = model.get_dataframe()
+                if self._find_row_by_alias(df_check, _stored_alias) is None:
+                    logger.debug(f"Stale shift tracking for {pulse_key}: "
+                                 f"row '{_stored_alias}' no longer exists, cleaning up.")
+                    self._cleanup_stale_shift_entry(pulse_key)
+                    already_tracked = False
+                    # Re-read state since cleanup may have modified mother's PulseId
+                    df = model.get_dataframe()
+                    mother_row_idx = self._find_row_by_uid_or_variable(
+                        df, signal_uid, original_signal)
+                    if mother_row_idx is None:
+                        return
+                    current_mother_pulse_id = (
+                        df.at[mother_row_idx, 'PulseId']
+                        if 'PulseId' in df.columns else ''
+                    )
+
         if already_tracked and not self._shift_original_exprs[pulse_key].get('inline_mode', False):
             # This pulse already has an active dedicated row, keep using multi-pulse path
             pulse_count = 2  # force multi-pulse path
@@ -206,6 +233,7 @@ class ShiftHandlerMixin:
                     'stack': df.at[mother_row_idx, 'Stack'] if 'Stack' in df.columns else '',
                     'original_label': getattr(original_signal, 'label', '') or getattr(original_signal, 'name', ''),
                     'alias': '',
+                    'original_alias': df.at[mother_row_idx, 'Alias'] if 'Alias' in df.columns else '',
                     'mother_pulse_updated': False,
                     'inline_mode': True,
                     'var_name': var_name,
@@ -313,6 +341,13 @@ class ShiftHandlerMixin:
         pulse_key = f"{signal_uid}_{pulse_id}"
         original_signal, original_plot = self._find_signal_in_canvas(signal_uid)
         tracking = self._shift_original_exprs.get(pulse_key, {})
+
+        # If tracking was already cleaned up (e.g., user manually deleted the shifted row),
+        # skip table manipulation — the manual-delete handler already restored state.
+        if not tracking:
+            self.canvasStack.refreshLinks()
+            return
+
         stored_alias = tracking.get('alias', '')
         is_inline = tracking.get('inline_mode', False)
 
@@ -333,7 +368,8 @@ class ShiftHandlerMixin:
                     # Restore original alias
                     df = model.get_dataframe()
                     if 'Alias' in df.columns:
-                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), '', 2)
+                        original_alias = tracking.get('original_alias', '')
+                        model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('Alias')), original_alias, 2)
 
                 # Clean up mother original pulse id if no other shifts remain
                 var_name = tracking.get('var_name', '')
@@ -366,7 +402,11 @@ class ShiftHandlerMixin:
                     if row_to_delete is not None:
                         if hasattr(model, 'aliases') and stored_alias in model.aliases:
                             model.aliases.remove(stored_alias)
-                        model.removeRows(row_to_delete, 1, QModelIndex())
+                        self._shift_undo_in_progress = True
+                        try:
+                            model.removeRows(row_to_delete, 1, QModelIndex())
+                        finally:
+                            self._shift_undo_in_progress = False
 
                 if original_signal:
                     df = model.get_dataframe()
@@ -580,6 +620,12 @@ class ShiftHandlerMixin:
         display_name = row_alias.strip() if row_alias and row_alias.strip() else (
             var_name if '${' not in var_name else ''
         )
+        # Strip existing shifted prefixes
+        if display_name:
+            display_name = re.sub(r'^(shifted\d*_)+', '', display_name)
+            # Strip trailing pulse_id
+            if pulse_id and display_name.endswith(f'_{pulse_id}'):
+                display_name = display_name[:-len(f'_{pulse_id}')]
         # Include pulse_id in alias when provided (multiple pulses case)
         if pulse_id:
             base_alias = f"{prefix}_{display_name}_{pulse_id}" if display_name else f"{prefix}_{pulse_id}"
@@ -700,6 +746,36 @@ class ShiftHandlerMixin:
                 return idx
         return None
 
+    def _cleanup_stale_shift_entry(self, pulse_key: str):
+        """Remove a stale tracking entry whose shifted row no longer exists.
+
+        Cleans up _shift_original_exprs, _shift_accumulated, and
+        _shift_mother_original_pulse_id when appropriate.
+        """
+        tracking = self._shift_original_exprs.get(pulse_key)
+        if not tracking:
+            return
+
+        var_name = tracking.get('var_name', '')
+        ds_name = tracking.get('ds_name', '')
+        mother_key = (var_name, ds_name)
+
+        # Check if other active shifts exist for the same mother signal
+        other_active = any(
+            v.get('mother_pulse_updated', False)
+            and v.get('var_name') == var_name
+            and v.get('ds_name') == ds_name
+            for k, v in self._shift_original_exprs.items()
+            if k != pulse_key
+        )
+
+        # Clean up mother original pulse tracking if this was the last shift
+        if not other_active and mother_key in self._shift_mother_original_pulse_id:
+            del self._shift_mother_original_pulse_id[mother_key]
+
+        self._shift_original_exprs.pop(pulse_key, None)
+        self._shift_accumulated.pop(pulse_key, None)
+
     def _build_offset_expressions(self, model, key: str, total_dx: float, total_dy: float):
         """Build x/y expressions with the accumulated offset (reads originals from tracking)."""
         tracking = self._shift_original_exprs.get(key)
@@ -744,3 +820,109 @@ class ShiftHandlerMixin:
                 continue
             if val is not None:
                 model.setData(model.createIndex(new_row_idx, col_idx), val, 2)
+
+    def _on_rows_about_to_be_removed(self, parent, first: int, last: int):
+        """Handle rows about to be removed from the signal table.
+
+        Detects if any removed rows are tracked shifted-signal rows.
+        If so, cleans up tracking and restores the mother row's PulseId.
+
+        Fires from beginRemoveRows(), BEFORE rows are actually deleted,
+        so row data is still readable.
+        """
+        if not self._shift_original_exprs:
+            return  # No active tracking, nothing to do
+        if self._shift_undo_in_progress:
+            return  # Undo handler manages cleanup itself
+
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+
+        if df.empty:
+            return
+
+        # Collect aliases of rows being removed
+        removed_aliases = set()
+        for row_idx in range(first, last + 1):
+            if row_idx < len(df) and 'Alias' in df.columns:
+                alias = df.at[row_idx, 'Alias']
+                if alias:
+                    removed_aliases.add(alias)
+
+        if not removed_aliases:
+            return
+
+        # Find which tracked shift entries correspond to removed rows
+        stale_keys = []
+        for pulse_key, tracking in self._shift_original_exprs.items():
+            stored_alias = tracking.get('alias', '')
+            is_inline = tracking.get('inline_mode', False)
+            if not is_inline and stored_alias and stored_alias in removed_aliases:
+                stale_keys.append(pulse_key)
+
+        if not stale_keys:
+            return
+
+        # Process each stale entry: restore mother PulseId where appropriate
+        for pulse_key in stale_keys:
+            tracking = self._shift_original_exprs[pulse_key]
+            var_name = tracking.get('var_name', '')
+            ds_name = tracking.get('ds_name', '')
+            mother_key = (var_name, ds_name)
+            was_mother_updated = tracking.get('mother_pulse_updated', False)
+
+            # Read the shifted pulse_id from the row being deleted
+            shifted_pulse_id = None
+            stored_alias = tracking.get('alias', '')
+            if stored_alias:
+                shifted_row = self._find_row_by_alias(df, stored_alias)
+                if shifted_row is not None and 'PulseId' in df.columns:
+                    shifted_pulse_id = str(df.at[shifted_row, 'PulseId']).strip()
+
+            # Count other active (non-stale) shifts for the same mother
+            other_active_shifts = [
+                k for k, v in self._shift_original_exprs.items()
+                if k != pulse_key
+                and k not in stale_keys
+                and v.get('mother_pulse_updated', False)
+                and v.get('var_name') == var_name
+                and v.get('ds_name') == ds_name
+            ]
+
+            if was_mother_updated and mother_key in self._shift_mother_original_pulse_id:
+                # Find the mother row by Variable+DS, excluding rows being deleted
+                mother_row_idx = None
+                if 'Variable' in df.columns and 'DS' in df.columns:
+                    candidates = df.index[
+                        (df['Variable'] == var_name) & (df['DS'] == ds_name)
+                    ].tolist()
+                    candidates = [i for i in candidates if i < first or i > last]
+                    if candidates:
+                        mother_row_idx = candidates[0]
+
+                if mother_row_idx is not None and 'PulseId' in df.columns:
+                    if not other_active_shifts:
+                        # Last shift being removed: restore true original PulseId
+                        true_original = self._shift_mother_original_pulse_id[mother_key]
+                        model.setData(
+                            model.createIndex(
+                                mother_row_idx,
+                                df.columns.get_loc('PulseId')),
+                            true_original, 2)
+                    elif shifted_pulse_id:
+                        # Other shifts remain: re-add just this pulse
+                        current_pulse_id = df.at[mother_row_idx, 'PulseId']
+                        restored = self._add_pulse_to_list(
+                            current_pulse_id, shifted_pulse_id)
+                        model.setData(
+                            model.createIndex(
+                                mother_row_idx,
+                                df.columns.get_loc('PulseId')),
+                            restored, 2)
+
+            # Clean up tracking
+            if not other_active_shifts and mother_key in self._shift_mother_original_pulse_id:
+                del self._shift_mother_original_pulse_id[mother_key]
+
+            self._shift_original_exprs.pop(pulse_key, None)
+            self._shift_accumulated.pop(pulse_key, None)

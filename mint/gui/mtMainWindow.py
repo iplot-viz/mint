@@ -144,6 +144,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
         self._connect_shift_signals()
         self._init_shift_storage()
+        self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
+            self._on_rows_about_to_be_removed)
 
         file_menu = self.menuBar().addMenu("&File")
         help_menu = self.menuBar().addMenu("&Help")
@@ -358,6 +360,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
+
+        # Clear shift tracking since workspace import replaces the entire signal table.
+        self._init_shift_storage()
+
         self.indicate_busy('Importing workspace...')
         data_range = input_dict.get('data_range')
         self.dataRangeSelector.import_dict(data_range)
@@ -391,6 +397,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Clear markers table before importing new signals
         self.qtcanvas._marker_window.clear_info()
+
+        # Clear alias list to check for fetches row
+        self.sigCfgWidget.model._alias_list.clear()
+        self.sigCfgWidget.model._alias_checked = False
 
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         valid_signal = False
@@ -613,7 +623,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file, export_filter = QFileDialog.getSaveFileName(self,
                                                           "Export file as ..",
                                                           dir=self._data_export_dir,
-                                                          filter="Parquet (*.parquet);;HDF5 (*.hdf5)")
+                                                          filter="HDF5 (*.hdf5);;Parquet (*.parquet)")
         if not file:
             return
 
@@ -646,13 +656,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         table, errors = self.sigCfgWidget.model.export_information()
         self.indicate_busy('Exporting canvas information...')
 
-        if table.empty or errors:
-            logger.warning("No data available to export")
-            self.show_popup_msg("No data available to export",
-                                "Data export requires:\n"
-                                "- No active processing\n"
-                                "- Non-empty stacks\n"
-                                "- No custom time", QMessageBox.Icon.Critical)
+        if table.empty:
+            error_details = "\n".join(f"- {e}" for e in errors)
+            logger.warning("Export failed: no data available to export")
+            self.show_popup_msg("Export failed: no data available to export",
+                                f"No data could be exported due to:\n{error_details}",
+                                QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
             self.indicate_ready()
             return
@@ -674,6 +683,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     ts_str = f"{result.timeFrom}"
                     te_str = f"{result.timeTo}"
                     ts_iso = pd.to_datetime(result.timeFrom).isoformat()
+                    ts_iso = ts_iso.replace(':', '-')
 
                     original_path = Path(output_path)
                     valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
@@ -702,8 +712,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 else:
                     logger.info(f"Export failed for data source: {ds_name}")
 
-        self.show_popup_msg("Export completed",
-                            "The data export process finished successfully", QMessageBox.Icon.Information)
+        if errors:
+            error_details = "\n".join(f"- {e}" for e in errors)
+            logger.warning("Export completed with issues:\n%s", error_details)
+            self.show_popup_msg("Export completed with issues",
+                                f"The following conditions prevented a full export:\n{error_details}",
+                                QMessageBox.Icon.Information)
+        else:
+            self.show_popup_msg("Export completed",
+                                "The data export process finished successfully", QMessageBox.Icon.Information)
         self.exportCfgWidget.ui.pathLineEdit.clear()
         self.indicate_ready()
 
@@ -715,6 +732,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
+
+        # Clear shift tracking so stale state from previous canvas does not
+        # interfere with future shift operations (UIDs are regenerated on each build).
+        self._init_shift_storage()
 
         self.canvas.streaming = stream
         stream_window = self.streamerCfgWidget.time_window() * 1000000000
@@ -751,6 +772,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Get signals in order to preserve markers
         previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
+
+        # Clear alias list to check for fetches row
+        self.sigCfgWidget.model._alias_list.clear()
+        self.sigCfgWidget.model._alias_checked = False
 
         if valid:
             for waypt in self.sigCfgWidget.build(**da_params):
@@ -884,21 +909,28 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                 if not canvas.streaming:
                     signal_x_is_date = False
+                    has_date = False
+                    has_non_date = False
                     for stack, signals in rows[row]["signals"].items():
                         for signal in signals:
                             try:
                                 x_data = signal.get_data()[0]
-                                if x_axis_transformed:
-                                    if len(x_data) > 0:  # Create a separate function to detect dates
-                                        signal_x_is_date |= bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
-                                else:
-                                    if rows[row]["ts_start"] is not None:
-                                        signal_x_is_date |= bool(
-                                            rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
+                                if len(x_data) > 0:
+                                    sig_is_date = bool(min(x_data) > (1 << 53) and max(x_data) < (1 << 62))
+                                    signal_x_is_date |= sig_is_date
+                                    if sig_is_date:
+                                        has_date = True
+                                    else:
+                                        has_non_date = True
+                                elif not x_axis_transformed and rows[row]["ts_start"] is not None:
+                                    signal_x_is_date |= bool(
+                                        rows[row]["ts_start"] > (1 << 53) and rows[row]["ts_end"] < (1 << 62))
                             except (IndexError, ValueError) as _:
                                 signal_x_is_date = False
+                    mixed_time_bases = has_date and has_non_date
                 else:
                     signal_x_is_date = True
+                    mixed_time_bases = False
 
                 y_axes = [LinearAxis() for _ in range(len(rows[row]["signals"].items()))]
 
@@ -913,12 +945,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     x_axis.begin = rows[row]["ts_start"]
                     x_axis.end = rows[row]["ts_end"]
 
-                plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
-                                                        col_span=rows[row]["col_span"], row=row, col=col)
-                for stack, signals in rows[row]["signals"].items():
-                    for signal in signals:
-                        if signal.stream_valid:
-                            plot.add_signal(signal, stack=stack)
+                if mixed_time_bases:
+                    logger.warning(f"Plot at row {row}, col {col} contains signals with mixed time bases "
+                                   f"(absolute and relative timestamps). Signals will not be drawn.")
+                    plot = None
+                else:
+                    plot = self.plot_classes[plot_types[0]](axes=[x_axis, y_axes], row_span=rows[row]["row_span"],
+                                                            col_span=rows[row]["col_span"], row=row, col=col)
+                    for stack, signals in rows[row]["signals"].items():
+                        for signal in signals:
+                            if signal.stream_valid:
+                                plot.add_signal(signal, stack=stack)
 
                 # In case of streaming, when the plot does not contain any signals that can be streamed, the plot
                 # is not added to the Canvas and None is added instead.
