@@ -68,7 +68,7 @@ def run_app(q_app: QApplication, args=None):
     #########################################################################
     # 3. Prepare model for data range
     t_now = datetime.utcnow().isoformat(timespec='seconds')
-    t_now_delta_seven_d = datetime.utcnow() - timedelta(days=7)
+    t_now_delta_seven_d = datetime.utcnow() - timedelta(minutes=5)
 
     time_model = {
         "range": {

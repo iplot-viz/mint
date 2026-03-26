@@ -99,7 +99,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         fromTimeLayout.addWidget(QLabel(".", parent=self.form))
         fromTimeLayout.addWidget(self.fromTimeNs)
         fromTimeLayout.addWidget(QLabel("ns", parent=self.form))
-        fromTimeLayout.setAlignment(Qt.AlignLeft)
+        fromTimeLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Create layout for the "To time" row
         toTimeLayout = QHBoxLayout()
@@ -107,7 +107,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         toTimeLayout.addWidget(QLabel(".", parent=self.form))
         toTimeLayout.addWidget(self.toTimeNs)
         toTimeLayout.addWidget(QLabel("ns", parent=self.form))
-        toTimeLayout.setAlignment(Qt.AlignLeft)  # Align items to the left
+        toTimeLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Align items to the left
 
         # Add the rows to the form layout
         self.form.layout().addRow(QLabel("From time", parent=self.form), fromTimeLayout)
@@ -214,12 +214,13 @@ class MTAbsoluteTime(MTGenericAccessMode):
 
         # Set the values in the UI
         # Save current time values before overwriting so Clear can restore them
-        self._saved_time_before_pulse = {
-            'from_time': QDateTime(self.fromTime.dateTime()),
-            'to_time': QDateTime(self.toTime.dateTime()),
-            'from_ns': self.fromTimeNs.text(),
-            'to_ns': self.toTimeNs.text()
-        }
+        if self._saved_time_before_pulse is None:
+            self._saved_time_before_pulse = {
+                'from_time': QDateTime(self.fromTime.dateTime()),
+                'to_time': QDateTime(self.toTime.dateTime()),
+                'from_ns': self.fromTimeNs.text(),
+                'to_ns': self.toTimeNs.text()
+            }
 
         self.model.setStringList([
             qdt_from.toString(MTAbsoluteTime.TIME_FORMAT),
