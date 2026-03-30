@@ -8,6 +8,7 @@ IPLOT_SOURCES_CONFIG=/etc/opt/codac/mint/mydatasources.cfg
 IPLOT_LOG_LIMIT=10
 MINT_GET_EXTRE=false
 IPLOT_CANVAS_CONFIG=/etc/opt/codac/mint/canvas_default_properties.json
+IPLOT_PYQTGRAPH_OPENGL=true
 UDA_MAX_SOCKET_DELAY=0
 UDA_MAX_SOCKET_ATTEMPTS=0
 

@@ -693,7 +693,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
                                          startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
                     if valid:
-                        logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                        logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
                     else:
                         logger.info(f"Export failed for data source: {ds_name}")
             else:
@@ -708,7 +708,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
                                      startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
                 if valid:
-                    logger.info(f"Export successful for data source: {ds_name} in format: {export_format}")
+                    logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
                 else:
                     logger.info(f"Export failed for data source: {ds_name}")
 

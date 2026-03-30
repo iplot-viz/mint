@@ -89,13 +89,13 @@ class MTDataRangeSelector(QWidget):
         item.from_dict(input_dict)
 
         # Always clear the pulse reference in Time Range mode
-        self.accessModes[0].clear_pulse()
+        self.accessModes[0].pulseUsed.setText("")
 
     def select_page(self, page_id: int):
         self.stack.setCurrentIndex(page_id)
         self.modeChanged.emit()
         # Emit cancelRefresh if we are leaving relative mode
-        if self.accessModes[self.stack.currentIndex()].mode == MTGenericAccessMode.RELATIVE_TIME:
+        if self.accessModes[self.stack.currentIndex()].mode != MTGenericAccessMode.RELATIVE_TIME:
             self.cancelRefresh.emit()
             logger.info("Canvas auto-refresh cancelled (left relative mode)")
 

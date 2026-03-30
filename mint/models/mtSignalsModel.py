@@ -314,7 +314,7 @@ class MTSignalsModel(QAbstractItemModel):
         df_fails = pd.DataFrame(data=0, index=range(df.shape[0]), columns=self._table_fails.columns)
 
         # Check if last row is empty
-        if self._table.empty or self._table.iloc[-1:, 1:-5].any(axis=1).bool():
+        if self._table.empty or self._table.iloc[-1:, 1:-5].any(axis=1).item():
             self._table = pd.concat([self._table, df], ignore_index=True).fillna('')
             self.insertRows(len(self._table), 1, QModelIndex())
             self._table_fails = pd.concat([self._table_fails, df_fails], ignore_index=True)
