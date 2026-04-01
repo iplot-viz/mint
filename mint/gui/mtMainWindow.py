@@ -22,7 +22,6 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
     QSplitter, QVBoxLayout, QWidget
 
 from iplotDataAccess.dataAccess import DataAccess
-from iplotDataAccess.dataHandling.exportData.exportData import generateData
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
@@ -675,6 +674,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if conn.source_type != "CODAC_UDA":
                 logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
                 continue
+
+            from iplotDataAccess.dataHandling.exportData.exportData import generateData
 
             # Pulse mode
             if pulse_number is not None:
