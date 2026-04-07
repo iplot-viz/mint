@@ -672,7 +672,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             conn = self.da.ds_list[ds_name]
 
             if conn.source_type != "CODAC_UDA":
-                logger.warning(f"The data source: {ds_name} is invalid. Only CODAC UDA data sources can be exported")
+                msg = f"The data source: '{ds_name}' is invalid. Only CODAC UDA data sources can be exported"
+                errors.append(msg)
+                logger.warning(msg)
                 continue
 
             from iplotDataAccess.dataHandling.exportData.exportData import generateData
