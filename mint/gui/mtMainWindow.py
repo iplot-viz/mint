@@ -178,6 +178,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
+        file_menu.addAction(self.toolBar.saveImageAction)
         file_menu.addAction(show_console_action)
         file_menu.addAction(exit_action)
 
@@ -278,6 +279,24 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_busy('Redrawing...')
         super().re_draw()
         self.indicate_ready()
+
+    def save_canvas_image(self):
+        w = self.canvasStack.currentWidget()
+        if not w:
+            return
+        file_filter = "PNG Image (*.png);;SVG Image (*.svg);;JPEG Image (*.jpg *.jpeg)"
+        filename, selected_filter = QFileDialog.getSaveFileName(
+            self, "Save Canvas as Image", dir=self._data_dir, filter=file_filter)
+        if filename:
+            if not any(filename.lower().endswith(ext) for ext in ('.png', '.svg', '.jpg', '.jpeg')):
+                if 'SVG' in selected_filter:
+                    filename += '.svg'
+                elif 'JPEG' in selected_filter:
+                    filename += '.jpg'
+                else:
+                    filename += '.png'
+            self._data_dir = os.path.dirname(filename)
+            w.save_canvas_image(filename)
 
     def on_export(self):
         file = QFileDialog.getSaveFileName(
