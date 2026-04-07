@@ -557,6 +557,26 @@ class MTSignalsModel(QAbstractItemModel):
                                     pulse = element
                                     idx = 2
 
+                                # Resolve special pulse numbers (0 = last, -1 = previous)
+                                pulse_parts = pulse.rsplit("/", 1)
+                                pulse_num_str = pulse_parts[-1] if len(pulse_parts) > 1 else pulse
+                                if pulse_num_str in ("0", "-1") and inp['DS'] in self.data_sources:
+                                    ds = AppDataAccess.da.get_data_source(inp['DS'])
+                                    prefix = pulse_parts[0] + "/" if len(pulse_parts) > 1 else ""
+                                    # If no prefix, infer category from global pulse
+                                    if not prefix and default_value and default_value != '' and default_value != ['']:
+                                        global_pulse = default_value[0] if isinstance(default_value, list) else default_value
+                                        global_parts = str(global_pulse).rsplit("/", 1)
+                                        if len(global_parts) > 1:
+                                            prefix = global_parts[0] + "/"
+                                    search = prefix + "*" if prefix else "*:*/*"
+                                    all_pulses = ds.get_pulses_df(pattern=search)
+                                    if not all_pulses.empty:
+                                        if pulse_num_str == "0":
+                                            pulse = str(all_pulses.iloc[-1]['Pulse'])
+                                        elif len(all_pulses) >= 2:
+                                            pulse = str(all_pulses.iloc[-2]['Pulse'])
+
                                 # Check each pulse
                                 if inp['DS'] in self.data_sources:
                                     if not AppDataAccess.da.get_data_source(inp['DS']).get_pulses_df(
@@ -587,6 +607,9 @@ class MTSignalsModel(QAbstractItemModel):
                                         value = default_value
                                     else:
                                         value = ['']
+                            else:
+                                # Use resolved pulses (handles 0/-1 special values)
+                                value = elements[2]
 
                         else:
                             value = default_value
