@@ -36,6 +36,11 @@
         "type_name": "bool",
         "default": false
     },
+    "Calibrated": {
+        "code_name": "calibrated",
+        "type_name": "bool",
+        "default": true
+    },
     "Alias": {
         "code_name": "alias",
         "type_name": "str",
