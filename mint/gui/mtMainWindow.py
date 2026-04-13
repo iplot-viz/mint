@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QM
 from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
-from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
+from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage, PlotImageWithSlider
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
@@ -69,7 +69,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                              "PlotContour": PlotContour,
                              "PlotXYWithSlider": PlotXYWithSlider,
                              "PlotContourWithSlider": PlotContourWithSlider,
-                             "PlotImage": PlotImage}
+                             "PlotImage": PlotImage,
+                             "PlotImageWithSlider": PlotImageWithSlider}
         self.appVersion = app_version
         self.dragItem = None
         try:
@@ -391,7 +392,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Remove previous slider references
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
+                if isinstance(plot, (PlotXYWithSlider, PlotContourWithSlider, PlotImageWithSlider)):
                     plot.clean_slider()
 
         main_canvas = input_dict.get('main_canvas')
@@ -879,7 +880,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # callback references during redrawing.
         for col in self.canvas.plots:
             for plot in col:
-                if isinstance(plot, PlotXYWithSlider) or isinstance(plot, PlotContourWithSlider):
+                if isinstance(plot, (PlotXYWithSlider, PlotContourWithSlider, PlotImageWithSlider)):
                     plot.clean_slider()
 
         # Keep copy of previous canvas to be able to restore preferences
