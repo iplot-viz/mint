@@ -678,9 +678,16 @@ class MTSignalsModel(QAbstractItemModel):
                     if k == 'DataSource':  # Do not read default value when parsing an already filled in table
                         value = get_value(inp, column_name, type_func)
                         if value == '':
-                            fls[column_name] = 1
-                            logger.warning(f"Invalid datasource: the 'Datasource' field cannot be empty in the table "
-                                           f"row [{table_row}]")
+                            # Virtual signal: no data source, no variable, but has alias and expressions
+                            is_virtual = (inp['Variable'] == ''
+                                          and inp['Alias'] != ''
+                                          and any(inp[exp] != '' for exp in ['x', 'y', 'z']))
+                            if is_virtual:
+                                fls[column_name] = 0
+                            else:
+                                fls[column_name] = 1
+                                logger.warning(f"Invalid datasource: the 'Datasource' field cannot be empty in the table "
+                                               f"row [{table_row}]")
                         else:
                             if value in self.data_sources:
                                 fls[column_name] = 0
@@ -778,7 +785,14 @@ class MTSignalsModel(QAbstractItemModel):
                             try:
                                 p.set_expression(value)
                                 if p.is_valid:
-                                    fls[column_name] = 0
+                                    is_virtual = (inp['DS'] == '' and inp['Variable'] == '' and inp['Alias'] != '')
+                                    if is_virtual and column_name in ('x', 'y') and inp[column_name] == '':
+                                        fls[column_name] = 1
+                                        logger.warning(
+                                            f"Virtual signal row [{table_row}]: '{column_name}' must have "
+                                            f"an explicit expression")
+                                    else:
+                                        fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
                                     logger.warning(f"Invalid '{column_name}' expression: the provided expression cannot"
