@@ -25,6 +25,8 @@
   "full_mode_all_stack": true,
   "contour_levels": 10,
   "contour_filled": false,
+  "interpolation": "none",
+  "origin": "upper",
   "autoscale": false,
   "legend_format": "color_bar",
   "equivalent_units": false,
