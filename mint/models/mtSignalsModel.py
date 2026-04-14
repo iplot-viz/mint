@@ -705,7 +705,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 1
                                 logger.warning(
                                     f"Invalid stack in table row [{table_row}]: "
-                                    f"Plot of type PlotContour, PlotContourWithSlider or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
+                                    f"Plot of type PlotContour, PlotContourWithSlider, PlotImage, PlotImageWithSlider or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
                                     f"Mixing different plot types in the same stack is not allowed.")
                             else:
                                 if exp_stack.match(value):

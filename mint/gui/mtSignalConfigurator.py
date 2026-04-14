@@ -809,8 +809,9 @@ class MTSignalConfigurator(QWidget):
             if group["Stack"].values[0].count(".") > 1 and not all(types == 'PlotXY'):
                 return True
 
-            # Rule #2: A PlotContour or PlotContourWithSlider stack cannot contain more than one signal
-            if (all(types == 'PlotContour') or all(types == 'PlotContourWithSlider')) and len(types) > 1:
+            # Rule #2: A PlotContour, PlotContourWithSlider, PlotImage or PlotImageWithSlider stack cannot contain more than one signal
+            if (all(types == 'PlotContour') or all(types == 'PlotContourWithSlider')
+                    or all(types == 'PlotImage') or all(types == 'PlotImageWithSlider')) and len(types) > 1:
                 return True
 
             # Rule #3: Mixing different plot types in the same stack is not allowed
