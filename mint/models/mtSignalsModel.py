@@ -557,10 +557,14 @@ class MTSignalsModel(QAbstractItemModel):
                                     pulse = element
                                     idx = 2
 
-                                # Resolve special pulse numbers (0 = last, -1 = previous)
+                                # Resolve special pulse numbers (0 = last, -N = N-th previous)
                                 pulse_parts = pulse.rsplit("/", 1)
                                 pulse_num_str = pulse_parts[-1] if len(pulse_parts) > 1 else pulse
-                                if pulse_num_str in ("0", "-1") and inp['DS'] in self.data_sources:
+                                try:
+                                    n = int(pulse_num_str)
+                                except ValueError:
+                                    n = 1  # non-numeric → not a relative pulse
+                                if n <= 0 and inp['DS'] in self.data_sources:
                                     ds = AppDataAccess.da.get_data_source(inp['DS'])
                                     prefix = pulse_parts[0] + "/" if len(pulse_parts) > 1 else ""
                                     # If no prefix, infer category from global pulse
@@ -572,10 +576,14 @@ class MTSignalsModel(QAbstractItemModel):
                                     search = prefix + "*" if prefix else "*:*/*"
                                     all_pulses = ds.get_pulses_df(pattern=search)
                                     if not all_pulses.empty:
-                                        if pulse_num_str == "0":
-                                            pulse = str(all_pulses.iloc[-1]['Pulse'])
-                                        elif len(all_pulses) >= 2:
-                                            pulse = str(all_pulses.iloc[-2]['Pulse'])
+                                        idx = n - 1  # 0→-1, -N→-(N+1)
+                                        if abs(idx) > len(all_pulses):
+                                            logger.warning(
+                                                f"Requested pulse '{pulse_num_str}' but only {len(all_pulses)} "
+                                                f"pulse(s) available in category '{prefix or '*'}' "
+                                                f"in the table row [{table_row}]")
+                                        else:
+                                            pulse = str(all_pulses.iloc[idx]['Pulse'])
 
                                 # Check each pulse
                                 if inp['DS'] in self.data_sources:
