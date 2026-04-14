@@ -560,6 +560,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if self.streamerCfgWidget.is_activated():
             return
 
+        # Close preferences window to prevent stale state (same as import_dict)
+        if self.prefWindow.isVisible():
+            self.prefWindow.close()
+
         if not no_build:
             # Dumps are done before canvas processing
             dump_dir = os.path.expanduser("~/.local/1Dtool/dumps/")
