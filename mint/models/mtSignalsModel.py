@@ -510,6 +510,13 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 
+    @staticmethod
+    def _is_virtual_signal_row(inp) -> bool:
+        """A virtual signal has no data source, no variable, an alias, and at least one x/y/z expression."""
+        return (inp['Variable'] == ''
+                and inp['Alias'] != ''
+                and any(inp[exp] != '' for exp in ['x', 'y', 'z']))
+
     def _parse_series(self, inp: pd.Series, fls: pd.Series, table_row, stack) -> typing.Iterator[pd.Series]:
         with self.activate_fast_mode():
             out = dict()
@@ -678,11 +685,7 @@ class MTSignalsModel(QAbstractItemModel):
                     if k == 'DataSource':  # Do not read default value when parsing an already filled in table
                         value = get_value(inp, column_name, type_func)
                         if value == '':
-                            # Virtual signal: no data source, no variable, but has alias and expressions
-                            is_virtual = (inp['Variable'] == ''
-                                          and inp['Alias'] != ''
-                                          and any(inp[exp] != '' for exp in ['x', 'y', 'z']))
-                            if is_virtual:
+                            if self._is_virtual_signal_row(inp):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
@@ -785,8 +788,8 @@ class MTSignalsModel(QAbstractItemModel):
                             try:
                                 p.set_expression(value)
                                 if p.is_valid:
-                                    is_virtual = (inp['DS'] == '' and inp['Variable'] == '' and inp['Alias'] != '')
-                                    if is_virtual and column_name in ('x', 'y') and inp[column_name] == '':
+                                    if (self._is_virtual_signal_row(inp)
+                                            and column_name in ('x', 'y') and inp[column_name] == ''):
                                         fls[column_name] = 1
                                         logger.warning(
                                             f"Virtual signal row [{table_row}]: '{column_name}' must have "
