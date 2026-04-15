@@ -375,6 +375,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                         col[idx_plot] = None
 
     def import_dict(self, input_dict: dict):
+        # Close preferences window to prevent stale state
+        if self.prefWindow.isVisible():
+            self.prefWindow.close()
+
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
@@ -574,6 +578,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         if self.streamerCfgWidget.is_activated():
             return
+
+        # Close preferences window to prevent stale state (same as import_dict)
+        if self.prefWindow.isVisible():
+            self.prefWindow.close()
 
         if not no_build:
             # Dumps are done before canvas processing
