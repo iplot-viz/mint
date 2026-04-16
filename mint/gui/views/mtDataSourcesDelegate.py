@@ -49,7 +49,7 @@ class MTDataSourcesDelegate(QStyledItemDelegate):
 class MTCalibratedDelegate(QStyledItemDelegate):
     def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
         combobox = QComboBox(parent)
-        combobox.addItems(["true", "false"])
+        combobox.addItems(["false", "true"])
         return combobox
 
     def setEditorData(self, editor: QComboBox, index: QModelIndex):

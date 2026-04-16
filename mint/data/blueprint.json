@@ -39,7 +39,7 @@
     "Calibrated": {
         "code_name": "calibrated",
         "type_name": "bool",
-        "default": true
+        "default": false
     },
     "Alias": {
         "code_name": "alias",
