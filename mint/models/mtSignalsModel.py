@@ -255,8 +255,17 @@ class MTSignalsModel(QAbstractItemModel):
         self._table = self._table[(self._table[columns].isnull().sum(1) + (self._table[columns] == "").sum(1)) < 14]
 
     def accommodate(self, df: pd.DataFrame):
-        # Accommodate for missing columns in df.
+        # Add missing blueprint columns with defaults (backward compatibility)
         columns = list(mtBP.get_column_names(self._blueprint))
+        for col_name in columns:
+            if col_name not in df.columns:
+                # Find the blueprint key for this column name
+                for k, v in self._blueprint.items():
+                    if mtBP.get_column_name(self._blueprint, k) == col_name and 'default' in v:
+                        df[col_name] = v['default']
+                        break
+
+        # Accommodate for unknown columns in df.
         for df_column_name in df.columns:
             if df_column_name not in columns:
                 if df_column_name == self.ROWUID_COLNAME:
