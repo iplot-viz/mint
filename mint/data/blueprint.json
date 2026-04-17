@@ -36,11 +36,6 @@
         "type_name": "bool",
         "default": false
     },
-    "Calibrated": {
-        "code_name": "calibrated",
-        "type_name": "bool",
-        "default": false
-    },
     "Alias": {
         "code_name": "alias",
         "type_name": "str",
@@ -82,6 +77,11 @@
     },
     "Extremities": {
         "code_name": "extremities",
+        "type_name": "bool",
+        "default": false
+    },
+    "Calibrated": {
+        "code_name": "calibrated",
         "type_name": "bool",
         "default": false
     },
