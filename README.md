@@ -66,11 +66,7 @@ export IPLOT_SOURCES_CONFIG=./mint/mint/mydatasources.cfg
 
 ```json
 {
-    "my_source_name": {
-        "type": "IMASPY",
-        "database": "iter",
-        "backend": "HDF5",
-        "default": false,
+    "imaspy": {
         "populate_pulse_table": true,
         "pulse_list_folder": "/abs/path/to/local/pulses",
         "simdb_url": "https://simdb.iter.org/scenarios/api/v1.2/simulations",
@@ -79,21 +75,10 @@ export IPLOT_SOURCES_CONFIG=./mint/mint/mydatasources.cfg
 }
 ```
 
-### IMASPY DATA Source Keys
-
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
-| `type` | string | yes | Must be `"IMASPY"` |
-| `database` | string | no | IMAS database name (default: `"ITER"`) |
-| `backend` | string | no | IMAS backend (default: `"hdf5"`) |
-| `user` | string | no | IMAS user (default: `"public"`) |
-| `version` | string | no | IMAS DD version (default: `"3"`) |
-| `default` | bool | no | Set as default data source |
-| `populate_pulse_table` | bool | no | Enable pulse browser table population (default: `false`) |
-| `pulse_list_folder` | string | no | **Absolute path** to a local folder to scan for IMAS files. Supported: `master.h5`, `*.h5`, `*.nc`, `*.tree`. |
-| `simdb_url` | string | no | SIMDB REST API URL for fetching simulation list |
-| `simdb_metadata_url` | string | no | SIMDB REST API URL template for per-simulation metadata (`{uuid}` is substituted) |
-
+| `populate_pulse_table` | bool | no | Enable pulse browser table population (default: `false`). When `true`, fetches from SIMDB and scans `pulse_list_folder`. |
+| `pulse_list_folder` | string | no | **Absolute path** to a local folder to scan for IMAS files. Supported formats: `master.h5`, `*.h5`, `*.nc`, `*.tree`. |
 
 Start the application
 ```bash
