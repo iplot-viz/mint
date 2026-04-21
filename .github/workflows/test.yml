@@ -25,6 +25,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libegl1 libgl1 libxcb-cursor0 xvfb
           python -m pip install --upgrade pip setuptools wheel
+          # MINT develop tracks the latest iplot-* repos on develop; the
+          # PyPI releases lag behind. Install the dev branches first so
+          # the ".[test]" install below does not pull older PyPI wheels.
+          pip install git+https://github.com/iplot-viz/iplotLogging.git@develop
+          pip install git+https://github.com/iplot-viz/iplotProcessing.git@develop
+          pip install git+https://github.com/iplot-viz/iplotDataAccess.git@develop
+          pip install git+https://github.com/iplot-viz/iplotWidgets.git@develop
+          pip install git+https://github.com/iplot-viz/iplotlib.git@develop
           pip install ".[test]"
 
       - name: Automated tests with Pytest
