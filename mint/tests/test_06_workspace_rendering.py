@@ -105,9 +105,11 @@ class WorkspaceRenderingTest(unittest.TestCase):
                     tol=BASELINE_TOLERANCE,
                     figsize=RENDER_FIGSIZE, dpi=RENDER_DPI)
             else:
-                scene = win.qtcanvas._parser.figure.scene()
+                figure = win.qtcanvas._parser.figure
+                figure.resize(*PYQT_GRAB_SIZE)
+                self.app.processEvents()
                 compare_pyqtgraph_scene_to_baseline(
-                    scene, baseline,
+                    figure.scene(), baseline,
                     tol=BASELINE_TOLERANCE, width=PYQT_GRAB_SIZE[0])
         finally:
             win.close()
