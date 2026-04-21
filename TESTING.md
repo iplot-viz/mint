@@ -62,14 +62,24 @@ Visual tests run on both backends with the same test code. The matplotlib
 backend produces deterministic PNGs across OSes when rendered via
 `figure.savefig`, so its baseline is cross-platform.
 
-Pyqtgraph renders through Qt and drifts between OSes even in offscreen mode.
-We pin the canonical platform to Linux and skip pyqt visual tests elsewhere.
-To keep rendering reproducible across Linux distros (CODAC RHEL vs ubuntu
-runners), we export the pyqtgraph scene with `pg.exporters.ImageExporter`
-at a fixed width instead of going through `QWidget.grab()`. This bypasses
-Qt's native painter and gives a stable output.
+Pyqtgraph renders through Qt, which cannot match matplotlib's Agg backend
+for cross-platform determinism: Qt's painter depends on system freetype
+and fontconfig, so the same scene renders a couple of pixels differently
+on CODAC (RHEL) vs GitHub Actions (ubuntu-latest). To keep the pyqt
+visual check useful rather than skipped, the helper:
 
-Regenerate pyqt baselines on Linux (CODAC or CI), never from Windows.
+- Exports the scene via `pg.exporters.ImageExporter` at a fixed width
+  (not `QWidget.grab()`, which is even less stable).
+- Pins a scene rect so the output size is deterministic.
+- Disables pyqtgraph antialiasing to reduce drift sources.
+- Rescales the actual image to the baseline size when they drift by
+  <2% per dimension, so matplotlib's strict size check does not fail
+  on sub-pixel font differences.
+- Uses a generous RMS tolerance that catches real regressions
+  (missing plots, wrong data, wrong legends) but tolerates font drift.
+
+Pyqt visual tests are still skipped on non-Linux because the drift there
+is much larger. Regenerate pyqt baselines on Linux (CODAC or CI).
 
 ## Adding a new rendering test
 
