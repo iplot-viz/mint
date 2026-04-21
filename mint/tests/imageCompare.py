@@ -57,3 +57,30 @@ def compare_figure_to_baseline(figure, baseline_path: str, tol: float = 5.0,
                 os.remove(actual_path)
             except OSError:
                 pass
+
+
+def compare_pyqtgraph_scene_to_baseline(scene, baseline_path: str,
+                                        tol: float = 5.0,
+                                        width: int = 1000) -> None:
+    """Export a pyqtgraph scene to PNG via ImageExporter at a fixed width.
+
+    Sidesteps QWidget.grab(), which relies on Qt's native painter pipeline
+    and drifts between Linux distros. ImageExporter renders the scene to
+    a QImage of a fixed width/height with pyqtgraph's own painter path,
+    giving a more reproducible output across environments.
+    """
+    import pyqtgraph.exporters  # noqa: F401 — registers exporter
+    import pyqtgraph as pg
+
+    actual_path = baseline_path.replace('.png', '_actual.png')
+    exporter = pg.exporters.ImageExporter(scene)
+    exporter.parameters()['width'] = width
+    exporter.export(actual_path)
+    try:
+        _compare_or_bootstrap(actual_path, baseline_path, tol)
+    finally:
+        if os.path.exists(actual_path):
+            try:
+                os.remove(actual_path)
+            except OSError:
+                pass

@@ -63,14 +63,13 @@ backend produces deterministic PNGs across OSes when rendered via
 `figure.savefig`, so its baseline is cross-platform.
 
 Pyqtgraph renders through Qt and drifts between OSes even in offscreen mode.
-We pin the canonical platform to Linux and skip pyqt visual tests elsewhere:
+We pin the canonical platform to Linux and skip pyqt visual tests elsewhere.
+To keep rendering reproducible across Linux distros (CODAC RHEL vs ubuntu
+runners), we export the pyqtgraph scene with `pg.exporters.ImageExporter`
+at a fixed width instead of going through `QWidget.grab()`. This bypasses
+Qt's native painter and gives a stable output.
 
-```python
-if impl == 'pyqt' and not sys.platform.startswith('linux'):
-    self.skipTest("pyqt visual baselines are canonical on Linux only")
-```
-
-Regenerate pyqt baselines on Linux (CI or CODAC), never from Windows.
+Regenerate pyqt baselines on Linux (CODAC or CI), never from Windows.
 
 ## Adding a new rendering test
 

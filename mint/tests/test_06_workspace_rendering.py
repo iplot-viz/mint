@@ -22,7 +22,7 @@ from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.models.utils import mtBlueprintParser
 from mint.tests.fixtures import BASELINE_DIR, write_csv_datasource_config
 from mint.tests.imageCompare import (
-    compare_figure_to_baseline, compare_pixmap_to_baseline,
+    compare_figure_to_baseline, compare_pyqtgraph_scene_to_baseline,
 )
 from mint.tests.qAppSingleton import ensure_qapp
 
@@ -105,12 +105,10 @@ class WorkspaceRenderingTest(unittest.TestCase):
                     tol=BASELINE_TOLERANCE,
                     figsize=RENDER_FIGSIZE, dpi=RENDER_DPI)
             else:
-                canvas_widget = win.canvasStack.currentWidget()
-                canvas_widget.resize(*PYQT_GRAB_SIZE)
-                self.app.processEvents()
-                pixmap = canvas_widget.grab()
-                self.assertFalse(pixmap.isNull(), f"{impl}: null pixmap")
-                compare_pixmap_to_baseline(pixmap, baseline, tol=BASELINE_TOLERANCE)
+                scene = win.qtcanvas._parser.figure.scene()
+                compare_pyqtgraph_scene_to_baseline(
+                    scene, baseline,
+                    tol=BASELINE_TOLERANCE, width=PYQT_GRAB_SIZE[0])
         finally:
             win.close()
 
