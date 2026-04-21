@@ -82,11 +82,11 @@ def compare_figure_to_baseline(figure, baseline_path: str, tol: float = 5.0,
                 pass
 
 
-def compare_pyqtgraph_scene_to_baseline(scene, baseline_path: str,
-                                        tol: float = 20.0,
-                                        width: int = 1000,
-                                        height: int = 700) -> None:
-    """Export a pyqtgraph scene to PNG via ImageExporter and diff it.
+def compare_pyqtgraph_layout_to_baseline(figure, baseline_path: str,
+                                         tol: float = 20.0,
+                                         width: int = 1000,
+                                         height: int = 700) -> None:
+    """Export a pyqtgraph GraphicsLayoutWidget to PNG and diff it.
 
     pyqtgraph renders through Qt, which depends on system freetype and
     fontconfig — two different Linux distros produce images that differ
@@ -94,7 +94,10 @@ def compare_pyqtgraph_scene_to_baseline(scene, baseline_path: str,
     pen cap rendering). Matplotlib's `compare_images` is strict about
     exact size, so we:
 
-    - Set an explicit scene rect so the output is always width x height.
+    - Force the central item geometry and the scene rect to width x
+      height so the plots fill the exported image (otherwise the central
+      item keeps whatever size the parent layout gave it, leaving a big
+      white band in the output).
     - Disable antialiasing at pyqtgraph level to reduce drift sources.
     - Rescale the actual image to the baseline's size when the drift is
       tiny (<2% per dimension) so the RMS diff can still run.
@@ -105,9 +108,17 @@ def compare_pyqtgraph_scene_to_baseline(scene, baseline_path: str,
     """
     import pyqtgraph.exporters  # noqa: F401 — registers exporter
     import pyqtgraph as pg
+    from PySide6.QtCore import QRectF
 
     pg.setConfigOptions(antialias=False)
-    scene.setSceneRect(0, 0, width, height)
+
+    rect = QRectF(0, 0, width, height)
+    scene = figure.scene()
+    scene.setSceneRect(rect)
+    # Force the top-level layout item to fill the scene so the plots
+    # re-flow to the full width x height area.
+    if getattr(figure, 'ci', None) is not None:
+        figure.ci.setGeometry(rect)
 
     actual_path = baseline_path.replace('.png', '_actual.png')
     exporter = pg.exporters.ImageExporter(scene)

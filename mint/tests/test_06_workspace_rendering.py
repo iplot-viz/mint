@@ -22,12 +22,17 @@ from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.models.utils import mtBlueprintParser
 from mint.tests.fixtures import BASELINE_DIR, write_csv_datasource_config
 from mint.tests.imageCompare import (
-    compare_figure_to_baseline, compare_pyqtgraph_scene_to_baseline,
+    compare_figure_to_baseline, compare_pyqtgraph_layout_to_baseline,
 )
 from mint.tests.qAppSingleton import ensure_qapp
 
 PYQT_CANONICAL_PLATFORM = 'linux'
+# Matplotlib Agg is byte-stable across platforms, so a strict tolerance is
+# appropriate. Pyqtgraph goes through Qt and drifts between Linux distros;
+# a higher tolerance catches real regressions (missing plots, wrong data)
+# while absorbing sub-pixel font differences.
 BASELINE_TOLERANCE = 5.0
+PYQT_BASELINE_TOLERANCE = 20.0
 # Fixed render size. For matplotlib we drive the Figure directly, bypassing
 # Qt layout so the PNG is deterministic across runs. For pyqt we grab the
 # widget (Linux-only).
@@ -108,9 +113,10 @@ class WorkspaceRenderingTest(unittest.TestCase):
                 figure = win.qtcanvas._parser.figure
                 figure.resize(*PYQT_GRAB_SIZE)
                 self.app.processEvents()
-                compare_pyqtgraph_scene_to_baseline(
-                    figure.scene(), baseline,
-                    tol=BASELINE_TOLERANCE, width=PYQT_GRAB_SIZE[0])
+                compare_pyqtgraph_layout_to_baseline(
+                    figure, baseline,
+                    tol=PYQT_BASELINE_TOLERANCE,
+                    width=PYQT_GRAB_SIZE[0], height=PYQT_GRAB_SIZE[1])
         finally:
             win.close()
 
