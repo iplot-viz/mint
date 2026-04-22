@@ -38,3 +38,10 @@ jobs:
       - name: Automated tests with Pytest
         run: |
           xvfb-run pytest
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml

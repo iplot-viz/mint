@@ -9,6 +9,14 @@ QT_QPA_PLATFORM=offscreen python -m pytest mint/tests/
 Offscreen is required: the main-window builds real Qt widgets and needs a
 platform plugin. All tests are self-contained (no UDA, no IMAS, no network).
 
+## Coverage
+
+`pytest-cov` is wired into `pyproject.toml`, so every run prints a
+per-module coverage summary to the terminal and writes `coverage.xml`
+to the repo root. CI uploads the XML as an artifact (`coverage-xml`)
+on every workflow run. Nothing extra needs to be installed — `pip install
+".[test]"` pulls `pytest-cov` as part of the test extra.
+
 ## Layout
 
 ```
