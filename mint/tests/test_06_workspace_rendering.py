@@ -84,6 +84,29 @@ def _populate_two_signals(win: MTMainWindow) -> None:
     win.sigCfgWidget.model.set_dataframe(df)
 
 
+def _populate_multi_stack(win: MTMainWindow) -> None:
+    """Four signals spread over two separate plots (columns 1 and 2)."""
+    df = pd.DataFrame({
+        'DS': ['csv', 'csv', 'csv', 'csv'],
+        'Variable': ['MAG-MCTB-F1:VAR1', 'MAG-MCTB-F1:VAR2',
+                     'MAG-MCTB-F1:VAR3', 'MAG-MCTB-F1:VAR4'],
+        'Stack': ['1.1', '1.2', '2.1', '2.2'],
+        'Plot type': ['PlotXY', 'PlotXY', 'PlotXY', 'PlotXY'],
+    })
+    win.sigCfgWidget.model.set_dataframe(df)
+
+
+def _populate_overlay_same_stack(win: MTMainWindow) -> None:
+    """Two signals on the same plot (overlay) — exercises multi-signal legend."""
+    df = pd.DataFrame({
+        'DS': ['csv', 'csv'],
+        'Variable': ['MAG-MCTB-F1:VAR1', 'MAG-MCTB-F1:VAR2'],
+        'Stack': ['1.1', '1.1'],
+        'Plot type': ['PlotXY', 'PlotXY'],
+    })
+    win.sigCfgWidget.model.set_dataframe(df)
+
+
 class WorkspaceRenderingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -125,6 +148,50 @@ class WorkspaceRenderingTest(unittest.TestCase):
 
     def test_two_signals_stacked_pyqtgraph(self):
         self._render_and_compare('pyqt', "two_signals_stacked")
+
+    def _render_with_signals(self, impl: str, name: str, populate) -> None:
+        if impl == 'pyqt' and not sys.platform.startswith(PYQT_CANONICAL_PLATFORM):
+            self.skipTest("pyqt visual baselines are canonical on Linux only")
+
+        win = _build_main_window(impl)
+        try:
+            populate(win)
+            win.draw_clicked()
+            self.app.processEvents()
+
+            baseline = os.path.join(BASELINE_DIR, f"{name}_{impl}.png")
+            if impl == 'matplotlib':
+                compare_figure_to_baseline(
+                    win.qtcanvas._parser.figure, baseline,
+                    tol=BASELINE_TOLERANCE,
+                    figsize=RENDER_FIGSIZE, dpi=RENDER_DPI)
+            else:
+                figure = win.qtcanvas._parser.figure
+                figure.resize(*PYQT_GRAB_SIZE)
+                self.app.processEvents()
+                compare_pyqtgraph_layout_to_baseline(
+                    figure, baseline,
+                    tol=PYQT_BASELINE_TOLERANCE,
+                    width=PYQT_GRAB_SIZE[0], height=PYQT_GRAB_SIZE[1])
+        finally:
+            win.close()
+
+    def test_multi_stack_matplotlib(self):
+        """Two columns × two stacks: four plots in a single canvas."""
+        self._render_with_signals('matplotlib', "multi_stack",
+                                  _populate_multi_stack)
+
+    def test_multi_stack_pyqtgraph(self):
+        self._render_with_signals('pyqt', "multi_stack", _populate_multi_stack)
+
+    def test_overlay_same_stack_matplotlib(self):
+        """Two signals on the same plot — exercises multi-signal legend."""
+        self._render_with_signals('matplotlib', "overlay_same_stack",
+                                  _populate_overlay_same_stack)
+
+    def test_overlay_same_stack_pyqtgraph(self):
+        self._render_with_signals('pyqt', "overlay_same_stack",
+                                  _populate_overlay_same_stack)
 
 
 if __name__ == '__main__':
