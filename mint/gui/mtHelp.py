@@ -6,8 +6,8 @@ import typing
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QTextCursor, QTextDocument
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
+from PySide6.QtGui import QKeySequence, QShortcut, QTextCursor, QTextDocument
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
                                QSplitter, QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
@@ -19,15 +19,11 @@ _TOC_PATTERN = re.compile(r"<(h[23])\s+id=\"([^\"]+)\"[^>]*>(.*?)</\1>", re.IGNO
 _TAG_PATTERN = re.compile(r"<[^>]+>")
 
 
-class MTHelp(QDialog):
-    def __init__(self, parent: typing.Optional[QMainWindow] = None):
+class MTHelp(QMainWindow):
+    def __init__(self, parent: typing.Optional[QWidget] = None):
         super().__init__(parent=parent)
         self.setWindowTitle("MINT - User Manual")
         self.resize(1100, 750)
-        self.setWindowFlags(self.windowFlags()
-                            | Qt.Window
-                            | Qt.WindowMinimizeButtonHint
-                            | Qt.WindowMaximizeButtonHint)
 
         self._image_dir_ctx = None
         self._image_dir: typing.Optional[Path] = None
@@ -93,9 +89,13 @@ class MTHelp(QDialog):
         bottom.addStretch(1)
         bottom.addWidget(close_btn)
 
-        layout = QVBoxLayout(self)
+        central = QWidget(self)
+        layout = QVBoxLayout(central)
         layout.addWidget(splitter)
         layout.addLayout(bottom)
+        self.setCentralWidget(central)
+
+        QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.close)
 
     def _on_toc_clicked(self, item: QTreeWidgetItem, _column: int):
         anchor = item.data(0, Qt.UserRole)
