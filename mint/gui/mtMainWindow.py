@@ -32,6 +32,7 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
+from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
@@ -165,6 +166,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         clear_cache_action.setStatusTip("Clear cache")
         clear_cache_action.triggered.connect(self.da.clear_cache)
 
+        user_manual_action = QAction("User Manual", self.menuBar())
+        user_manual_action.setStatusTip("Open the embedded MINT user manual")
+        user_manual_action.triggered.connect(lambda: self._open_manual())
+
+        error_ref_action = QAction("Error Reference", self.menuBar())
+        error_ref_action.setStatusTip("Browse the catalogue of MINT error messages")
+        error_ref_action.triggered.connect(lambda: self._open_manual(anchor="errors"))
+
+        help_menu.addAction(user_manual_action)
+        help_menu.addAction(error_ref_action)
+        help_menu.addSeparator()
         help_menu.addAction(clear_cache_action)
         help_menu.addAction(about_action)
         help_menu.addAction(about_qt_action)
@@ -231,6 +243,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.busy.connect(self.indicate_busy)
         self.sigCfgWidget.ready.connect(self.indicate_ready)
         self.sigCfgWidget.progressChanged.connect(self._progressBar.setValue)
+        self.sigCfgWidget.errorCellClicked.connect(self._open_manual)
         self.toolBar.exportAction.triggered.connect(self.on_export)
         self.toolBar.exportDataAction.triggered.connect(self.on_export_data)
         self.toolBar.importAction.triggered.connect(self.on_import)
@@ -662,8 +675,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def on_export_started(self, data: dict):
         self.exportCfgWidget.hide()
-        logger.warning(f"Export will be performed using the global time settings. Custom time and processing columns "
-                       f"will not be applied")
 
         ts, te = self.dataRangeSelector.get_time_range()
         pulse_number = self.dataRangeSelector.get_pulse_number()
@@ -692,6 +703,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.indicate_ready()
             return
 
+        attempt_count = 0
+        success_count = 0
         for ds_name, group in table.groupby('DS'):
             filename = f"{ds_name}.csv"
             export_group = group[['Variable', 'Comment']]
@@ -720,12 +733,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     new_path = original_path.with_name(valid_name)
 
                     # Use of export data script
-                    valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                         startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                    attempt_count += 1
+                    valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
                     if valid:
+                        success_count += 1
                         logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
                     else:
-                        logger.info(f"Export failed for data source: {ds_name}")
+                        reason = f"Export failed for data source '{ds_name}' (pulse {pulse}): {err_msg}"
+                        logger.warning(reason)
+                        errors.append(reason)
             else:
                 ts_str = f"{ts}"
                 te_str = f"{te}"
@@ -735,19 +752,30 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 new_path = original_path.with_name(valid_name)
 
                 # Use of export data script
-                valid = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                     startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                attempt_count += 1
+                valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
                 if valid:
+                    success_count += 1
                     logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
                 else:
-                    logger.info(f"Export failed for data source: {ds_name}")
+                    reason = f"Export failed for data source '{ds_name}': {err_msg}"
+                    logger.warning(reason)
+                    errors.append(reason)
 
-        if errors:
+        if attempt_count > 0 and success_count == 0:
+            error_details = "\n".join(f"- {e}" for e in errors)
+            logger.error("Export failed:\n%s", error_details)
+            self.show_popup_msg("Export failed",
+                                f"No data was exported. Reasons:\n{error_details}",
+                                QMessageBox.Icon.Critical)
+        elif errors:
             error_details = "\n".join(f"- {e}" for e in errors)
             logger.warning("Export completed with issues:\n%s", error_details)
             self.show_popup_msg("Export completed with issues",
-                                f"The following conditions prevented a full export:\n{error_details}",
-                                QMessageBox.Icon.Information)
+                                f"{success_count} of {attempt_count} export(s) completed. "
+                                f"Some issues were reported:\n{error_details}",
+                                QMessageBox.Icon.Warning)
         else:
             self.show_popup_msg("Export completed",
                                 "The data export process finished successfully", QMessageBox.Icon.Information)
@@ -1020,5 +1048,25 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         box = QMessageBox()
         box.setIcon(icon)
         box.setWindowTitle(title)
-        box.setText(message)
+
+        entry = ErrorCatalog.instance().match(message)
+        if entry:
+            box.setText(entry['title'])
+            box.setInformativeText(entry['explanation'])
+            box.setDetailedText(message)
+            learn_btn = box.addButton("Learn more", QMessageBox.ButtonRole.HelpRole)
+            box.addButton(QMessageBox.StandardButton.Ok)
+        else:
+            box.setText(message)
+            learn_btn = None
+
         box.exec_()
+
+        if learn_btn is not None and box.clickedButton() is learn_btn:
+            self._open_manual(anchor=entry.get('manual_anchor'))
+
+    def _open_manual(self, anchor: str = None):
+        from mint.gui.mtHelp import MTHelp
+        if not hasattr(self, '_helpDialog') or self._helpDialog is None:
+            self._helpDialog = MTHelp(self)
+        self._helpDialog.show_at(anchor)

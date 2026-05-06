@@ -20,6 +20,7 @@ from iplotlib.core import SignalXY, SignalContour
 from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, ParserHelper
 from iplotProcessing.tools import Parser
 
+from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.models.utils import mtBlueprintParser as mtBP
 from mint.tools.table_parser import get_value
 
@@ -120,14 +121,40 @@ class MTSignalsModel(QAbstractItemModel):
                 return self._red_brush
             else:
                 return self._orange_brush
-        # tooltip for comment column
         if role == Qt.ItemDataRole.ToolTipRole:
-            # get the column name
             column_name = self._table.columns[index.column()]
             if column_name == "Comment":
                 return self._table.iat[index.row(), index.column()]
 
         return None
+
+    def _row_status_message(self, row: int) -> str:
+        if 'Status' not in self._table.columns:
+            return ""
+        return str(self._table.iat[row, self._table.columns.get_loc('Status')] or "")
+
+    def error_info_for_cell(self, index: QModelIndex) -> typing.Optional[dict]:
+        if not index.isValid():
+            return None
+        fail_value = self._table_fails.iat[index.row(), index.column()]
+        column_name = self._table.columns[index.column()]
+        if fail_value == 0 and column_name != "Status":
+            return None
+        status_msg = self._row_status_message(index.row())
+        if not status_msg:
+            return None
+        entry = ErrorCatalog.instance().match(status_msg)
+        if entry:
+            return {
+                'title': entry['title'],
+                'explanation': entry['explanation'],
+                'anchor': entry.get('manual_anchor'),
+            }
+        return {
+            'title': 'Error',
+            'explanation': status_msg,
+            'anchor': None,
+        }
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole):
         if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
@@ -890,13 +917,17 @@ class MTSignalsModel(QAbstractItemModel):
         table = self._table[self._table['Stack'] != ""]
         errors = []
 
-        # Active processing check
-        if not (table[['x', 'y', 'z']] == "").all(axis=1).all():
-            errors.append("Processing in x/y/z columns is not supported for export")
+        xyz_mask = ~(table[['x', 'y', 'z']] == "").all(axis=1)
+        if xyz_mask.any():
+            skipped = self._format_skipped(table[xyz_mask])
+            errors.append(f"Processing in x/y/z columns is not supported for export "
+                          f"({xyz_mask.sum()} signal(s) skipped: {skipped})")
 
-        # Modified dates check
-        if not (table[['StartTime', 'EndTime']] == "").all(axis=1).all():
-            errors.append("Custom StartTime/EndTime is not supported for export")
+        time_mask = ~(table[['StartTime', 'EndTime']] == "").all(axis=1)
+        if time_mask.any():
+            skipped = self._format_skipped(table[time_mask])
+            errors.append(f"Custom StartTime/EndTime is not supported for export "
+                          f"({time_mask.sum()} signal(s) skipped: {skipped})")
 
         # Filter table
         filter_table = table[
@@ -907,12 +938,29 @@ class MTSignalsModel(QAbstractItemModel):
         # Filter column variable for processing due to for the moment is discarded
         p = Parser()
         mask = []
-        for val in filter_table['Variable']:
-            p.set_expression(val)
+        expr_signals = []
+        for _, row in filter_table.iterrows():
+            p.set_expression(row['Variable'])
             if p.is_valid:
-                errors.append("Processing expression in Variable column is not supported for export")
+                expr_signals.append(row)
             mask.append(not p.is_valid)
+
+        if expr_signals:
+            skipped = self._format_skipped(pd.DataFrame(expr_signals))
+            errors.append(f"Processing expression in Variable column is not supported for export "
+                          f"({len(expr_signals)} signal(s) skipped: {skipped})")
 
         result_table = filter_table[mask]
 
         return result_table, errors
+
+    @staticmethod
+    def _format_skipped(rows, limit: int = 5) -> str:
+        labels = []
+        for _, row in rows.iterrows():
+            alias = str(row.get('Alias', '') or '').strip()
+            variable = str(row.get('Variable', '') or '').strip()
+            labels.append(alias or variable or '<unnamed>')
+        if len(labels) > limit:
+            return ", ".join(labels[:limit]) + f", ... (+{len(labels) - limit} more)"
+        return ", ".join(labels)

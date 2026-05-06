@@ -1,0 +1,91 @@
+{
+    "version": 1,
+    "entries": [
+        {
+            "id": "permission-denied",
+            "patterns": [
+                "PermissionError",
+                "Permission denied",
+                "errno = 13"
+            ],
+            "title": "Permission denied",
+            "explanation": "MINT could not write the output file because the destination folder denies write access. This typically happens when exporting into a system or read-only location (for example a SDCC module install path).\n\nWhat to do:\n  1. Choose a different output folder under your home directory (e.g. ~/exports).\n  2. Make sure the destination folder exists and is writable by your user.\n  3. If you really need to write to a shared location, ask the administrator to grant write permissions.",
+            "manual_anchor": "errors-permission-denied"
+        },
+        {
+            "id": "shape-mismatch",
+            "patterns": [
+                "operands could not be broadcast together with shapes"
+            ],
+            "title": "Signal arrays have incompatible shapes",
+            "explanation": "An expression mixing two or more signals failed because the signal vectors do not have the same length. NumPy refuses to combine arrays of different sizes element-wise.\n\nWhat to do:\n  1. Check the time ranges of the signals involved. If they differ, the time-axis re-alignment is producing different sample counts.\n  2. Make sure all signals share the same data source resolution.\n  3. Manually align the signals by using the x/y columns and an interpolation expression, or split the calculation per signal.",
+            "manual_anchor": "errors-shape-mismatch"
+        },
+        {
+            "id": "no-data-sources",
+            "patterns": [
+                "no data sources found"
+            ],
+            "title": "No data sources available",
+            "explanation": "MINT could not connect to any UDA or IMAS data source at startup. Without at least one valid data source MINT cannot fetch any data.\n\nWhat to do:\n  1. Check that the environment variable IPLOT_SOURCES_CONFIG points to a valid datasources_def.cfg file.\n  2. Confirm that the UDA/IMAS server listed in that file is reachable from your machine.\n  3. On SDCC, run `module load MINT` in a fresh shell so the default data sources are configured.",
+            "manual_anchor": "errors-no-data-sources"
+        },
+        {
+            "id": "export-expression-in-variable",
+            "patterns": [
+                "Processing expression in Variable column is not supported for export"
+            ],
+            "title": "Expressions in Variable column cannot be exported",
+            "explanation": "Signals declared as expressions (using ${...}) in the Variable column are computed at draw time only. The Export feature exports raw signal data straight from the data source, so derived signals are skipped.\n\nWhat to do:\n  1. If you only need the raw signals, ignore this message: the underlying signals are still exported.\n  2. If you need the result of the expression, save the workspace and reproduce the computation downstream from the exported file.",
+            "manual_anchor": "errors-export-expression"
+        },
+        {
+            "id": "export-custom-time",
+            "patterns": [
+                "Custom StartTime/EndTime is not supported for export"
+            ],
+            "title": "Per-signal time overrides ignored during export",
+            "explanation": "Some signals in the table override the global time range with their own StartTime/EndTime. Export uses only the global time range, so those overrides are ignored.\n\nWhat to do:\n  1. Adjust the global time range to cover the period you want to export.\n  2. Or clear the per-signal StartTime/EndTime cells for the signals you want to export.",
+            "manual_anchor": "errors-export-custom-time"
+        },
+        {
+            "id": "export-xyz-processing",
+            "patterns": [
+                "Processing in x/y/z columns is not supported for export"
+            ],
+            "title": "Custom x/y/z processing ignored during export",
+            "explanation": "Some signals use the x, y or z columns to redefine their plotted vectors. Export delivers raw data from the data source and cannot replay these per-signal computations.\n\nWhat to do:\n  1. Export the raw signal and replay the x/y/z transformation in your downstream tool.\n  2. Or remove the x/y/z entries before exporting.",
+            "manual_anchor": "errors-export-xyz"
+        },
+        {
+            "id": "expression-not-array",
+            "patterns": [
+                "Result of expression=.* is not an instance of"
+            ],
+            "title": "Expression result is not a data array",
+            "explanation": "The expression you wrote produced a scalar (or unsupported type) instead of a numerical array. MINT cannot plot a single value; it needs a vector of points.\n\nWhat to do:\n  1. Check the expression: did you use np.max(...) where you wanted to keep an array?\n  2. Wrap scalar results into an array, e.g. np.max(${a}.data) * np.ones(${a}.data.size).",
+            "manual_anchor": "errors-expression-not-array"
+        },
+        {
+            "id": "no-data-in-interval",
+            "patterns": [
+                "Data-Access\\|0 points",
+                "\\|0 points\\b",
+                "no data .{0,40}interval",
+                "no data found"
+            ],
+            "title": "No data available for this signal",
+            "explanation": "The data source returned zero points for this signal in the requested time range. The signal exists, but there is no archived data in that interval - or the variable name does not match anything indexed by the server.\n\nWhat to do:\n  1. Widen the time range (or pick a different range where you expect data).\n  2. Double-check the variable name for typos. For IMAS data, make sure you used the full path including any [n] indices.\n  3. Confirm the data source is the right one (codacuda for ITER plant data, imasuda for IMAS).\n  4. If you used Extremities=1, the previous archived sample is shown if available; otherwise the cell stays empty.",
+            "manual_anchor": "errors-no-data-in-interval"
+        },
+        {
+            "id": "expression-envelope-mismatch",
+            "patterns": [
+                "is derived from signals with envelope data"
+            ],
+            "title": "Envelope flag missing on derived signal",
+            "explanation": "The expression depends on signals that use envelope data (min/avg/max). The result signal must therefore also be marked as envelope, otherwise MINT cannot reconcile the formats.\n\nWhat to do:\n  1. Set the Envelope column to 1 on the derived signal.\n  2. Or remove envelope mode on the source signals if you do not need it.",
+            "manual_anchor": "errors-envelope-mismatch"
+        }
+    ]
+}
