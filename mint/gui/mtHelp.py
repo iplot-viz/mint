@@ -25,6 +25,7 @@ class MTHelp(QDialog):
         self.setWindowTitle("MINT - User Manual")
         self.resize(1100, 750)
         self.setWindowFlags(self.windowFlags()
+                            | Qt.Window
                             | Qt.WindowMinimizeButtonHint
                             | Qt.WindowMaximizeButtonHint)
 
