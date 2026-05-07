@@ -101,15 +101,7 @@ class FindReplaceTest(unittest.TestCase):
             dlg.find_input.setText('nonexistent')
             dlg.replace_input.setText('whatever')
             dlg.find_text(find_one=False)
-            # No selection → replace_text has nothing to do. It still
-            # emits dataChanged for bookkeeping, which we accept; what
-            # matters is that the underlying data is intact.
-            try:
-                dlg.replace_text()
-            except ValueError:
-                # min()/max() on empty rows/cols sets raises — we treat
-                # this as a no-op, the model was never touched.
-                pass
+            dlg.replace_text()
             self.assertEqual(model.get_dataframe()['Alias'].tolist(),
                              original_aliases)
         finally:

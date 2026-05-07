@@ -119,10 +119,7 @@ class PlotTypeDelegateTest(unittest.TestCase):
         delegate = MTPlotTypeDelegate(plot_types=['PlotXY', 'PlotContour'])
         editor = delegate.createEditor(None, None, None)
         items = [editor.itemText(i) for i in range(editor.count())]
-        # createEditor also adds an empty option as a sentinel; the two
-        # plot types must be at the start.
-        self.assertIn('PlotXY', items)
-        self.assertIn('PlotContour', items)
+        self.assertEqual(items, ['PlotXY', 'PlotContour'])
 
     def test_set_model_data_writes_choice(self):
         delegate = MTPlotTypeDelegate(plot_types=['PlotXY', 'PlotContour'])
