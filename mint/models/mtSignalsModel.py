@@ -147,7 +147,7 @@ class MTSignalsModel(QAbstractItemModel):
         if entry:
             return {
                 'title': entry['title'],
-                'explanation': entry['explanation'],
+                'explanation': ErrorCatalog.format_for_popup(entry),
                 'anchor': entry.get('manual_anchor'),
             }
         return {

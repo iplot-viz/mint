@@ -289,85 +289,12 @@ $ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SD
 <h4 id="cat-validation">Table validation</h4>
 <p>Raised when MINT rejects a value typed in the signals table — invalid date formats, duplicated aliases, non-numeric stack identifiers, out-of-range values. These messages already describe both the problem and the remedy, so they only appear in the log; no further explanation is needed.</p>
 
+<h4 id="cat-streaming">Streaming</h4>
+<p>Raised by the streaming pipeline. Symptoms include occasional <em>operands could not be broadcast together</em> warnings while the X and Y buffers of a signal are being updated, and <code>PlotItem not found</code> followed by an <code>IndexError</code> in the date axis formatter when a workspace is imported with a stream still active. The first one is transient and recovers on the next frame; the second one is a known race for which the workaround is to stop the stream before importing.</p>
+
 <h3>Catalogued errors</h3>
-<p>The following entries are kept in sync with <code>mint/data/help/errors.json</code> so the popup <em>Learn more</em> button and the Status column tooltip can deep-link here.</p>
 
-<h3 id="errors-permission-denied">Permission denied</h3>
-<p>MINT could not write the output file because the destination folder denies write access. Common when exporting into a system or read-only location (e.g. an SDCC module install path).</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Choose a different output folder under your home directory (e.g. <code>~/exports</code>).</li>
-  <li>Make sure the destination folder exists and is writable.</li>
-  <li>If you really need to write to a shared location, ask the administrator to grant write permissions.</li>
-</ol>
-
-<h3 id="errors-shape-mismatch">Signal arrays have incompatible shapes</h3>
-<p>An expression mixing two or more signals failed because the underlying vectors have different lengths and NumPy refuses to broadcast them.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Check the time ranges of the involved signals; differing ranges yield different sample counts.</li>
-  <li>Make sure all signals share the same data source resolution.</li>
-  <li>Re-align manually using the x/y columns and an interpolation expression, or split the calculation per signal.</li>
-</ol>
-
-<h3 id="errors-no-data-sources">No data sources available</h3>
-<p>MINT could not connect to any UDA or IMAS data source at startup.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Check that <code>IPLOT_SOURCES_CONFIG</code> points to a valid <code>datasources_def.cfg</code> file.</li>
-  <li>Confirm the UDA/IMAS server listed there is reachable from your machine.</li>
-  <li>On SDCC, run <code>module load MINT</code> in a fresh shell so the default sources are configured.</li>
-</ol>
-
-<h3 id="errors-export-expression">Expressions in Variable column cannot be exported</h3>
-<p>Signals declared as expressions (<code>${...}</code>) in the Variable column are computed at draw time only. The Export feature delivers raw data straight from the source, so derived signals are skipped.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>If you only need the raw signals, ignore the message: the underlying ones are still exported.</li>
-  <li>If you need the result of the expression, save the workspace and reproduce the computation downstream.</li>
-</ol>
-
-<h3 id="errors-export-custom-time">Per-signal time overrides ignored during export</h3>
-<p>Some signals in the table override the global time range with their own StartTime/EndTime. Export uses only the global time range.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Adjust the global time range to cover the period you want to export.</li>
-  <li>Or clear the per-signal StartTime/EndTime cells.</li>
-</ol>
-
-<h3 id="errors-export-xyz">Custom x/y/z processing ignored during export</h3>
-<p>Signals using x/y/z columns to redefine their plotted vectors cannot have those transformations replayed during export.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Export the raw signal and replay the transformation in your downstream tool.</li>
-  <li>Or remove the x/y/z entries before exporting.</li>
-</ol>
-
-<h3 id="errors-expression-not-array">Expression result is not a data array</h3>
-<p>The expression produced a scalar or unsupported type instead of a numerical array.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Check whether <code>np.max(...)</code> was meant to keep an array.</li>
-  <li>Wrap scalar results into an array, e.g. <code>np.max(${a}.data) * np.ones(${a}.data.size)</code>.</li>
-</ol>
-
-<h3 id="errors-no-data-in-interval">No data available for this signal</h3>
-<p>The data source returned zero points for this signal in the requested time range. The signal exists, but there is no archived data in that interval - or the variable name does not match anything indexed by the server.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Widen the time range, or pick a different range where you expect data.</li>
-  <li>Double-check the variable name for typos. For IMAS data, make sure you used the full path including any <code>[n]</code> indices.</li>
-  <li>Confirm the data source is the right one (<code>codacuda</code> for ITER plant data, <code>imasuda</code> for IMAS).</li>
-  <li>If you used <code>Extremities=1</code>, the previous archived sample is shown if available; otherwise the cell stays empty.</li>
-</ol>
-
-<h3 id="errors-envelope-mismatch">Envelope flag missing on derived signal</h3>
-<p>The expression depends on signals that use envelope data (min/avg/max). The result signal must therefore also be marked as envelope.</p>
-<p><strong>What to do:</strong></p>
-<ol>
-  <li>Set the Envelope column to 1 on the derived signal.</li>
-  <li>Or remove envelope mode on the source signals if not needed.</li>
-</ol>
+<!-- AUTO_ERRORS -->
 
 </body>
 </html>

@@ -1,3 +1,4 @@
+import html
 import json
 import pkgutil
 import re
@@ -50,3 +51,42 @@ class ErrorCatalog:
 
     def all_entries(self) -> list:
         return list(self._entries)
+
+    @staticmethod
+    def format_for_popup(entry: dict) -> str:
+        lines = [entry.get('summary', '').strip()]
+        steps = entry.get('what_to_do') or []
+        if steps:
+            lines.append("")
+            lines.append("What to do:")
+            for i, step in enumerate(steps, 1):
+                lines.append(f"  {i}. {step}")
+        tail = (entry.get('if_it_persists') or '').strip()
+        if tail:
+            lines.append("")
+            lines.append("If it persists:")
+            lines.append(f"  {tail}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def render_html(entry: dict) -> str:
+        anchor = entry.get('manual_anchor', '')
+        title = html.escape(entry.get('title', ''))
+        summary = html.escape(entry.get('summary', '').strip())
+
+        parts = [f'<h3 id="{html.escape(anchor)}">{title}</h3>',
+                 f'<p>{summary}</p>']
+
+        steps = entry.get('what_to_do') or []
+        if steps:
+            parts.append('<p><strong>What to do:</strong></p>')
+            parts.append('<ol>')
+            for step in steps:
+                parts.append(f'  <li>{html.escape(step)}</li>')
+            parts.append('</ol>')
+
+        tail = (entry.get('if_it_persists') or '').strip()
+        if tail:
+            parts.append(f'<p><strong>If it persists:</strong> {html.escape(tail)}</p>')
+
+        return "\n".join(parts)

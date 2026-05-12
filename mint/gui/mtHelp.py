@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPus
                                QVBoxLayout, QWidget)
 
 from iplotLogging import setupLogger as setupLog
+from mint.gui.mtErrorCatalog import ErrorCatalog
 
 logger = setupLog.get_logger(__name__)
 
 _TOC_PATTERN = re.compile(r"<(h[23])\s+id=\"([^\"]+)\"[^>]*>(.*?)</\1>", re.IGNORECASE | re.DOTALL)
 _TAG_PATTERN = re.compile(r"<[^>]+>")
+_ERRORS_MARKER = "<!-- AUTO_ERRORS -->"
 
 
 class MTHelp(QMainWindow):
@@ -96,11 +98,16 @@ class MTHelp(QMainWindow):
         self.setCentralWidget(central)
 
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.close)
+        QShortcut(QKeySequence.Find, self, activated=self._focus_search)
 
     def _on_toc_clicked(self, item: QTreeWidgetItem, _column: int):
         anchor = item.data(0, Qt.UserRole)
         if anchor:
             self._scroll_to_anchor(anchor)
+
+    def _focus_search(self):
+        self._search.setFocus(Qt.ShortcutFocusReason)
+        self._search.selectAll()
 
     def _find_next(self):
         needle = self._search.text().strip()
@@ -165,12 +172,24 @@ class MTHelp(QMainWindow):
                                   f"<p>Could not load the embedded manual ({exc!r}).</p>")
             return
 
+        html = self._inject_error_catalog(html)
+
         self._image_dir = self._resolve_image_dir()
         if self._image_dir is not None:
             self._browser.setSearchPaths([str(self._image_dir)])
 
         self._browser.setHtml(html)
         self._populate_toc(html)
+
+    @staticmethod
+    def _inject_error_catalog(html: str) -> str:
+        if _ERRORS_MARKER not in html:
+            return html
+        entries = ErrorCatalog.instance().all_entries()
+        if not entries:
+            return html.replace(_ERRORS_MARKER, "<p><em>No catalogued entries available.</em></p>")
+        rendered = "\n\n".join(ErrorCatalog.render_html(e) for e in entries)
+        return html.replace(_ERRORS_MARKER, rendered)
 
     def _populate_toc(self, html: str):
         self._toc.clear()

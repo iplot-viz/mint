@@ -1052,7 +1052,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         entry = ErrorCatalog.instance().match(message)
         if entry:
             box.setText(entry['title'])
-            box.setInformativeText(entry['explanation'])
+            box.setInformativeText(ErrorCatalog.format_for_popup(entry))
             box.setDetailedText(message)
             learn_btn = box.addButton("Learn more", QMessageBox.ButtonRole.HelpRole)
             box.addButton(QMessageBox.StandardButton.Ok)
