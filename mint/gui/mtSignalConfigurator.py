@@ -225,7 +225,7 @@ class MTSignalConfigurator(QWidget):
             widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
             self._tabs.addTab(widget, widget.windowTitle())
             widget.view().setItemDelegateForColumn(0, self._ds_delegate)
-            widget.view().setItemDelegateForColumn(6, self._cal_delegate)
+            widget.view().setItemDelegateForColumn(14, self._cal_delegate)
             widget.view().setItemDelegateForColumn(15, self._pt_delegate)
             widget.view().setSortingEnabled(True)
 
