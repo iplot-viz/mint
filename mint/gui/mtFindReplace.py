@@ -71,6 +71,8 @@ class FindReplaceDialog(QDialog):
         text_to_find = self.find_input.text()
         text_to_replace = self.replace_input.text()
         all_indexes = self.table_view.selectionModel().selectedIndexes()
+        if not all_indexes:
+            return
         rows = set()
         cols = set()
         for index in all_indexes:
