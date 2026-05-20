@@ -1,11 +1,12 @@
 {
   "title": null,
   "font_size": 8,
-  "shared_x_axis": false,
+  "shared_x_axis": true,
   "max_diff": 1,
   "round_hour": false,
   "log_scale": false,
   "grid": true,
+  "grid_spacing_label": false,
   "ticks_position": false,
   "tick_number": 7,
   "background_color": "#FFFFFF",

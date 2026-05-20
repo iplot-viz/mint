@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
+import getpass
 import json
 import os
 import pkgutil
@@ -359,7 +360,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         workspace.update({
             '_metadata': {
                 'createdAt': datetime.now().isoformat(),
-                'createdBy': os.getlogin(),
+                'createdBy': getpass.getuser(),
                 'createdOnHost': socket.gethostname(),
                 'appVersion': self.appVersion
             }

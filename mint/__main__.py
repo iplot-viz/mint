@@ -20,6 +20,11 @@ def load_env(fpath):
 
 
 def main():
+    if 'IPLOT_CANVAS_CONFIG' not in os.environ:
+        from importlib import resources
+        bundled = resources.files('mint.data').joinpath('canvas_properties', 'default_properties.json')
+        os.environ['IPLOT_CANVAS_CONFIG'] = str(bundled)
+
     if os.environ.get('MINT_XK_CONFIG') is not None and os.path.isfile(os.environ.get('MINT_XK_CONFIG')):
         logger.info("Found an environment XK_CONFIG file for MINT")
         load_env(os.environ.get('MINT_XK_CONFIG'))
