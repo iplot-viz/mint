@@ -21,280 +21,381 @@
   ul.toc li { margin: 2px 0; }
   ul.toc a { text-decoration: none; }
   img.inline-icon { vertical-align: middle; height: 18px; border: 0; }
+  figure { text-align: center; margin: 14px auto; }
+  figcaption { color: #555; font-size: 90%; font-style: italic; }
 </style>
 </head>
 <body>
-
 <h1>MINT - User Manual</h1>
 <p><em>Make Informative and Nice Trends.</em> Visualization tool for ITER, developed alongside Science Division.</p>
-
 <h2>Table of Contents</h2>
-<ul class="toc">
-  <li><a href="#introduction">1. Introduction</a></li>
-  <li><a href="#viewing-data">2. Viewing data</a>
-    <ul>
-      <li><a href="#installation">2.1 Installation</a></li>
-      <li><a href="#logging">2.2 Logging</a></li>
-      <li><a href="#time-configuration">2.3 Time configuration</a></li>
-      <li><a href="#table">2.4 Table</a></li>
-      <li><a href="#draw-stream">2.5 Draw, Stream</a></li>
-      <li><a href="#export-import-workspace">2.6 Export/Import workspace</a></li>
-      <li><a href="#export-data">2.7 Export data</a></li>
-      <li><a href="#plotting-area">2.8 Plotting area</a></li>
-      <li><a href="#expressions">2.9 Expressions</a></li>
-      <li><a href="#data-sources">2.10 Data Sources</a></li>
-    </ul>
-  </li>
-  <li><a href="#iter-environment">3. ITER environment</a></li>
-  <li><a href="#faq">4. FAQ</a></li>
-  <li><a href="#errors">5. Error reference</a>
-    <ul>
-      <li><a href="#error-categories">5.1 Error categories</a></li>
-    </ul>
-  </li>
+<ul>
+<li><a href="#introduction">1. Introduction</a></li>
+<li><a href="#viewing-data">2. Viewing data</a><ul>
+<li><a href="#installation">2.1 Installation</a></li>
+<li><a href="#logging">2.2 Logging</a></li>
+<li><a href="#time-configuration">2.3 Time configuration</a></li>
+<li><a href="#table">2.4 Table</a></li>
+<li><a href="#draw-stream">2.5 Draw, Stream</a></li>
+<li><a href="#export-import-workspace">2.6 Export/Import workspace</a></li>
+<li><a href="#export-data">2.7 Export data</a></li>
+<li><a href="#plotting-area">2.8 Plotting area</a></li>
+<li><a href="#expressions">2.9 Expressions</a></li>
+<li><a href="#data-sources">2.10 Data Sources</a></li>
 </ul>
-
+</li>
+<li><a href="#iter-environment">3. ITER environment</a></li>
+<li><a href="#reference">4. Reference</a><ul>
+<li><a href="#keyboard-shortcuts">4.1 Keyboard shortcuts</a></li>
+<li><a href="#access-modes">4.2 Access modes</a></li>
+<li><a href="#datasource-types">4.3 Supported data source types</a></li>
+</ul>
+</li>
+<li><a href="#faq">5. FAQ</a></li>
+<li><a href="#errors">6. Error reference</a><ul>
+<li><a href="#error-categories">6.1 Error categories</a></li>
+</ul>
+</li>
+</ul>
 <h2 id="introduction">1. Introduction</h2>
-
 <h3 id="purpose-scope">1.1 Purpose and scope</h3>
 <p>This is a how-to guide for MINT - Make Informative and Nice Trends, the visualization tool developed alongside Science Division and used in the ITER control room. It retrieves both CODAC and IMAS data and is implemented in Python 3, PySide6, Matplotlib and VTK.</p>
 <p>The current version is limited to 1-D traces. More complex plots are planned for upcoming releases.</p>
-
 <h3 id="definitions">1.2 Definitions</h3>
 <table>
-  <tr><th>Term</th><th>Meaning</th></tr>
-  <tr><td>IMAS</td><td>Integrated Modelling Application Software</td></tr>
-  <tr><td>UDA</td><td>Unified Data Access</td></tr>
-  <tr><td>CBS</td><td>Control Breakdown Structure</td></tr>
-  <tr><td>Scsv</td><td>Semi-colon separated values</td></tr>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IMAS</td>
+<td>Integrated Modelling Application Software</td>
+</tr>
+<tr>
+<td>UDA</td>
+<td>Unified Data Access</td>
+</tr>
+<tr>
+<td>CBS</td>
+<td>Control Breakdown Structure</td>
+</tr>
+<tr>
+<td>Scsv</td>
+<td>Semi-colon separated values</td>
+</tr>
+</tbody>
 </table>
-
 <h3 id="references">1.3 References</h3>
 <ul>
-  <li>[RD1] IMAS data dictionary</li>
-  <li>[RD2] NumPy</li>
-  <li>[RD3] UDA user manual (TPLTGK)</li>
-  <li>[RD4] Advanced Exercises (BBNVVH)</li>
-  <li>[RD5] Example of user-defined processing</li>
-  <li>[RD6] Example of user-defined data source</li>
+<li>[RD1] IMAS data dictionary</li>
+<li>[RD2] NumPy</li>
+<li>[RD3] UDA user manual (TPLTGK)</li>
+<li>[RD4] Advanced Exercises (BBNVVH)</li>
+<li>[RD5] Example of user-defined processing</li>
+<li>[RD6] Example of user-defined data source</li>
 </ul>
-
 <h2 id="viewing-data">2. Viewing data</h2>
-
 <h3 id="installation">2.1 Installation</h3>
 <p>On a CODAC environment:</p>
-<pre>$ sudo yum install codac-core-$(codac-version -v)-mint codac-core-$(codac-version -v)-uda-client-python3-utils -y</pre>
+<pre><code>$ sudo yum install codac-core-$(codac-version -v)-mint codac-core-$(codac-version -v)-uda-client-python3-utils -y
+</code></pre>
 <p>On SDCC (no installation required):</p>
-<pre>$ module load MINT</pre>
+<pre><code>$ module load MINT
+</code></pre>
 <p>To start the tool:</p>
-<pre>$ mint</pre>
+<pre><code>$ mint
+</code></pre>
 <div class="note">If MINT exits with <em>"no data sources found, exiting"</em>, it could not find a valid UDA or IMAS server. See <a href="#errors-no-data-sources">Error reference - No data sources</a> and <a href="#data-sources">section 2.10</a>.</div>
 
 <h3 id="logging">2.2 Logging</h3>
 <p>Log files live under <code>~/.local/1Dtool/logs/</code>; the log file is <code>mint.log</code>.</p>
 <p>Severity is controlled with the <code>IPLOT_LOG_LEVEL</code> environment variable, set <em>before</em> starting the tool. Allowed values: <code>DEBUG</code>, <code>WARNING</code>, <code>CRITICAL</code>, <code>ERROR</code>.</p>
-<pre>$ export IPLOT_LOG_LEVEL=DEBUG
-$ mint</pre>
-
+<pre><code>$ export IPLOT_LOG_LEVEL=DEBUG
+$ mint
+</code></pre>
 <h3 id="time-configuration">2.3 Time configuration</h3>
 <p>MINT always assumes UTC time, regardless of the host time zone. Timestamps follow ISO 8601.</p>
 <p>Data can be queried by:</p>
 <ul>
-  <li>Absolute time range (From time / To time, ISO 8601).</li>
-  <li>Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. <code>ITER:CWS-SCSU-BASIN-FILL-TESTS/130125</code>. On SDCC, IMAS pulses use <code>pulse/run</code>, e.g. <code>135011/7</code>, or an Access Layer URI such as <code>imas:hdf5?path=/home/ITER/.../3/105027/32</code>.</li>
-  <li>Relative time range, with an optional refresh interval (minimum 5 minutes).</li>
+<li>Absolute time range (From time / To time, ISO 8601).</li>
+<li>Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. <code>ITER:CWS-SCSU-BASIN-FILL-TESTS/130125</code>. On SDCC, IMAS pulses use <code>pulse/run</code>, e.g. <code>135011/7</code>, or an Access Layer URI such as <code>imas:hdf5?path=/home/ITER/.../3/105027/32</code>.</li>
+<li>Relative time range, with an optional refresh interval (minimum 5 minutes).</li>
 </ul>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_01.png" alt="Querying by absolute time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 1. Querying by absolute time range.</i></td></tr></table>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_02.png" alt="Querying by pulse id on CCS" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 2. Querying by pulse id on CCS.</i></td></tr></table>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_03.png" alt="Querying IMAS data by pulse id on SDCC" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 3. Querying IMAS data by pulse id on SDCC: pulse/run.</i></td></tr></table>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></td></tr></table>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_01.png" alt="Querying by absolute time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 1. Querying by absolute time range.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_02.png" alt="Querying by pulse id on CCS" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 2. Querying by pulse id on CCS.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_03.png" alt="Querying IMAS data by pulse id on SDCC" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 3. Querying IMAS data by pulse id on SDCC: pulse/run.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
 
 <p>Multiple pulse IDs can be overlaid by separating them with commas. Use the <em>Search</em> button next to the Pulse ID field to browse pulses.</p>
-
 <h3 id="table">2.4 Table</h3>
-
 <h4>2.4.1 Icons and buttons</h4>
 <p>The toolbar above the variable table provides import / save / append actions, a <em>Hide/Show columns</em> menu, a <em>Search Vars</em> button (browse variables per data source), and <em>Load new module</em> to register an extra Python module for processing.</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
 <h4>2.4.2 Columns definition</h4>
 <table>
-  <tr><th>Column</th><th>Meaning</th></tr>
-  <tr><td>DS</td><td>Data Source alias. Choose <code>codacuda</code> for ITER plant data, <code>imasuda</code> for IMAS data.</td></tr>
-  <tr><td>Variable</td><td>Variable name. For IMAS, full structure with <code>[]</code> for arrays, e.g. <code>summary/heating_current_drive/ec[0]/power/value</code>.</td></tr>
-  <tr><td>Stack</td><td>Up to three dot-separated digits: row, column, optional stack id. Numbering starts at 1. Stack id defaults to 1; signals sharing a stack share the X axis.</td></tr>
-  <tr><td>Row span</td><td>Rows the plot occupies (default 1).</td></tr>
-  <tr><td>Col span</td><td>Columns the plot occupies (default 1).</td></tr>
-  <tr><td>Envelope</td><td>Empty disables envelope. Set to 1 to compute min/max/avg envelope.</td></tr>
-  <tr><td>Alias</td><td>Shortcut name used in legends and expressions.</td></tr>
-  <tr><td>Pulse ID</td><td>Per-row pulse override. Use <code>+(pulseID)</code> to add, <code>-(pulseID)</code> to exclude, comma-separated.</td></tr>
-  <tr><td>Start Time / End Time</td><td>Per-row time override (ISO 8601, or relative seconds for pulse mode; negative values allowed).</td></tr>
-  <tr><td>X / Y / Z</td><td>Redefine the X, Y, Z vectors used for plotting (Z for contour and slider plots).</td></tr>
-  <tr><td>Extremities</td><td>Set to 1 to retrieve the last point before the start time (useful for PON data).</td></tr>
-  <tr><td>Plot type</td><td>Default <code>PlotXY</code>.</td></tr>
-  <tr><td>Output datatype</td><td>Indicates the output type of data retrieved from the archive.</td></tr>
-  <tr><td>Status</td><td>Status of the different stages (data retrieval, processing).</td></tr>
-  <tr><td>Comment</td><td>Free-text description, useful when sharing CSV/workspace files.</td></tr>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DS</td>
+<td>Data Source alias. Choose <code>codacuda</code> for ITER plant data, <code>imasuda</code> for IMAS data.</td>
+</tr>
+<tr>
+<td>Variable</td>
+<td>Variable name. For IMAS, full structure with <code>[]</code> for arrays, e.g. <code>summary/heating_current_drive/ec[0]/power/value</code>.</td>
+</tr>
+<tr>
+<td>Stack</td>
+<td>Up to three dot-separated digits: row, column, optional stack id. Numbering starts at 1. Stack id defaults to 1; signals sharing a stack share the X axis.</td>
+</tr>
+<tr>
+<td>Row span</td>
+<td>Rows the plot occupies (default 1).</td>
+</tr>
+<tr>
+<td>Col span</td>
+<td>Columns the plot occupies (default 1).</td>
+</tr>
+<tr>
+<td>Envelope</td>
+<td>Empty disables envelope. Set to 1 to compute min/max/avg envelope.</td>
+</tr>
+<tr>
+<td>Alias</td>
+<td>Shortcut name used in legends and expressions.</td>
+</tr>
+<tr>
+<td>Pulse ID</td>
+<td>Per-row pulse override. Use <code>+(pulseID)</code> to add, <code>-(pulseID)</code> to exclude, comma-separated.</td>
+</tr>
+<tr>
+<td>Start Time / End Time</td>
+<td>Per-row time override (ISO 8601, or relative seconds for pulse mode; negative values allowed).</td>
+</tr>
+<tr>
+<td>X / Y / Z</td>
+<td>Redefine the X, Y, Z vectors used for plotting (Z for contour and slider plots).</td>
+</tr>
+<tr>
+<td>Extremities</td>
+<td>Set to 1 to retrieve the last point before the start time (useful for PON data).</td>
+</tr>
+<tr>
+<td>Plot type</td>
+<td>Default <code>PlotXY</code>.</td>
+</tr>
+<tr>
+<td>Output datatype</td>
+<td>Indicates the output type of data retrieved from the archive.</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Status of the different stages (data retrieval, processing).</td>
+</tr>
+<tr>
+<td>Comment</td>
+<td>Free-text description, useful when sharing CSV/workspace files.</td>
+</tr>
+</tbody>
 </table>
 <p>Complex layouts can be built by manipulating <em>Stack</em>, <em>Row span</em> and <em>Col span</em>. The example workspace <code>ExampleOfComplexLayout.json</code> reproduces a multi-plot layout combining stacks and column spans.</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
 
 <h3 id="draw-stream">2.5 Draw, Stream</h3>
 <p>Once the time range or pulse IDs are set and the table populated, click <strong>Draw</strong> to plot, or <strong>Stream</strong> to subscribe to incoming data. Streaming requires a window in seconds (max 3600 s).</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></td></tr></table>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
+
 <div class="note">Preferences are unavailable while streaming. Apply preferences via <em>Draw</em> first, then start the stream.</div>
 
 <h3 id="export-import-workspace">2.6 Export/Import workspace</h3>
 <p>Use <em>File &gt; Import Workspace</em> or <em>File &gt; Export workspace</em>. Workspaces are JSON files.</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
 <h3 id="export-data">2.7 Export data</h3>
 <p>The <em>Export</em> button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded.</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
+
 <div class="err-block">If the export fails or completes only partially, MINT shows a popup with the underlying reason. Common causes are listed under <a href="#errors">Error reference</a>: <a href="#errors-permission-denied">Permission denied</a>, <a href="#errors-export-expression">Expressions in Variable column</a>, <a href="#errors-export-custom-time">Per-signal time overrides</a>, <a href="#errors-export-xyz">Custom x/y/z processing</a>.</div>
 
 <h3 id="plotting-area">2.8 Plotting area</h3>
 <p>Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></td></tr></table>
-<ul>
-  <li><strong>SELECT</strong>: left double-click to put a plot in full-screen; right double-click to go back.</li>
-  <li><strong>CROSSHAIR</strong>: shows X/Y coordinates and the closest signal value. SELECT disables it.</li>
-  <li><strong>PAN</strong>: drag to pan; left double-click to reset.</li>
-  <li><strong>ZOOM</strong>: rubber-band a region (cover both X and Y); left double-click to reset.</li>
-  <li><strong>DIST</strong>: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).</li>
-  <li><strong>MARKER</strong>: precise distance by selecting points (only with &lt; 100 points per plot).</li>
-  <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via <em>Hide/Show columns</em>.</li>
-  <li>Undo / Redo: roll back or replay the last pan/zoom action.</li>
-  <li>Folder / Floppy: open / save preferences.</li>
-  <li>Square-with-arrow: export the points of each signal currently rendered.</li>
-  <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
-  <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
-</ul>
+<p style="text-align:center;margin:14px 0;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
 
+<ul>
+<li><strong>SELECT</strong>: left double-click to put a plot in full-screen; right double-click to go back.</li>
+<li><strong>CROSSHAIR</strong>: shows X/Y coordinates and the closest signal value. SELECT disables it.</li>
+<li><strong>PAN</strong>: drag to pan; left double-click to reset.</li>
+<li><strong>ZOOM</strong>: rubber-band a region (cover both X and Y); left double-click to reset.</li>
+<li><strong>DIST</strong>: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).</li>
+<li><strong>MARKER</strong>: precise distance by selecting points (only with &lt; 100 points per plot).</li>
+<li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via <em>Hide/Show columns</em>.</li>
+<li>Undo / Redo: roll back or replay the last pan/zoom action.</li>
+<li>Folder / Floppy: open / save preferences.</li>
+<li>Square-with-arrow: export the points of each signal currently rendered.</li>
+<li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
+<li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
+</ul>
 <h4>Canvas-level preferences</h4>
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), focus all plots on stack.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>
 <p>Most preference changes survive subsequent <em>Draw</em> calls; axis-limit changes do not. Click <em>Apply</em> to commit and close the panel.</p>
 <p>To persist preferences, save them and add to your profile:</p>
-<pre>IPLOT_CANVAS_CONFIG=~/.local/1DPreferences/default_properties.json</pre>
-
+<pre><code>IPLOT_CANVAS_CONFIG=~/.local/1DPreferences/default_properties.json
+</code></pre>
 <h3 id="expressions">2.9 Expressions</h3>
-
 <h4>2.9.1 Simple processing</h4>
 <p>Wrap a variable in <code>${...}</code> and combine with NumPy operations. <code>${X}.data</code> and <code>${X}.time</code> refer to the data and time vectors of variable X.</p>
 <p>Example: multiply <code>UTIL-HV-S22-BUS1:TOTAL_POWER</code> by <code>-2</code> and add an offset of <code>10</code>:</p>
-<pre>${UTIL-HV-S22-BUS1:TOTAL_POWER}*(-2)+10</pre>
+<pre><code>${UTIL-HV-S22-BUS1:TOTAL_POWER}*(-2)+10
+</code></pre>
 <p>Aliases can be reused in expressions. If the Stack column is empty, the signal is not drawn (it can still feed an expression).</p>
-
 <h4>2.9.2 Complex processing</h4>
 <p>Combine several variables with aliases:</p>
-<pre>${Bus1} + ${Bus2} + ${Bus4}</pre>
+<pre><code>${Bus1} + ${Bus2} + ${Bus4}
+</code></pre>
 <p>The processing module aligns the time vectors when they differ (union of the time vectors, interpolated using the previous-value mode).</p>
 <div class="err-block">If the result of an expression has incompatible shapes, MINT will report it - see <a href="#errors-shape-mismatch">Signal arrays have incompatible shapes</a>.</div>
 
 <h4>2.9.3 Use of x and y columns</h4>
 <p>The <em>x</em> column rewrites the time vector; <em>y</em> rewrites the data vector. Example - plot a signal as the maximum value over a relative-time window:</p>
 <table>
-  <tr><th>Column</th><th>Value</th></tr>
-  <tr><td>X</td><td><code>(${ML4_max}.time-${ML4_max}.time[0])/86400000000000</code></td></tr>
-  <tr><td>Y</td><td><code>np.max(${ML4_max}.data) * np.ones(${ML4_max}.data.size)</code></td></tr>
+<thead>
+<tr>
+<th>Column</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>X</td>
+<td><code>(${ML4_max}.time-${ML4_max}.time[0])/86400000000000</code></td>
+</tr>
+<tr>
+<td>Y</td>
+<td><code>np.max(${ML4_max}.data) * np.ones(${ML4_max}.data.size)</code></td>
+</tr>
+</tbody>
 </table>
 <p>NumPy is available via the <code>np.</code> prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.</p>
-<table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Using X and Y columns in a complex processing.</i></td></tr></table>
+<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Using X and Y columns in a complex processing.</i></p>
 
 <h3 id="data-sources">2.10 Data Sources</h3>
 <p>The default configuration lives under <code>/etc/opt/codac/mint/datasources_def.cfg</code>. Example:</p>
-<pre>{
-  "codacuda": {
-    "type": "CODAC_UDA",
-    "host": "io-ls-udasrv1.iter.org",
-    "port": 3090,
-    "rturl": "https://controls.iter.org/dashboard/backend/sse",
-    "rtheaders": "REMOTE_USER:$USERNAME,User-Agent:python_client",
-    "rtauth": null,
-    "default": true
+<pre><code>{
+  &quot;codacuda&quot;: {
+    &quot;type&quot;: &quot;CODAC_UDA&quot;,
+    &quot;host&quot;: &quot;io-ls-udasrv1.iter.org&quot;,
+    &quot;port&quot;: 3090,
+    &quot;rturl&quot;: &quot;https://controls.iter.org/dashboard/backend/sse&quot;,
+    &quot;rtheaders&quot;: &quot;REMOTE_USER:$USERNAME,User-Agent:python_client&quot;,
+    &quot;rtauth&quot;: null,
+    &quot;default&quot;: true
   },
-  "imaspy": {
-    "type": "IMASPY",
-    "database": "iter",
-    "path": "public",
-    "backend": "MDSPLUS"
+  &quot;imaspy&quot;: {
+    &quot;type&quot;: &quot;IMASPY&quot;,
+    &quot;database&quot;: &quot;iter&quot;,
+    &quot;path&quot;: &quot;public&quot;,
+    &quot;backend&quot;: &quot;MDSPLUS&quot;
   }
-}</pre>
+}
+</code></pre>
 <p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none).</p>
-
+<p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
-
 <h3 id="codac">3.1 CODAC</h3>
 <p>MINT is installed on all CODAC XPOZ terminals. The CCI team grants access to the relevant machines. The tool connects to the central UDA servers; IMAS data is not yet accessible from CODAC terminals.</p>
-
 <h3 id="sdcc">3.2 SDCC cluster</h3>
-<pre>$ module load MINT
-$ mint</pre>
+<pre><code>$ module load MINT
+$ mint
+</code></pre>
 <p>From SDCC you can plot IMAS and CODAC data on the same canvas. IMAS data is only accessible by pulse IDs (no absolute time range).</p>
-
 <h3 id="pulse-identifier">3.3 Pulse identifier support</h3>
 <p>Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three parts: location, category, number, e.g. <code>ITER:PCS/12000</code>. Both syntaxes are supported; bare numbers fall back to the central UDA defaults. IMAS pulses currently use <code>&lt;pulse&gt;/&lt;run&gt;</code>, e.g. <code>130012/2</code>; Access Layer URIs of the form <code>imas:&lt;backend&gt;?path=/path/to/data/entry</code> are also supported.</p>
+<h2 id="reference">4. Reference</h2>
+<p>This section is auto-generated from the code at build time. Do not edit by hand — edits are overwritten.</p>
+<h3 id="keyboard-shortcuts">4.1 Keyboard shortcuts</h3>
+<table>
+  <tr><th>Shortcut</th><th>What it does</th></tr>
+  <tr><td><code>Ctrl+C</code></td><td>Copy the current selection from the variable table to the clipboard</td></tr>
+  <tr><td><code>Ctrl+H</code></td><td>Open the user manual at the section relevant to the focused area</td></tr>
+  <tr><td><code>Ctrl+V</code></td><td>Paste from the clipboard into the variable table</td></tr>
+  <tr><td><code>Ctrl+F</code></td><td>Open the search box in the user manual</td></tr>
+  <tr><td><code>Ctrl+Q</code></td><td>Quit MINT</td></tr>
+  <tr><td><code>Esc</code></td><td>Close the user manual window</td></tr>
+</table>
 
-<h2 id="faq">4. FAQ</h2>
+<h3 id="access-modes">4.2 Access modes</h3>
+<table>
+  <tr><th>Mode</th><th>Label</th><th>Description</th></tr>
+  <tr><td><code>TIME_RANGE</code></td><td>Time range</td><td>Select data by time range</td></tr>
+  <tr><td><code>PULSE_NUMBER</code></td><td>Pulse Id</td><td>Select data by pulse/run (ITER:PCS/123) or IMAS URI (imas:hdf5?path=/path/to/data/entry). In case of multiple pulse id, the separator used is coma</td></tr>
+  <tr><td><code>RELATIVE_TIME</code></td><td>Relative</td><td>Select data by relative time to now</td></tr>
+</table>
 
+<h3 id="datasource-types">4.3 Supported data source types</h3>
+<table>
+  <tr><th>Type</th><th>Module</th><th>Class</th></tr>
+  <tr><td><code>CODAC_UDA</code></td><td><code>iplotDataAccess.udaAccess</code></td><td><code>UdaAccess</code></td></tr>
+  <tr><td><code>CSV</code></td><td><code>iplotDataAccess.csvAccess</code></td><td><code>CsvAccess</code></td></tr>
+  <tr><td><code>IMASPY</code></td><td><code>iplotDataAccess.imaspyAccess</code></td><td><code>IMASPYDataAccess</code></td></tr>
+</table>
+
+<h2 id="faq">5. FAQ</h2>
 <ol>
-  <li><strong>Font is too small.</strong> Set <code>QT_SCALE_FACTOR=2</code> (or another value) before starting MINT.</li>
-  <li><strong>The tool crashed - did I lose my table?</strong> Every <em>Draw</em> dumps the table; copies live in <code>~/.local/1Dtool/dumps</code>.</li>
-  <li><strong>Can I run two instances?</strong> Yes.</li>
-  <li><strong>PON data:</strong> set <em>Extremities</em> to 1 to retrieve the first point of the interval.</li>
-  <li><strong>An expression fails because one signal has no data.</strong> Currently a missing input signal aborts the expression. This will improve in a future release.</li>
-  <li><strong>I loaded a workspace and the canvas is blank.</strong> Click <em>Draw</em> - it usually helps.</li>
-  <li><strong>A preference change is not visible.</strong> Close the preferences panel - it usually helps.</li>
-  <li><strong>Can I move the canvas toolbar?</strong> Yes, grab it from the small handle on the left.
-    <table cellpadding="0" cellspacing="0" align="center" style="margin:14px auto;border:0;"><tr><td style="padding:0;border:0;text-align:center;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Moving the canvas toolbar.</i></td></tr></table>
-  </li>
-  <li><strong>Overlay pulses on all plots?</strong> Comma-separate pulse IDs. See <code>OverlayPulsesID.json</code>.</li>
-  <li><strong>Overlay or append a pulse on a single plot?</strong> See <code>CustomizedPulsesPlots.json</code>.</li>
-  <li><strong>Specify a start/end time for pulse IDs?</strong> Use Start/End Time with shared X axis off. See <code>CustomizedPulsesPlotsWithStartEnd.json</code>.</li>
-  <li><strong>Compare signals with two different time ranges?</strong> Yes (untick shared X). See <code>WeekComparison.json</code>.</li>
-  <li><strong>Different time ranges on the same plot, no pulses?</strong> See <code>WeekComparisonSamePlot.json</code>.</li>
-  <li><strong>Load a new Python module?</strong> Click <em>Load new module</em> and import e.g. <code>scipy.fft as sfft</code>.</li>
-  <li><strong>Examples of self-written modules?</strong> See Advanced Exercises [RD5].</li>
-  <li><strong>Add my own data source?</strong> See Advanced Exercises [RD6].</li>
-  <li><strong>Where are the workspaces?</strong>
-    <pre>$ ls `rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1`     # CODAC
-$ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SDCC</pre>
-  </li>
-  <li><strong>Cell too small to write an expression?</strong> Right-click and pick <em>Editor mode</em>; the resulting window is resizable.</li>
-  <li><strong>Hide unused columns?</strong> Use <em>Hide/Show columns</em> above the table.</li>
-  <li><strong>Drag-and-drop a signal across plots?</strong> Yes - in SELECT mode.</li>
+<li><strong>Font is too small.</strong> Two options. From the GUI: open the canvas preferences (gear icon in the canvas toolbar) and raise <em>Font size</em>. Globally for the whole application: set <code>QT_SCALE_FACTOR=2</code> (or another value) before starting MINT.</li>
+<li><strong>The tool crashed - did I lose my table?</strong> Every <em>Draw</em> dumps the table; copies live in <code>~/.local/1Dtool/dumps</code>.</li>
+<li><strong>Can I run two instances?</strong> Yes.</li>
+<li><strong>PON data:</strong> set <em>Extremities</em> to 1 to retrieve the first point of the interval.</li>
+<li><strong>An expression fails because one signal has no data.</strong> Currently a missing input signal aborts the expression. This will improve in a future release.</li>
+<li><strong>I loaded a workspace and the canvas is blank.</strong> Click <em>Draw</em> - it usually helps.</li>
+<li><strong>A preference change is not visible.</strong> Close the preferences panel - it usually helps.</li>
+<li><strong>Can I move the canvas toolbar?</strong> Only when the canvas is detached. Click <em>Detach</em> first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Moving the canvas toolbar (visible after Detach).</i></p></li>
+<li><strong>Overlay pulses on all plots?</strong> Comma-separate pulse IDs. See <code>OverlayPulsesID.json</code>.</li>
+<li><strong>Overlay or append a pulse on a single plot?</strong> See <code>CustomizedPulsesPlots.json</code>.</li>
+<li><strong>Specify a start/end time for pulse IDs?</strong> Use Start/End Time with shared X axis off. See <code>CustomizedPulsesPlotsWithStartEnd.json</code>.</li>
+<li><strong>Compare signals with two different time ranges?</strong> Yes (untick shared X). See <code>WeekComparison.json</code>.</li>
+<li><strong>Different time ranges on the same plot, no pulses?</strong> See <code>WeekComparisonSamePlot.json</code>.</li>
+<li><strong>Load a new Python module?</strong> Click <em>Load new module</em> and import e.g. <code>scipy.fft as sfft</code>.</li>
+<li><strong>Examples of self-written modules?</strong> See Advanced Exercises [RD5].</li>
+<li><strong>Add my own data source?</strong> See Advanced Exercises [RD6].</li>
+<li>
+<p><strong>Where are the workspaces?</strong></p>
+<p><code>$ ls `rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1`     # CODAC
+$ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SDCC</code></p>
+</li>
+<li>
+<p><strong>Cell too small to write an expression?</strong> Right-click and pick <em>Editor mode</em>; the resulting window is resizable.</p>
+</li>
+<li><strong>Hide unused columns?</strong> Use <em>Hide/Show columns</em> above the table.</li>
+<li><strong>Drag-and-drop a signal across plots?</strong> Yes - in SELECT mode.</li>
 </ol>
-
-<h2 id="errors">5. Error reference</h2>
+<h2 id="errors">6. Error reference</h2>
 <p>MINT reports two kinds of feedback. <em>Validation messages</em> (e.g. <code>Invalid date format</code>, <code>Alias already in use</code>) are written to the log when you edit the table; they are self-explanatory and not duplicated here. <em>Conceptual errors</em> (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.</p>
-
 <h3 id="error-categories">Error categories</h3>
 <p>Most issues fall into one of the following families.</p>
-
 <h4 id="cat-data-access">Data access</h4>
 <p>Raised when MINT asks a data source for a signal and either cannot reach the server, cannot find the variable, or finds no data in the requested interval. Typical symptoms: the Status cell shows <code>Data-Access | 0 points</code> or a network/timeout message, the affected row turns red, and other rows in the same plot may turn orange (downstream errors). Most of the time the fix is to widen the time range, verify the variable name, or check that the data source is reachable.</p>
-
 <h4 id="cat-processing">Processing</h4>
 <p>Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.</p>
-
 <h4 id="cat-export">Export</h4>
 <p>Raised by the <em>Export</em> dialog. The export only delivers raw data straight from the data source, so per-signal time overrides, custom x/y/z processing and signals defined as expressions in the <em>Variable</em> column are skipped (with a warning listing which aliases were skipped). A genuine failure — for example writing to a folder where the user has no permission — produces a red <em>Export failed</em> popup with the underlying reason and a Learn more button.</p>
-
 <h4 id="cat-configuration">Configuration</h4>
 <p>Raised at startup or while loading workspaces. Examples: <code>no data sources found, exiting</code> (the data sources file is missing or empty), <code>Blueprint does not have a DataSource key</code> (the blueprint JSON is malformed), <code>Could not load the embedded manual</code> (a packaged resource is missing). These almost always point at an environment or installation problem rather than user input.</p>
-
 <h4 id="cat-validation">Table validation</h4>
 <p>Raised when MINT rejects a value typed in the signals table — invalid date formats, duplicated aliases, non-numeric stack identifiers, out-of-range values. These messages already describe both the problem and the remedy, so they only appear in the log; no further explanation is needed.</p>
-
 <h4 id="cat-streaming">Streaming</h4>
 <p>Raised by the streaming pipeline. Symptoms include occasional <em>operands could not be broadcast together</em> warnings while the X and Y buffers of a signal are being updated, and <code>PlotItem not found</code> followed by an <code>IndexError</code> in the date axis formatter when a workspace is imported with a stream still active. The first one is transient and recovers on the next frame; the second one is a known race for which the workaround is to stop the stream before importing.</p>
-
 <h3>Catalogued errors</h3>
-
 <!-- AUTO_ERRORS -->
-
 </body>
 </html>

@@ -219,6 +219,11 @@ class MTHelp(QMainWindow):
         self.activateWindow()
         if anchor:
             self._scroll_to_anchor(anchor)
+        else:
+            # Reset to the top so opening "User Manual" from the menu
+            # always lands on the TOC, never on the last viewed section.
+            QTimer.singleShot(0, lambda: self._browser.verticalScrollBar().setValue(0))
+            self._toc.clearSelection()
 
     def _scroll_to_anchor(self, anchor: str):
         # Deferred to the next event tick: scrollToAnchor right after setHtml is unreliable in Qt6.

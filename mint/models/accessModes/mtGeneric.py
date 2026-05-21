@@ -24,6 +24,22 @@ class MTGenericAccessMode(QObject):
     def get_supported_modes():
         return [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.PULSE_NUMBER, MTGenericAccessMode.RELATIVE_TIME]
 
+    @staticmethod
+    def meta():
+        # (mode, label, tooltip). Mirrors label()/tooltip() but avoids
+        # needing a QObject instance — consumed by build_manual.py to
+        # render the access-modes reference table.
+        return [
+            (MTGenericAccessMode.TIME_RANGE, "Time range",
+             "Select data by time range"),
+            (MTGenericAccessMode.PULSE_NUMBER, "Pulse Id",
+             "Select data by pulse/run (ITER:PCS/123) or IMAS URI "
+             "(imas:hdf5?path=/path/to/data/entry). In case of multiple "
+             "pulse id, the separator used is coma"),
+            (MTGenericAccessMode.RELATIVE_TIME, "Relative",
+             "Select data by relative time to now"),
+        ]
+
     def properties(self):
         return {}
 

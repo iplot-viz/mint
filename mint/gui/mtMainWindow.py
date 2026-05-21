@@ -31,6 +31,7 @@ from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
+from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
@@ -175,7 +176,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         error_ref_action.setStatusTip("Browse the catalogue of MINT error messages")
         error_ref_action.triggered.connect(lambda: self._open_manual(anchor="errors"))
 
+        context_help_action = QAction("Context Help", self.menuBar())
+        context_help_action.setShortcut(QKeySequence("Ctrl+H"))
+        context_help_action.setShortcutContext(Qt.ApplicationShortcut)
+        context_help_action.setStatusTip(
+            "Open the user manual at the section relevant to the focused area")
+        context_help_action.triggered.connect(
+            lambda: trigger_context_help(self._open_manual))
+
         help_menu.addAction(user_manual_action)
+        help_menu.addAction(context_help_action)
         help_menu.addAction(error_ref_action)
         help_menu.addSeparator()
         help_menu.addAction(clear_cache_action)
@@ -233,7 +243,22 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
+        self._install_help_anchors()
         self.resize(1920, 1080)
+
+    def _install_help_anchors(self):
+        # Ctrl+H over any of these widgets jumps to the matching manual
+        # section. Anchor IDs must exist in mint/data/help/manual.md.
+        anchors = {
+            self.sigCfgWidget: "table",
+            self.dataRangeSelector: "time-configuration",
+            self.daWidgetButtons: "draw-stream",
+            self.streamerCfgWidget: "draw-stream",
+            self.canvasStack: "plotting-area",
+        }
+        for widget, anchor in anchors.items():
+            if widget is not None:
+                widget.setProperty(HELP_ANCHOR_PROPERTY, anchor)
 
     def wire_connections(self):
         super().wire_connections()
