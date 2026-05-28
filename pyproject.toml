@@ -34,7 +34,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-test = ["pytest >= 6.0", "pytest-cov >= 5.0", "matplotlib >= 3.5"]
+test = ["pytest >= 6.0", "pytest-cov >= 5.0", "matplotlib >= 3.5", "markdown >= 3.4"]
+docs = ["markdown >= 3.4"]
 
 [project.urls]
 Homepage = "https://github.com/iplot-viz/mint"
@@ -46,7 +47,7 @@ where = ["."]
 include = ["mint*"]
 
 [tool.setuptools.package-data]
-"mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "canvas_properties/*", "blueprint.json"]
+"mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "canvas_properties/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*"]
 "mint.gui" = ["icons/*.png", "res/*.ui"]
 "mint" = ["mydatasources.cfg"]
 

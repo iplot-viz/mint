@@ -16,7 +16,7 @@ import sys
 import typing
 from typing import List
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QMargins, QModelIndex, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
     QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
@@ -29,6 +29,7 @@ from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from iplotWidgets.consoleWidget.consoleWidget import ConsoleWidget
+from mint.gui.mtErrorHoverPopup import MTErrorHoverPopup
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
 from mint.gui.views import MTDataSourcesDelegate, MTSignalItemView
@@ -185,6 +186,7 @@ class MTSignalConfigurator(QWidget):
     hideProgress = Signal()
     busy = Signal()
     ready = Signal()
+    errorCellClicked = Signal(str)
 
     # add_dataframe = Signal(pd.DataFrame)
 
@@ -220,6 +222,14 @@ class MTSignalConfigurator(QWidget):
         self.parseBtn = QPushButton("Parse", self)
         self.parseBtn.clicked.connect(self.on_parse_button_pressed)
 
+        self._error_popup = MTErrorHoverPopup(self)
+        self._error_popup.moreInfoRequested.connect(self.errorCellClicked.emit)
+        self._popup_cell_key = None
+        self._popup_pending = None
+        self._popup_show_timer = QTimer(self)
+        self._popup_show_timer.setSingleShot(True)
+        self._popup_show_timer.timeout.connect(self._show_pending_popup)
+
         for widget in self._signal_item_widgets:
             widget.set_model(self._model)
             widget.import_dict(NEAT_VIEW.get(widget.windowTitle()))
@@ -228,6 +238,9 @@ class MTSignalConfigurator(QWidget):
             widget.view().setItemDelegateForColumn(14, self._cal_delegate)
             widget.view().setItemDelegateForColumn(15, self._pt_delegate)
             widget.view().setSortingEnabled(True)
+            widget.view().setMouseTracking(True)
+            widget.view().viewport().setMouseTracking(True)
+            widget.view().viewport().installEventFilter(self)
 
         self._tabs.currentChanged.connect(self.on_current_view_changed)
         # Set menu for configure columns button.
@@ -269,6 +282,65 @@ class MTSignalConfigurator(QWidget):
     def on_current_view_changed(self, index: int):
         current_view = self.item_widgets[index]
         self._toolbar.configureColsBtn.setMenu(current_view.header_menu())
+
+    INITIAL_HOVER_DELAY_MS = 700
+    SUSTAINED_HOVER_DELAY_MS = 150
+
+    def eventFilter(self, obj, event):
+        view = self._view_for_viewport(obj)
+        if view is not None:
+            etype = event.type()
+            if etype == QEvent.MouseMove:
+                self._handle_hover(view, event.position().toPoint(), event.globalPosition().toPoint())
+                return False
+            if etype == QEvent.Leave:
+                self._cancel_pending_popup()
+                self._error_popup.schedule_hide()
+                self._popup_cell_key = None
+                return False
+        return super().eventFilter(obj, event)
+
+    def _view_for_viewport(self, obj):
+        for widget in self._signal_item_widgets:
+            if widget.view().viewport() is obj:
+                return widget.view()
+        return None
+
+    def _handle_hover(self, view, local_pos: QPoint, global_pos: QPoint):
+        index = view.indexAt(local_pos)
+        if not index.isValid():
+            self._cancel_pending_popup()
+            self._error_popup.schedule_hide()
+            self._popup_cell_key = None
+            return
+        info = self._model.error_info_for_cell(index)
+        if info is None:
+            self._cancel_pending_popup()
+            self._error_popup.schedule_hide()
+            self._popup_cell_key = None
+            return
+        cell_key = (id(view), index.row(), index.column())
+        if cell_key == self._popup_cell_key and self._error_popup.isVisible():
+            self._error_popup.cancel_hide()
+            return
+        self._popup_cell_key = cell_key
+        self._popup_pending = (info, global_pos + QPoint(16, 18))
+        self._error_popup.cancel_hide()
+        delay = self.SUSTAINED_HOVER_DELAY_MS if self._error_popup.isVisible() else self.INITIAL_HOVER_DELAY_MS
+        self._popup_show_timer.start(delay)
+
+    def _cancel_pending_popup(self):
+        self._popup_show_timer.stop()
+        self._popup_pending = None
+
+    def _show_pending_popup(self):
+        if self._popup_pending is None:
+            return
+        info, position = self._popup_pending
+        self._error_popup.populate(info['title'], info['explanation'], info['anchor'])
+        self._error_popup.move(position)
+        self._error_popup.show()
+        self._popup_pending = None
 
     def on_parse_button_pressed(self):
         logger.debug('Build order:')

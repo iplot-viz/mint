@@ -26,6 +26,20 @@ Install the package from PyPi:
 mint
 ```
 
+## User manual
+
+The embedded manual (`mint/data/help/manual.html`) is generated from
+`mint/data/help/manual.md` plus sections injected from the code (keyboard
+shortcuts, access modes, supported data source types). The HTML is
+regenerated automatically on every push by a GitHub Action — you only
+edit the Markdown.
+
+To preview a change locally before pushing:
+
+```bash
+pip install -e ".[docs]"
+python -m mint.tools.build_manual
+```
 
 ## Contributing
 

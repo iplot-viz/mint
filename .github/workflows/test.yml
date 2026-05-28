@@ -41,6 +41,9 @@ jobs:
           pip install git+https://github.com/iplot-viz/iplotlib.git@develop
           pip install ".[test]"
 
+      - name: Verify embedded user manual is up to date
+        run: python -m mint.tools.build_manual --check
+
       - name: Automated tests with Pytest (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run pytest

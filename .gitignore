@@ -61,6 +61,7 @@ cython_debug/
 *.xml
 *.html
 *.coverage
+!mint/data/help/*.html
 .coverage
 htmlcov/
 
