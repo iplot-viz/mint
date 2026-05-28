@@ -26,65 +26,20 @@ Install the package from PyPi:
 mint
 ```
 
-## Development
-Clone all the projects
+## User manual
+
+The embedded manual (`mint/data/help/manual.html`) is generated from
+`mint/data/help/manual.md` plus sections injected from the code (keyboard
+shortcuts, access modes, supported data source types). The HTML is
+regenerated automatically on every push by a GitHub Action — you only
+edit the Markdown.
+
+To preview a change locally before pushing:
+
 ```bash
-mkdir mintdev
-cd  mintdev
-git clone -b develop git@github.com:iplot-viz/iplotlogging.git
-git clone -b develop git@github.com:iplot-viz/iplotprocessing.git
-git clone -b develop git@github.com:iplot-viz/iplotdataaccess.git
-git clone -b develop git@github.com:iplot-viz/iplotwidgets.git
-git clone -b develop git@github.com:iplot-viz/iplotlib.git
-git clone -b develop git@github.com:iplot-viz/mint.git
+pip install -e ".[docs]"
+python -m mint.tools.build_manual
 ```
-Create virtual environment
-```bash
-python -m venv devenv
-source devenv/bin/activate
-```
-
-
-Install all packages with the editable option
-```bash
-cd iplotlogging;pip install -e .
-cd ../iplotprocessing;pip install -e .
-cd ../iplotdataaccess;pip install -e .
-cd ../iplotwidgets;pip install -e .
-cd ../iplotlib;pip install -e .
-cd ../mint;pip install -e .
-```
-
-Set the IPLOT_SOURCES_CONFIG environment variable to point to mydatasources.cfg
-This configuration file is generally stored in the mint repository under the mint directory
-```bash
-export IPLOT_SOURCES_CONFIG=./mint/mint/mydatasources.cfg
-```
-
-
-### Config File Format
-
-```json
-{
-    "imaspy": {
-        "populate_pulse_table": true,
-        "pulse_list_folder": "/abs/path/to/local/pulses",
-        "simdb_url": "https://simdb.iter.org/scenarios/api/v1.2/simulations",
-        "simdb_metadata_url": "https://simdb.iter.org/scenarios/api/v1.2/simulation/{uuid}"
-    }
-}
-```
-
-| Key | Type | Required | Description |
-|-----|------|----------|-------------|
-| `populate_pulse_table` | bool | no | Enable pulse browser table population (default: `false`). When `true`, fetches from SIMDB and scans `pulse_list_folder`. |
-| `pulse_list_folder` | string | no | **Absolute path** to a local folder to scan for IMAS files. Supported formats: `master.h5`, `*.h5`, `*.nc`, `*.tree`. |
-
-Start the application
-```bash
-mint
-```
-
 
 ## Contributing
 

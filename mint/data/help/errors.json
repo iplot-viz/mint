@@ -1,0 +1,161 @@
+{
+    "version": 2,
+    "entries": [
+        {
+            "id": "permission-denied",
+            "patterns": [
+                "PermissionError",
+                "Permission denied",
+                "errno = 13"
+            ],
+            "title": "Permission denied",
+            "manual_anchor": "errors-permission-denied",
+            "summary": "MINT could not save the file because the destination folder does not allow your user to write into it. The export was aborted; nothing was created.",
+            "what_to_do": [
+                "Choose a folder inside your home directory.",
+                "Confirm the folder exists and that you can write to it from a file manager.",
+                "If you must save into a shared or system folder, ask the administrator of that folder to grant you write permission."
+            ],
+            "if_it_persists": "Contact MINT support and share the destination path along with the log file at .local/1Dtool/logs/mint.log inside your home directory."
+        },
+        {
+            "id": "shape-mismatch",
+            "patterns": [
+                "operands could not be broadcast together with shapes",
+                "boolean index did not match indexed array"
+            ],
+            "title": "Signal arrays have incompatible shapes",
+            "manual_anchor": "errors-shape-mismatch",
+            "summary": "MINT tried to combine signals that do not have the same number of points. This appears in two situations: an expression that mixes signals with different sample counts, or a streaming refresh that catches a signal mid-update.",
+            "what_to_do": [
+                "If this happened in an expression: confirm the signals you are combining cover the same time range. Even small differences produce different sample counts.",
+                "If the signals genuinely have different sampling rates, align them before combining: use the X and Y columns of the table with an interpolation expression, or split the calculation per signal.",
+                "If this happened during streaming: the next refresh normally recovers. If the message keeps appearing, stop the stream and start it again."
+            ],
+            "if_it_persists": "Save the workspace, attach the failing expression, and send both to MINT support. That is enough to reproduce and fix it."
+        },
+        {
+            "id": "no-data-sources",
+            "patterns": [
+                "no data sources found"
+            ],
+            "title": "No data sources available",
+            "manual_anchor": "errors-no-data-sources",
+            "summary": "MINT could not find any data source (UDA or IMAS) at startup and cannot continue without one.",
+            "what_to_do": [
+                "On SDCC, run 'module load MINT' in a fresh terminal before starting MINT again.",
+                "On a CODAC terminal, this normally means MINT is not properly installed; ask your CODAC administrator to reinstall the MINT package.",
+                "If you provide your own data sources configuration, confirm the file exists and is readable."
+            ],
+            "if_it_persists": "Contact MINT support and share the log file at .local/1Dtool/logs/mint.log inside your home directory."
+        },
+        {
+            "id": "export-expression-in-variable",
+            "patterns": [
+                "Processing expression in Variable column is not supported for export"
+            ],
+            "title": "Expressions in Variable column are not exported",
+            "manual_anchor": "errors-export-expression",
+            "summary": "Some rows use an expression (for example ${SomeSignal}*2) in the Variable column. Expressions are computed when MINT plots them; the export only writes signals coming from the data source, so derived rows are skipped.",
+            "what_to_do": [
+                "If you only need the original signals, ignore the message: every signal referenced inside the expression is exported.",
+                "If you need the result of the expression, save the workspace and recompute the expression in the tool you use to read the exported file."
+            ],
+            "if_it_persists": "This is by design. There is no MINT setting that exports derived signals."
+        },
+        {
+            "id": "export-custom-time",
+            "patterns": [
+                "Custom StartTime/EndTime is not supported for export"
+            ],
+            "title": "Per-signal time overrides ignored during export",
+            "manual_anchor": "errors-export-custom-time",
+            "summary": "Some signals carry their own StartTime or EndTime, different from the global time range at the top. The export only honors the global range, so those signals are skipped.",
+            "what_to_do": [
+                "Widen the global time range so it covers the period you need, then export again.",
+                "Or clear the StartTime and EndTime cells of the signals you want to include."
+            ],
+            "if_it_persists": "The popup lists the signals that were skipped. Cross-check those names against the table and clear or align their time cells."
+        },
+        {
+            "id": "export-xyz-processing",
+            "patterns": [
+                "Processing in x/y/z columns is not supported for export"
+            ],
+            "title": "Custom X/Y/Z processing ignored during export",
+            "manual_anchor": "errors-export-xyz",
+            "summary": "Some signals use the X, Y or Z columns to redefine how they are plotted (for example to convert units or rescale time). The export delivers raw data from the data source and cannot replay these per-signal transformations.",
+            "what_to_do": [
+                "Export the original signal and apply the transformation in the tool you use to read the file.",
+                "Or remove the entries in the X, Y or Z columns for the signals you want to export."
+            ],
+            "if_it_persists": "This is by design. There is no MINT setting that applies these transformations during export."
+        },
+        {
+            "id": "expression-not-array",
+            "patterns": [
+                "Result of expression=.* is not an instance of"
+            ],
+            "title": "Expression result is not a data array",
+            "manual_anchor": "errors-expression-not-array",
+            "summary": "Your expression returned a single value rather than a series of points. MINT plots curves over time and needs a vector, not a scalar.",
+            "what_to_do": [
+                "Look for functions that collapse the curve into one number, such as np.max, np.mean or np.sum.",
+                "If you want the result drawn across the whole time axis, multiply by an array of ones, for example: np.max(${a}.data) * np.ones(${a}.data.size).",
+                "If you want a moving aggregate, use the X column to define the time vector and the Y column to define the values."
+            ],
+            "if_it_persists": "Reduce the expression to a single ${signal} reference and add the operators back one at a time. The step that turns the result back into a single number is the cause."
+        },
+        {
+            "id": "no-data-in-interval",
+            "patterns": [
+                "Data-Access\\|0 points",
+                "\\|0 points\\b",
+                "no data .{0,40}interval",
+                "no data found",
+                "Requested interval is empty"
+            ],
+            "title": "No data available for this signal",
+            "manual_anchor": "errors-no-data-in-interval",
+            "summary": "The data source returned no points for this signal in the time range you asked for. The signal name is recognised, but the archive has nothing stored for it in that interval.",
+            "what_to_do": [
+                "Try a wider time range, or a different range where you expect this signal to have data.",
+                "Double-check the signal name. For IMAS signals, include the full path with any [n] indices.",
+                "Confirm you picked the right data source: 'codacuda' for ITER plant data, 'imasuda' for IMAS data.",
+                "If you set Extremities to 1, MINT shows the previous archived point if one exists; otherwise the row stays empty."
+            ],
+            "if_it_persists": "Run the same query against the data source outside MINT (for example through the standard UDA client) to confirm whether the gap is on the data source side or in MINT."
+        },
+        {
+            "id": "expression-envelope-mismatch",
+            "patterns": [
+                "is derived from signals with envelope data"
+            ],
+            "title": "Envelope flag missing on derived signal",
+            "manual_anchor": "errors-envelope-mismatch",
+            "summary": "Your expression uses at least one signal set as envelope (the data carries a min, average and max for each point). When the inputs are envelope, the result must also be marked as envelope.",
+            "what_to_do": [
+                "Set the Envelope column to 1 on the row that contains the expression.",
+                "Or remove the envelope from the source signals if you do not need it."
+            ],
+            "if_it_persists": "Confirm every signal feeding the expression has the same Envelope setting. Mixing envelope and non-envelope signals in the same expression is not supported."
+        },
+        {
+            "id": "streaming-import-race",
+            "patterns": [
+                "PlotItem not found for signal",
+                "list index out of range.*tickValues",
+                "list index out of range.*dateFormatter"
+            ],
+            "title": "Workspace import while streaming is active",
+            "manual_anchor": "errors-streaming-import-race",
+            "summary": "You imported a workspace while a stream was still running. MINT was rebuilding the plots in the background and incoming live data tried to draw onto plots that did not yet exist.",
+            "what_to_do": [
+                "Stop the stream from the streaming dialog.",
+                "Import the workspace.",
+                "Start the stream again."
+            ],
+            "if_it_persists": "This is a known issue. Until it is fixed, please follow the order above."
+        }
+    ]
+}

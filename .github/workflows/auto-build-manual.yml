@@ -1,0 +1,65 @@
+name: Auto-regenerate user manual
+
+# Regenerates mint/data/help/manual.html whenever a push touches the
+# manual source, the build script, or any code consumed by an AUTO_X
+# marker (shortcuts, access modes). The bot commits the regenerated
+# HTML back to the same branch with [skip ci] so it does not loop.
+
+on:
+  push:
+    paths:
+      - 'mint/data/help/manual.md'
+      - 'mint/tools/build_manual.py'
+      - 'mint/gui/**'
+      - 'mint/models/accessModes/**'
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    # Bot pushes carry the github-actions[bot] actor — skip to avoid loops.
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies for PySide6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxcb-cursor0
+
+      - name: Install MINT + docs extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install git+https://github.com/iplot-viz/iplotLogging.git@develop
+          pip install git+https://github.com/iplot-viz/iplotProcessing.git@develop
+          pip install git+https://github.com/iplot-viz/iplotDataAccess.git@develop
+          pip install git+https://github.com/iplot-viz/iplotWidgets.git@develop
+          pip install git+https://github.com/iplot-viz/iplotlib.git@develop
+          pip install -e ".[docs]"
+
+      - name: Regenerate manual.html
+        run: python -m mint.tools.build_manual
+
+      - name: Commit and push if changed
+        run: |
+          if [[ -n "$(git status --porcelain mint/data/help/manual.html)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add mint/data/help/manual.html
+            git commit -m "chore(manual): regenerate manual.html [skip ci]"
+            git push
+          else
+            echo "manual.html already up to date"
+          fi
