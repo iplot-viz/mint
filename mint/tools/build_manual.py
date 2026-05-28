@@ -85,7 +85,7 @@ def _escape(text: str) -> str:
 SHORTCUT_DESCRIPTIONS = {
     "Ctrl+C": "Copy the current selection from the variable table to the clipboard",
     "Ctrl+V": "Paste from the clipboard into the variable table",
-    "Ctrl+H": "Open the user manual at the section relevant to the focused area",
+    "F1": "Open the user manual at the section relevant to the focused area",
     "Standard: Find": "Open the search box in the user manual",
     "Standard: Quit": "Quit MINT",
 }

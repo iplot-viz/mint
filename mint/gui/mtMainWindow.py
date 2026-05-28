@@ -177,7 +177,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         error_ref_action.triggered.connect(lambda: self._open_manual(anchor="errors"))
 
         context_help_action = QAction("Context Help", self.menuBar())
-        context_help_action.setShortcut(QKeySequence("Ctrl+H"))
+        context_help_action.setShortcut(QKeySequence("F1"))
         context_help_action.setShortcutContext(Qt.ApplicationShortcut)
         context_help_action.setStatusTip(
             "Open the user manual at the section relevant to the focused area")
@@ -247,7 +247,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.resize(1920, 1080)
 
     def _install_help_anchors(self):
-        # Ctrl+H over any of these widgets jumps to the matching manual
+        # F1 over any of these widgets jumps to the matching manual
         # section. Anchor IDs must exist in mint/data/help/manual.md.
         anchors = {
             self.sigCfgWidget: "table",

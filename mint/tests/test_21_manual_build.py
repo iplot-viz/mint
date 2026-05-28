@@ -61,7 +61,7 @@ class ManualAnchorsTest(unittest.TestCase):
         missing = WIRED_HELP_ANCHORS - anchors
         self.assertFalse(
             missing,
-            f"MTMainWindow wires Ctrl+H to anchor(s) not present in "
+            f"MTMainWindow wires F1 to anchor(s) not present in "
             f"manual.html: {missing}. Either add the section or remove "
             f"the wiring.")
 

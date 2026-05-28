@@ -1,4 +1,4 @@
-"""Ctrl+H context-sensitive help.
+"""F1 context-sensitive help.
 
 A widget opts in by carrying the "help_anchor" Qt property
 (set via QWidget.setProperty). When the shortcut fires, the
