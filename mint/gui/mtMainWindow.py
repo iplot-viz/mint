@@ -115,6 +115,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
         self._workspaceLabel = QLabel("No workspace loaded")
+        self._import_loaded_data_sources = False
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
@@ -418,6 +419,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if self.prefWindow.isVisible():
             self.prefWindow.close()
 
+        self._import_loaded_data_sources = False
+
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
         self.canvasStack.currentWidget()._parser.clear()
@@ -447,6 +450,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         signal_cfg = input_dict.get('signal_cfg') or input_dict
         if signal_cfg:
             self.sigCfgWidget.import_dict(signal_cfg)
+            self._import_loaded_data_sources = True
 
         path = list(self.sigCfgWidget.build(**da_params))
         path_len = len(path)
@@ -569,6 +573,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             logger.exception(e)
             box.exec_()
             self.indicate_ready()
+            if self._import_loaded_data_sources:
+                self._workspaceLabel.setText(os.path.basename(file_path))
+                self._workspaceLabel.setToolTip(file_path)
             return
 
     def export_data_plots(self, file_path: str):
