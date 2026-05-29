@@ -365,6 +365,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
+    def _snapshot_minimap_baseline(self):
+        target = self.canvas.get_minimap_target_plot()
+        if target is None or not target.axes:
+            self.canvas.snapshot_minimap_baseline(None, None)
+        else:
+            axis = target.axes[0]
+            self.canvas.snapshot_minimap_baseline(axis.original_begin, axis.original_end)
+        self.refresh_minimap_availability()
+        w = self.canvasStack.currentWidget()
+        if w is not None and self.canvas.show_minimap and self.canvas.is_minimap_eligible():
+            w._update_minimap()
+
     def indicate_busy(self, msg='Hang on ..'):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
@@ -537,6 +549,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Compute statistics when importing workspace
         if path:
             self.canvasStack.currentWidget().stats(self.canvas)
+        self._snapshot_minimap_baseline()
         self.drop_history()  # clean zoom history
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
@@ -639,8 +652,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.canvasStack.currentWidget().check_markers(self.canvas)
-        # Compute statistics when drawing
         self.canvasStack.currentWidget().stats(self.canvas)
+        self._snapshot_minimap_baseline()
 
         self.prefWindow.update()
         if self.prefWindow.isVisible():
