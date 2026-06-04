@@ -243,8 +243,15 @@ $ mint
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
+<li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible (see <a href="#mini-map">Mini-map</a>).</li>
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
+<h4 id="mini-map">Mini-map</h4>
+<p>Toggle a small overview of the current plot below the canvas. The button on the toolbar is enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise.</p>
+<p>The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. Panning the main plot outside the original window is reflected on the overlay as expected.</p>
+<p>The toggle is persisted with the workspace (<code>show_minimap</code> flag), so reopening a workspace restores the mini-map view.</p>
+<p style="text-align:center;margin:14px 0;"><img src="image_19.png" alt="Mini-map below a single plot with orange overlay" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Mini-map below the main plot.</i></p>
+
 <h4>Canvas-level preferences</h4>
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), focus all plots on stack.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>
@@ -378,6 +385,7 @@ $ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SD
 </li>
 <li><strong>Hide unused columns?</strong> Use <em>Hide/Show columns</em> above the table.</li>
 <li><strong>Drag-and-drop a signal across plots?</strong> Yes - in SELECT mode.</li>
+<li><strong>Why is the mini-map button greyed out?</strong> It is only available when a single PlotXY is visible — a single-plot canvas or focus mode. See <a href="#mini-map">Mini-map</a>.</li>
 </ol>
 <h2 id="errors">6. Error reference</h2>
 <p>MINT reports two kinds of feedback. <em>Validation messages</em> (e.g. <code>Invalid date format</code>, <code>Alias already in use</code>) are written to the log when you edit the table; they are self-explanatory and not duplicated here. <em>Conceptual errors</em> (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.</p>
