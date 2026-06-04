@@ -395,17 +395,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         return int(ts), int(te)
 
     def _snapshot_minimap_baseline(self):
-        get_target = getattr(self.canvas, 'get_minimap_target_plot', None)
-        snapshot = getattr(self.canvas, 'snapshot_minimap_baseline', None)
-        if get_target is None or snapshot is None:
-            return
-        target = get_target()
+        target = self.canvas.get_minimap_target_plot()
         if target is None or not target.axes:
-            snapshot(None, None)
+            self.canvas.snapshot_minimap_baseline(None, None)
         else:
-            axis = target.axes[0]
-            begin, end = self._requested_x_range_for_axis(axis)
-            snapshot(begin, end)
+            begin, end = self._requested_x_range_for_axis(target.axes[0])
+            self.canvas.snapshot_minimap_baseline(begin, end)
         refresh = getattr(self, 'refresh_minimap_availability', None)
         if refresh is not None:
             refresh()
