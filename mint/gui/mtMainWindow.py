@@ -365,6 +365,35 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
+    def on_minimap_toggled(self, checked: bool):
+        w = self.canvasStack.currentWidget()
+        if not w:
+            return
+        canvas = w.get_canvas() if hasattr(w, 'get_canvas') else None
+        if canvas is None or not checked:
+            w.set_minimap(checked)
+            return
+        target = canvas.get_minimap_target_plot()
+        if target is not None and target.axes:
+            begin, end = self._requested_x_range_for_axis(target.axes[0])
+            canvas.snapshot_minimap_baseline(begin, end)
+        canvas.show_minimap = True
+        with w.view_retainer():
+            w.refresh()
+
+    def _requested_x_range_for_axis(self, axis):
+        if not getattr(axis, 'is_date', False):
+            return axis.original_begin, axis.original_end
+        try:
+            ts, te = self.dataRangeSelector.get_time_range()
+        except (AttributeError, TypeError, ValueError):
+            return axis.original_begin, axis.original_end
+        if not isinstance(ts, (int, float)) or not isinstance(te, (int, float)):
+            return axis.original_begin, axis.original_end
+        if ts >= te:
+            return axis.original_begin, axis.original_end
+        return int(ts), int(te)
+
     def _snapshot_minimap_baseline(self):
         get_target = getattr(self.canvas, 'get_minimap_target_plot', None)
         snapshot = getattr(self.canvas, 'snapshot_minimap_baseline', None)
@@ -375,7 +404,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             snapshot(None, None)
         else:
             axis = target.axes[0]
-            snapshot(axis.original_begin, axis.original_end)
+            begin, end = self._requested_x_range_for_axis(axis)
+            snapshot(begin, end)
         refresh = getattr(self, 'refresh_minimap_availability', None)
         if refresh is not None:
             refresh()
