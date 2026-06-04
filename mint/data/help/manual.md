@@ -176,18 +176,8 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
-- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible (see [Mini-map](#mini-map)).
+- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
-
-#### Mini-map {#mini-map}
-
-Toggle a small overview of the current plot below the canvas. The button on the toolbar is enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise.
-
-The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. Panning the main plot outside the original window is reflected on the overlay as expected.
-
-The toggle is persisted with the workspace (`show_minimap` flag), so reopening a workspace restores the mini-map view.
-
-<p style="text-align:center;margin:14px 0;"><img src="image_19.png" alt="Mini-map below a single plot with orange overlay" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Mini-map below the main plot.</i></p>
 
 #### Canvas-level preferences
 
@@ -333,7 +323,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
-21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode. See [Mini-map](#mini-map).
+21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode.
 
 ## 6. Error reference {#errors}
 
