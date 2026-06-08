@@ -119,6 +119,48 @@ class MainWindowImportErrorsTest(unittest.TestCase):
             os.remove(path)
             win.close()
 
+    def test_workspace_label_unchanged_when_import_fails_before_data_sources(self):
+        """Early failure leaves the workspace label untouched."""
+        win = _build_main_window()
+        initial_label = win._workspaceLabel.text()
+        fd, path = tempfile.mkstemp(suffix='.json')
+        os.close(fd)
+        try:
+            with open(path, 'w') as fh:
+                fh.write('{ broken json')
+            win.import_json(path)
+            self.assertEqual(win._workspaceLabel.text(), initial_label)
+        finally:
+            os.remove(path)
+            win.close()
+
+    def test_workspace_label_updates_when_data_sources_loaded_but_import_fails(self):
+        """Late failure after data sources load still updates the label."""
+        win = _build_main_window()
+        fd, path = tempfile.mkstemp(suffix='.json')
+        os.close(fd)
+        try:
+            with open(path, 'w') as fh:
+                json.dump(win.export_dict(), fh)
+
+            original_build = win.sigCfgWidget.build
+
+            def _boom(*args, **kwargs):
+                raise RuntimeError('simulated downstream failure')
+
+            win.sigCfgWidget.build = _boom
+            try:
+                win.import_json(path)
+            finally:
+                win.sigCfgWidget.build = original_build
+
+            self.assertTrue(win._import_loaded_data_sources)
+            self.assertEqual(win._workspaceLabel.text(), os.path.basename(path))
+            self.assertEqual(win._workspaceLabel.toolTip(), path)
+        finally:
+            os.remove(path)
+            win.close()
+
 
 if __name__ == '__main__':
     unittest.main()
