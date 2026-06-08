@@ -59,7 +59,8 @@ HTML_TEMPLATE = """\
   ul.toc {{ list-style: none; padding-left: 0; }}
   ul.toc li {{ margin: 2px 0; }}
   ul.toc a {{ text-decoration: none; }}
-  img.inline-icon {{ vertical-align: middle; height: 18px; border: 0; }}
+  img {{ max-width: 900px; display: block; margin: 0 auto; height: auto; }}
+  img.inline-icon {{ max-width: none; vertical-align: middle; height: 18px; display: inline; margin: 0; border: 0; }}
   figure {{ text-align: center; margin: 14px auto; }}
   figcaption {{ color: #555; font-size: 90%; font-style: italic; }}
 </style>

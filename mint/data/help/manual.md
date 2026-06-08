@@ -176,6 +176,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
+- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
 
 #### Canvas-level preferences
@@ -322,6 +323,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
+21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode.
 
 ## 6. Error reference {#errors}
 

@@ -366,6 +366,56 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
+    def on_minimap_toggled(self, checked: bool):
+        w = self.canvasStack.currentWidget()
+        if not w:
+            return
+        canvas = w.get_canvas() if hasattr(w, 'get_canvas') else None
+        if canvas is None or not checked:
+            w.set_minimap(checked)
+            return
+        target = canvas.get_minimap_target_plot()
+        if target is not None and target.axes:
+            begin, end = self._requested_x_range_for_axis(target.axes[0])
+            canvas.snapshot_minimap_baseline(begin, end)
+        canvas.show_minimap = True
+        with w.view_retainer():
+            w.refresh()
+
+    def _requested_x_range_for_axis(self, axis):
+        if not getattr(axis, 'is_date', False):
+            return axis.original_begin, axis.original_end
+        try:
+            ts, te = self.dataRangeSelector.get_time_range()
+        except (AttributeError, TypeError, ValueError):
+            return axis.original_begin, axis.original_end
+        if not isinstance(ts, (int, float)) or not isinstance(te, (int, float)):
+            return axis.original_begin, axis.original_end
+        if ts >= te:
+            return axis.original_begin, axis.original_end
+        return int(ts), int(te)
+
+    def _snapshot_minimap_baseline(self):
+        get_target = getattr(self.canvas, 'get_minimap_target_plot', None)
+        snapshot = getattr(self.canvas, 'snapshot_minimap_baseline', None)
+        if get_target is None or snapshot is None:
+            return
+        target = get_target()
+        if target is None or not target.axes:
+            snapshot(None, None)
+        else:
+            begin, end = self._requested_x_range_for_axis(target.axes[0])
+            snapshot(begin, end)
+        refresh = getattr(self, 'refresh_minimap_availability', None)
+        if refresh is not None:
+            refresh()
+        w = self.canvasStack.currentWidget()
+        if w is None:
+            return
+        eligible = getattr(self.canvas, 'is_minimap_eligible', lambda: False)
+        if getattr(self.canvas, 'show_minimap', False) and eligible() and hasattr(w, '_update_minimap'):
+            w._update_minimap()
+
     def indicate_busy(self, msg='Hang on ..'):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
@@ -541,6 +591,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Compute statistics when importing workspace
         if path:
             self.canvasStack.currentWidget().stats(self.canvas)
+        self._snapshot_minimap_baseline()
         self.drop_history()  # clean zoom history
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
@@ -646,8 +697,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
         self.canvasStack.currentWidget().check_markers(self.canvas)
-        # Compute statistics when drawing
         self.canvasStack.currentWidget().stats(self.canvas)
+        self._snapshot_minimap_baseline()
 
         self.prefWindow.update()
         if self.prefWindow.isVisible():
