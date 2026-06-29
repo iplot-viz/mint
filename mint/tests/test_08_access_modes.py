@@ -12,6 +12,8 @@ but the serialisation behaviour is testable headlessly.
 
 import unittest
 
+from PySide6.QtCore import QDateTime
+
 from iplotDataAccess.appDataAccess import AppDataAccess
 
 from mint.models.accessModes.mtAbsoluteTime import MTAbsoluteTime
@@ -77,6 +79,79 @@ class AbsoluteTimeTest(unittest.TestCase):
         props = mode.properties()
         self.assertEqual(props['ts_ns_start'], '000000000')
         self.assertEqual(props['ts_ns_end'], '000000000')
+
+
+class AbsoluteTimeClearPulseTest(unittest.TestCase):
+    """Clear-pulse keeps user-edited timestamps; only resets when the
+    fields still match the pulse that originally populated them."""
+
+    FMT = MTAbsoluteTime.TIME_FORMAT
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _seed_pulse_snapshot(self, mode):
+        pre_from = QDateTime.fromString('2024-01-15T10:00:00', self.FMT)
+        pre_to = QDateTime.fromString('2024-01-15T11:00:00', self.FMT)
+        pulse_from = QDateTime.fromString('2024-01-15T12:00:00', self.FMT)
+        pulse_to = QDateTime.fromString('2024-01-15T13:00:00', self.FMT)
+        mode.fromTime.setDateTime(pulse_from)
+        mode.toTime.setDateTime(pulse_to)
+        mode.fromTimeNs.setText('000000000')
+        mode.toTimeNs.setText('000000000')
+        mode.pulseUsed.setText('ITER:test/1')
+        mode._saved_time_before_pulse = {
+            'from_time': pre_from,
+            'to_time': pre_to,
+            'from_ns': '111111111',
+            'to_ns': '222222222',
+            'pulse_from_time': pulse_from,
+            'pulse_to_time': pulse_to,
+            'pulse_from_ns': '000000000',
+            'pulse_to_ns': '000000000',
+        }
+        return pre_from, pre_to, pulse_from, pulse_to
+
+    def test_clear_restores_pre_pulse_when_user_did_not_edit(self):
+        mode = MTAbsoluteTime({})
+        pre_from, pre_to, _, _ = self._seed_pulse_snapshot(mode)
+        mode.clear_pulse()
+        self.assertEqual(mode.pulseUsed.text(), '')
+        self.assertEqual(mode.fromTime.dateTime(), pre_from)
+        self.assertEqual(mode.toTime.dateTime(), pre_to)
+        self.assertEqual(mode.fromTimeNs.text(), '111111111')
+        self.assertEqual(mode.toTimeNs.text(), '222222222')
+        self.assertIsNone(mode._saved_time_before_pulse)
+
+    def test_clear_preserves_user_edit_to_from_time(self):
+        mode = MTAbsoluteTime({})
+        _, _, _, pulse_to = self._seed_pulse_snapshot(mode)
+        edited_from = QDateTime.fromString('2024-01-15T12:30:00', self.FMT)
+        mode.fromTime.setDateTime(edited_from)
+        mode.clear_pulse()
+        self.assertEqual(mode.pulseUsed.text(), '')
+        self.assertEqual(mode.fromTime.dateTime(), edited_from)
+        self.assertEqual(mode.toTime.dateTime(), pulse_to)
+        self.assertIsNone(mode._saved_time_before_pulse)
+
+    def test_clear_preserves_user_edit_to_ns_field(self):
+        mode = MTAbsoluteTime({})
+        self._seed_pulse_snapshot(mode)
+        mode.fromTimeNs.setText('500000000')
+        mode.clear_pulse()
+        self.assertEqual(mode.fromTimeNs.text(), '500000000')
+        self.assertIsNone(mode._saved_time_before_pulse)
+
+    def test_clear_without_pulse_snapshot_is_noop_on_times(self):
+        mode = MTAbsoluteTime({})
+        free_from = QDateTime.fromString('2024-02-01T08:00:00', self.FMT)
+        mode.fromTime.setDateTime(free_from)
+        mode.pulseUsed.setText('stray-label')
+        mode.clear_pulse()
+        self.assertEqual(mode.pulseUsed.text(), '')
+        self.assertEqual(mode.fromTime.dateTime(), free_from)
 
 
 class PulseIdTest(unittest.TestCase):
