@@ -140,6 +140,9 @@ class MTSignalsModel(QAbstractItemModel):
         column_name = self._table.columns[index.column()]
         if fail_value == 0 and column_name != "Status":
             return None
+        # Status bypasses the check above; skip success rows so they don't hit the "Error" fallback.
+        if column_name == "Status" and not (self._table_fails.loc[index.row()].values > 0).any():
+            return None
         status_msg = self._row_status_message(index.row())
         if not status_msg:
             return None
