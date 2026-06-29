@@ -537,6 +537,38 @@ class MTSignalsModel(QAbstractItemModel):
             self._signal_stack_ids[col_num][row_num][stack_num] += 1
             yield waypoint
 
+    def _resolve_relative_pulse(self, pulse, ds_name, default_value=None, table_row=None):
+        """Resolve a relative pulse number (0 = last, -N = N-th previous) to its
+        concrete pulse for the given data source. Non-relative or unresolvable
+        pulses are returned unchanged."""
+        pulse_parts = pulse.rsplit("/", 1)
+        pulse_num_str = pulse_parts[-1] if len(pulse_parts) > 1 else pulse
+        try:
+            n = int(pulse_num_str)
+        except ValueError:
+            return pulse
+        if n > 0 or ds_name not in self.data_sources:
+            return pulse
+        ds = AppDataAccess.da.get_data_source(ds_name)
+        prefix = pulse_parts[0] + "/" if len(pulse_parts) > 1 else ""
+        if not prefix and default_value and default_value != '' and default_value != ['']:
+            global_pulse = default_value[0] if isinstance(default_value, list) else default_value
+            global_parts = str(global_pulse).rsplit("/", 1)
+            if len(global_parts) > 1:
+                prefix = global_parts[0] + "/"
+        search = prefix + "*" if prefix else "*:*/*"
+        all_pulses = ds.get_pulses_df(pattern=search)
+        if all_pulses.empty:
+            return pulse
+        df_idx = n - 1
+        if abs(df_idx) > len(all_pulses):
+            logger.warning(
+                f"Requested pulse '{pulse_num_str}' but only {len(all_pulses)} "
+                f"pulse(s) available in category '{prefix or '*'}' "
+                f"in the table row [{table_row}]")
+            return pulse
+        return str(all_pulses.iloc[df_idx]['Pulse'])
+
     def _parse_series(self, inp: pd.Series, fls: pd.Series, table_row, stack) -> typing.Iterator[pd.Series]:
         with self.activate_fast_mode():
             out = dict()
@@ -585,32 +617,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     idx = 2
 
                                 # Resolve special pulse numbers (0 = last, -N = N-th previous)
-                                pulse_parts = pulse.rsplit("/", 1)
-                                pulse_num_str = pulse_parts[-1] if len(pulse_parts) > 1 else pulse
-                                try:
-                                    n = int(pulse_num_str)
-                                except ValueError:
-                                    n = 1  # non-numeric → not a relative pulse
-                                if n <= 0 and inp['DS'] in self.data_sources:
-                                    ds = AppDataAccess.da.get_data_source(inp['DS'])
-                                    prefix = pulse_parts[0] + "/" if len(pulse_parts) > 1 else ""
-                                    # If no prefix, infer category from global pulse
-                                    if not prefix and default_value and default_value != '' and default_value != ['']:
-                                        global_pulse = default_value[0] if isinstance(default_value, list) else default_value
-                                        global_parts = str(global_pulse).rsplit("/", 1)
-                                        if len(global_parts) > 1:
-                                            prefix = global_parts[0] + "/"
-                                    search = prefix + "*" if prefix else "*:*/*"
-                                    all_pulses = ds.get_pulses_df(pattern=search)
-                                    if not all_pulses.empty:
-                                        idx = n - 1  # 0→-1, -N→-(N+1)
-                                        if abs(idx) > len(all_pulses):
-                                            logger.warning(
-                                                f"Requested pulse '{pulse_num_str}' but only {len(all_pulses)} "
-                                                f"pulse(s) available in category '{prefix or '*'}' "
-                                                f"in the table row [{table_row}]")
-                                        else:
-                                            pulse = str(all_pulses.iloc[idx]['Pulse'])
+                                pulse = self._resolve_relative_pulse(pulse, inp['DS'], default_value, table_row)
 
                                 # Check each pulse
                                 if inp['DS'] in self.data_sources:
