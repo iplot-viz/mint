@@ -12,6 +12,7 @@ layer depend on:
 """
 
 import unittest
+from unittest import mock
 
 import pandas as pd
 
@@ -143,6 +144,70 @@ class TestStatusErrorInfo(unittest.TestCase):
         info = model.error_info_for_cell(model.createIndex(0, status_col))
         self.assertIsNotNone(info)
         self.assertEqual(info['explanation'], 'Variable not found')
+
+
+class TestRowLevelRelativePulse(unittest.TestCase):
+    """Row-level relative pulse ids (0 = last, -N = N-th previous) must resolve
+    to the explicit pulse for that row, instead of being misrouted into the
+    'remove from global' bucket (mint #96)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _resolve_pulse(self, cell: str, global_pulses):
+        model = MTSignalsModel()
+        pulse_bp = model._blueprint['PulseNumber']
+        original_default = pulse_bp.get('default')
+        pulse_bp['default'] = list(global_pulses)
+        try:
+            model.insertRows(0, 1)
+            df = model.get_dataframe()
+            row = {
+                'DS': 'csv', 'Variable': 'MAG-MCTB-F1:VAR1', 'PulseId': cell,
+                'Stack': '1', 'Plot type': 'PlotXY', 'Row span': '1',
+                'Col span': '1', 'Envelope': '', 'x': '${self}.time',
+                'y': '${self}.data', 'z': '', 'Alias': '', 'StartTime': '',
+                'EndTime': '', 'Calibrated': '',
+            }
+            for col, val in row.items():
+                if col in df.columns:
+                    df.at[0, col] = val
+            inp = df.iloc[0]
+            fls = pd.Series(0, index=inp.index)
+
+            all_pulses = pd.DataFrame({'Pulse': list(global_pulses)})
+
+            def fake_get_pulses_df(pattern=None, **_):
+                text = str(pattern)
+                if text and '*' not in text:
+                    return pd.DataFrame({'Pulse': [pattern]})
+                return all_pulses
+
+            fake_ds = mock.Mock()
+            fake_ds.get_pulses_df.side_effect = fake_get_pulses_df
+            with mock.patch.object(AppDataAccess, 'da') as da:
+                da.get_data_source.return_value = fake_ds
+                model.data_sources = ['csv']
+                outputs = list(model._parse_series(inp, fls, 1, []))
+            return outputs[0][0]['PulseId']
+        finally:
+            pulse_bp['default'] = original_default
+
+    def test_minus_one_resolves_to_previous_pulse(self):
+        resolved = self._resolve_pulse('-1', ['10', '20', '30', '40', '50'])
+        self.assertEqual(resolved, '40')
+
+    def test_zero_resolves_to_last_pulse(self):
+        resolved = self._resolve_pulse('0', ['10', '20', '30', '40', '50'])
+        self.assertEqual(resolved, '50')
+
+    def test_minus_one_is_not_removed_from_global(self):
+        # The bug routed -1 into the 'remove from global' bucket, so the row
+        # kept the global list minus that pulse instead of the pulse itself.
+        resolved = self._resolve_pulse('-1', ['10', '20', '30', '40', '50'])
+        self.assertNotIn(',', str(resolved))
 
 
 if __name__ == '__main__':

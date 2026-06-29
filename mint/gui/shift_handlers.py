@@ -313,7 +313,8 @@ class ShiftHandlerMixin:
                 else:
                     # Mother has been modified, use current state
                     base_pulse_id = current_mother_pulse_id
-                remaining_pulses = self._build_remaining_pulse_expr(base_pulse_id, pulse_id, global_pulses)
+                resolved_globals = self._resolve_global_pulses(global_pulses, ds_name)
+                remaining_pulses = self._build_remaining_pulse_expr(base_pulse_id, pulse_id, resolved_globals)
                 model.setData(model.createIndex(mother_row_idx, df.columns.get_loc('PulseId')), remaining_pulses, 2)
                 self._shift_original_exprs[pulse_key]['mother_pulse_updated'] = True
 
@@ -653,6 +654,18 @@ class ShiftHandlerMixin:
             return base_count + (1 if row_pulse_id.startswith('+') else -1)
 
         return len([p for p in row_pulse_id.split(',') if p.strip()])
+
+    def _resolve_global_pulses(self, global_pulses, ds_name: str):
+        """Resolve relative global pulses (0, -N) to concrete pulses so an
+        already-resolved shifted pulse can be matched against them and excluded."""
+        model = self.sigCfgWidget.model
+        if isinstance(global_pulses, list):
+            exprs = [str(p).strip() for p in global_pulses if str(p).strip()]
+        elif global_pulses:
+            exprs = [str(global_pulses).strip()]
+        else:
+            return global_pulses
+        return [model._resolve_relative_pulse(expr, ds_name, expr) for expr in exprs]
 
     def _build_remaining_pulse_expr(self, original_pulse_id: str, shifted_pulse: str, global_pulses=None) -> str:
         """Build PulseId expression for non-manipulated pulses.

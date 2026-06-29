@@ -15,6 +15,7 @@ silently — it's happened before.
 
 import types
 import unittest
+from unittest import mock
 
 import pandas as pd
 
@@ -200,6 +201,43 @@ class BuildOffsetExpressionsFromTest(unittest.TestCase):
             self.model, original_x='${self}.time', original_y='',
             total_dx=-1.5, total_dy=0.0)
         self.assertEqual(new_x, '(${self}.time) - 1.5')
+
+
+class RemainingPulseExprTest(unittest.TestCase):
+    """After shifting a pulse, the mother row must keep only the other pulses.
+
+    The shifted pulse arrives already resolved (e.g. .../8), so the global
+    pulses have to be resolved as well for it to be matched and excluded;
+    otherwise the relative globals (0, -1) are replicated verbatim (mint #96)."""
+
+    def setUp(self) -> None:
+        self.host = _Host()
+
+    def test_resolved_globals_exclude_the_shifted_pulse(self):
+        remaining = self.host._build_remaining_pulse_expr(
+            '', 'ITER:P_GYA/8', ['ITER:P_GYA/9', 'ITER:P_GYA/8'])
+        self.assertEqual(remaining, 'ITER:P_GYA/9')
+
+    def test_unresolved_globals_replicate_into_mother_row(self):
+        # Pre-fix behaviour: relative globals never match the resolved shifted
+        # pulse, so the whole list is replicated into the mother PulseId.
+        remaining = self.host._build_remaining_pulse_expr(
+            '', 'ITER:P_GYA/8', ['ITER:P_GYA/0', 'ITER:P_GYA/-1'])
+        self.assertEqual(remaining, 'ITER:P_GYA/0,ITER:P_GYA/-1')
+
+
+class ResolveGlobalPulsesTest(unittest.TestCase):
+    """_resolve_global_pulses delegates each global pulse to the model resolver."""
+
+    def test_relative_globals_are_resolved_via_model(self):
+        host = _Host()
+        resolver = {'P/0': 'P/9', 'P/-1': 'P/8'}
+        host.sigCfgWidget = types.SimpleNamespace(model=mock.Mock())
+        host.sigCfgWidget.model._resolve_relative_pulse.side_effect = (
+            lambda expr, ds, dv: resolver[expr])
+        self.assertEqual(
+            host._resolve_global_pulses(['P/0', 'P/-1'], 'sdnuda'),
+            ['P/9', 'P/8'])
 
 
 if __name__ == '__main__':
