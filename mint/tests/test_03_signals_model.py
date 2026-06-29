@@ -110,6 +110,42 @@ class TestSetDataframeBackwardCompat(unittest.TestCase):
         self.assertIn('Calibrated', table.columns)
 
 
+class TestStatusErrorInfo(unittest.TestCase):
+    """error_info_for_cell drives the hover popup. A successful row must not
+    produce a popup; the Status cell surfaces row-level errors even when its
+    own cell isn't flagged."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _one_row_model(self):
+        model = MTSignalsModel()
+        cols = list(model._table.columns)
+        # Mirror how the model stores a row: empty strings, fail flags at 0.
+        model._table = pd.DataFrame([["" for _ in cols]], columns=cols)
+        model._table_fails = pd.DataFrame([[0 for _ in cols]], columns=cols)
+        return model, cols
+
+    def test_successful_status_has_no_popup(self):
+        model, cols = self._one_row_model()
+        status_col = cols.index('Status')
+        model._table.iat[0, status_col] = 'Success|1920 points|Downsampled'
+        index = model.createIndex(0, status_col)
+        self.assertIsNone(model.error_info_for_cell(index))
+
+    def test_failed_row_shows_error_on_status_cell(self):
+        model, cols = self._one_row_model()
+        status_col = cols.index('Status')
+        # Failure flagged on a data column; the Status cell's own flag stays 0.
+        model._table_fails.iat[0, cols.index('Variable')] = 1
+        model._table.iat[0, status_col] = 'Variable not found'
+        info = model.error_info_for_cell(model.createIndex(0, status_col))
+        self.assertIsNotNone(info)
+        self.assertEqual(info['explanation'], 'Variable not found')
+
+
 class TestRowLevelRelativePulse(unittest.TestCase):
     """Row-level relative pulse ids (0 = last, -N = N-th previous) must resolve
     to the explicit pulse for that row, instead of being misrouted into the
