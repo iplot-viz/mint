@@ -1,9 +1,12 @@
-# Description: Runtime selection of the application look (widget style, color scheme),
+# Description: Runtime selection of the application look (widget style, style-sheet theme),
 #              persisted across sessions with QSettings.
 # Author: Simon Pinches
 
-from PySide6.QtCore import QSettings, Qt
+import pkgutil
+import typing
+
 from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QMenu, QStyleFactory
 
 from iplotLogging import setupLogger as setupLog
@@ -11,18 +14,11 @@ from iplotLogging import setupLogger as setupLog
 logger = setupLog.get_logger(__name__)
 
 STYLE_KEY = 'appearance/style'
-COLOR_SCHEME_KEY = 'appearance/colorScheme'
+THEME_KEY = 'appearance/theme'
 
-COLOR_SCHEMES = {
-    'system': Qt.ColorScheme.Unknown,
-    'light': Qt.ColorScheme.Light,
-    'dark': Qt.ColorScheme.Dark,
-}
-
-
-def color_schemes_supported() -> bool:
-    # QStyleHints.setColorScheme() needs Qt >= 6.8; on older Qt the menu entry is omitted
-    return hasattr(QApplication.styleHints(), 'setColorScheme')
+# style-sheet themes shipped in mint/gui/themes/<name>.qss
+THEME_NONE = 'None'
+THEMES = ('Dark', 'Light')
 
 
 def apply_style(name: str):
@@ -33,13 +29,26 @@ def apply_style(name: str):
     QSettings().setValue(STYLE_KEY, name)
 
 
-def apply_color_scheme(name: str):
-    """Switch the color scheme (system/light/dark) at runtime and persist the choice."""
-    if name not in COLOR_SCHEMES or not color_schemes_supported():
-        logger.warning(f"Unsupported color scheme: {name}")
+def _load_theme(name: str) -> typing.Optional[str]:
+    try:
+        data = pkgutil.get_data('mint.gui', f'themes/{name.lower()}.qss')
+    except (FileNotFoundError, OSError):
+        data = None
+    return data.decode('utf-8') if data is not None else None
+
+
+def apply_theme(name: str):
+    """Switch the application style-sheet theme at runtime and persist the choice."""
+    if name == THEME_NONE:
+        QApplication.instance().setStyleSheet('')
+        QSettings().setValue(THEME_KEY, name)
         return
-    QApplication.styleHints().setColorScheme(COLOR_SCHEMES[name])
-    QSettings().setValue(COLOR_SCHEME_KEY, name)
+    qss = _load_theme(name)
+    if qss is None:
+        logger.warning(f"Unknown style-sheet theme: {name}")
+        return
+    QApplication.instance().setStyleSheet(qss)
+    QSettings().setValue(THEME_KEY, name)
 
 
 def restore_appearance():
@@ -48,13 +57,17 @@ def restore_appearance():
     style = settings.value(STYLE_KEY)
     if style and QApplication.setStyle(style) is None:
         logger.warning(f"Persisted widget style is not available: {style}")
-    scheme = settings.value(COLOR_SCHEME_KEY)
-    if scheme in COLOR_SCHEMES and color_schemes_supported():
-        QApplication.styleHints().setColorScheme(COLOR_SCHEMES[scheme])
+    theme = settings.value(THEME_KEY)
+    if theme and theme != THEME_NONE:
+        qss = _load_theme(theme)
+        if qss is None:
+            logger.warning(f"Persisted style-sheet theme is not available: {theme}")
+        else:
+            QApplication.instance().setStyleSheet(qss)
 
 
 class MTAppearanceMenu(QMenu):
-    """An 'Appearance' menu offering the built-in widget styles and color schemes."""
+    """An 'Appearance' menu offering the built-in widget styles and style-sheet themes."""
 
     def __init__(self, parent=None):
         super().__init__("&Appearance", parent)
@@ -73,15 +86,14 @@ class MTAppearanceMenu(QMenu):
             style_group.addAction(action)
             self._style_menu.addAction(action)
 
-        if color_schemes_supported():
-            self._scheme_menu = QMenu("&Color scheme", self)
-            self.addMenu(self._scheme_menu)
-            scheme_group = QActionGroup(self)
-            current_scheme = QSettings().value(COLOR_SCHEME_KEY, 'system')
-            for name in COLOR_SCHEMES:
-                action = QAction(name.capitalize(), self)
-                action.setCheckable(True)
-                action.setChecked(name == current_scheme)
-                action.triggered.connect(lambda checked=False, n=name: apply_color_scheme(n))
-                scheme_group.addAction(action)
-                self._scheme_menu.addAction(action)
+        self._theme_menu = QMenu("&Theme", self)
+        self.addMenu(self._theme_menu)
+        theme_group = QActionGroup(self)
+        current_theme = QSettings().value(THEME_KEY, THEME_NONE)
+        for name in (THEME_NONE,) + THEMES:
+            action = QAction(name, self)
+            action.setCheckable(True)
+            action.setChecked(name == current_theme)
+            action.triggered.connect(lambda checked=False, n=name: apply_theme(n))
+            theme_group.addAction(action)
+            self._theme_menu.addAction(action)
