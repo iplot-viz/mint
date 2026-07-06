@@ -33,6 +33,7 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
+from mint.gui.mtAppearance import MTAppearanceMenu
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
@@ -151,7 +152,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._on_rows_about_to_be_removed)
 
         file_menu = self.menuBar().addMenu("&File")
+        view_menu = self.menuBar().addMenu("&View")
         help_menu = self.menuBar().addMenu("&Help")
+        view_menu.addMenu(MTAppearanceMenu(self.menuBar()))
 
         exit_action = QAction("Exit", self.menuBar())
         exit_action.setShortcuts(QKeySequence.StandardKey.Quit)
