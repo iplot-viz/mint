@@ -56,7 +56,9 @@ def restore_appearance():
     settings = QSettings()
     style = settings.value(STYLE_KEY)
     if style and QApplication.setStyle(style) is None:
-        logger.warning(f"Persisted widget style is not available: {style}")
+        # self-heal legacy/renamed style names so settings and menu state stay consistent
+        logger.warning(f"Persisted widget style is not available, resetting it: {style}")
+        settings.remove(STYLE_KEY)
     theme = settings.value(THEME_KEY)
     if theme and theme != THEME_NONE:
         qss = _load_theme(theme)
@@ -80,8 +82,11 @@ class MTAppearanceMenu(QMenu):
         self.addMenu(self._style_menu)
         style_group = QActionGroup(self)
         # when a style-sheet theme is active QApplication.style() is an anonymous
-        # QStyleSheetStyle wrapper, so prefer the persisted choice over its objectName
-        current_style = QSettings().value(STYLE_KEY, QApplication.style().objectName())
+        # QStyleSheetStyle wrapper, so prefer the persisted choice over its objectName;
+        # a legacy/unknown persisted name falls back to the live style
+        current_style = QSettings().value(STYLE_KEY, '') or QApplication.style().objectName()
+        if current_style.lower() not in (k.lower() for k in QStyleFactory.keys()):
+            current_style = QApplication.style().objectName()
         for name in QStyleFactory.keys():
             action = QAction(name, self)
             action.setCheckable(True)

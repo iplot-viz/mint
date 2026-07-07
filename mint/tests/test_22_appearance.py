@@ -12,7 +12,7 @@ or write a real user configuration file.
 import tempfile
 import unittest
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, QStandardPaths
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from mint.gui.mtAppearance import (MTAppearanceMenu, STYLE_KEY, THEME_KEY, THEME_NONE, THEMES,
@@ -25,6 +25,7 @@ class AppearanceTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = ensure_qapp()
         cls._tmp = tempfile.TemporaryDirectory()
+        cls._prev_format = QSettings.defaultFormat()
         QSettings.setDefaultFormat(QSettings.Format.IniFormat)
         QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls._tmp.name)
         cls._org, cls._name = cls.app.organizationName(), cls.app.applicationName()
@@ -35,6 +36,11 @@ class AppearanceTest(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.app.setOrganizationName(cls._org)
         cls.app.setApplicationName(cls._name)
+        # restore the process-wide QSettings defaults changed in setUpClass (QSettings has
+        # no getter for the search path, so fall back to the platform config location)
+        QSettings.setDefaultFormat(cls._prev_format)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
+                          QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation))
         cls._tmp.cleanup()
 
     def setUp(self):
@@ -81,6 +87,21 @@ class AppearanceTest(unittest.TestCase):
         restore_appearance()
         self.assertEqual(QApplication.instance().styleSheet(), '')
         self.assertEqual(QSettings().value(THEME_KEY), THEME_NONE)
+
+    def test_restore_appearance_resets_unknown_style(self):
+        before = QApplication.style().objectName()
+        QSettings().setValue(STYLE_KEY, 'no-such-style')
+        restore_appearance()
+        self.assertEqual(QApplication.style().objectName(), before)
+        self.assertIsNone(QSettings().value(STYLE_KEY))
+
+    def test_menu_normalizes_unknown_style(self):
+        style = QStyleFactory.keys()[0]
+        apply_style(style)
+        QSettings().setValue(STYLE_KEY, 'no-such-style')
+        menu = MTAppearanceMenu()
+        checked = [a.text() for a in menu.actions()[0].menu().actions() if a.isChecked()]
+        self.assertEqual(checked, [style])
 
     def test_menu_reflects_state_and_normalizes_unknown_theme(self):
         menu = MTAppearanceMenu()
