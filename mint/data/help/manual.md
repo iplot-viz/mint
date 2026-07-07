@@ -171,6 +171,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
 - **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
+- **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
 - Undo / Redo: roll back or replay the last pan/zoom action.
 - Folder / Floppy: open / save preferences.
@@ -178,6 +179,15 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
+
+#### Rulers window
+
+Opens when you place a ruler. Two layouts:
+
+- **Rows**: one ruler per row with its X/Y values, its *Signal values* (each crossed signal's value at the ruler, shown as `name: value` and left blank where the ruler sits off a signal) and per-ruler controls — *Visible* (show or hide the ruler), *Labels* (choose whether to show the name tag, the signal-value tags, both or neither), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default).
+- **Columns**: a read-only view with one section per plot, rulers ordered by X value and a Δ column showing the gap between neighbours.
+
+Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* shows the dx/dy between two or more of them, even across plots.
 
 #### Canvas-level preferences
 
