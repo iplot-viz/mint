@@ -10,6 +10,7 @@ from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 import getpass
+import inspect
 import json
 import os
 import pkgutil
@@ -48,6 +49,15 @@ from mint.gui.shift_handlers import ShiftHandlerMixin
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
+
+
+def _accepts_kwarg(func, name: str) -> bool:
+    # Guards the progress-bar wiring against sibling releases (iplotlib, iplotDataAccess)
+    # that predate the progress_callback parameter.
+    try:
+        return name in inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
@@ -430,6 +440,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.statusBar().showMessage('Ready.')
         QCoreApplication.processEvents()
 
+    def _begin_export_progress(self):
+        self._progressBar.setMinimum(0)
+        self._progressBar.setValue(0)
+        self._progressBar.show()
+        QCoreApplication.processEvents()
+
+    def _report_export_progress(self, index, total, name):
+        self._progressBar.setMaximum(total)
+        self._progressBar.setValue(index)
+        self.statusBar().showMessage(f"Exporting {name} ({index}/{total}) ..")
+        QCoreApplication.processEvents()
+
     def export_dict(self) -> dict:
         self.indicate_busy('Exporting workspace...')
         workspace = {}
@@ -632,9 +654,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def export_data_plots(self, file_path: str):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
+            kwargs = {}
+            if _accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
+                self._begin_export_progress()
+                kwargs['progress_callback'] = self._report_export_progress
             with open(file_path, mode='w') as f:
-                f.write(self.canvas.get_signals_as_csv())
+                f.write(self.canvas.get_signals_as_csv(**kwargs))
             logger.info(f"Finished exporting data {file_path}")
+            self.indicate_ready()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -787,6 +814,23 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.indicate_ready()
             return
 
+        from iplotDataAccess.dataHandling.exportData.exportData import generateData
+
+        gen_kwargs = {}
+        if _accepts_kwarg(generateData, 'progressCallback'):
+            pulse_factor = len(pulse_number) if pulse_number else 1
+            total_vars = sum(len(group) * pulse_factor for ds_name, group in table.groupby('DS')
+                             if getattr(self.da.ds_list.get(ds_name), 'source_type', None) == "CODAC_UDA")
+            export_index = 0
+
+            def report_progress(name):
+                nonlocal export_index
+                export_index += 1
+                self._report_export_progress(export_index, total_vars, name)
+
+            gen_kwargs['progressCallback'] = report_progress
+            self._begin_export_progress()
+
         attempt_count = 0
         success_count = 0
         for ds_name, group in table.groupby('DS'):
@@ -800,8 +844,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 errors.append(msg)
                 logger.warning(msg)
                 continue
-
-            from iplotDataAccess.dataHandling.exportData.exportData import generateData
 
             # Pulse mode
             if pulse_number is not None:
@@ -819,7 +861,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     # Use of export data script
                     attempt_count += 1
                     valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
+                                                  **gen_kwargs)
                     if valid:
                         success_count += 1
                         logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
@@ -838,7 +881,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 # Use of export data script
                 attempt_count += 1
                 valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
+                                              **gen_kwargs)
                 if valid:
                     success_count += 1
                     logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
