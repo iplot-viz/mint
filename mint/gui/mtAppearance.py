@@ -61,7 +61,9 @@ def restore_appearance():
     if theme and theme != THEME_NONE:
         qss = _load_theme(theme)
         if qss is None:
-            logger.warning(f"Persisted style-sheet theme is not available: {theme}")
+            # self-heal legacy/renamed theme names so settings and menu state stay consistent
+            logger.warning(f"Persisted style-sheet theme is not available, resetting it: {theme}")
+            settings.setValue(THEME_KEY, THEME_NONE)
         else:
             QApplication.instance().setStyleSheet(qss)
 
@@ -77,11 +79,13 @@ class MTAppearanceMenu(QMenu):
         self._style_menu = QMenu("&Style", self)
         self.addMenu(self._style_menu)
         style_group = QActionGroup(self)
-        current_style = QApplication.style().objectName().lower()
+        # when a style-sheet theme is active QApplication.style() is an anonymous
+        # QStyleSheetStyle wrapper, so prefer the persisted choice over its objectName
+        current_style = QSettings().value(STYLE_KEY, QApplication.style().objectName())
         for name in QStyleFactory.keys():
             action = QAction(name, self)
             action.setCheckable(True)
-            action.setChecked(name.lower() == current_style)
+            action.setChecked(name.lower() == current_style.lower())
             action.triggered.connect(lambda checked=False, n=name: apply_style(n))
             style_group.addAction(action)
             self._style_menu.addAction(action)
@@ -90,6 +94,9 @@ class MTAppearanceMenu(QMenu):
         self.addMenu(self._theme_menu)
         theme_group = QActionGroup(self)
         current_theme = QSettings().value(THEME_KEY, THEME_NONE)
+        if current_theme not in (THEME_NONE,) + THEMES:
+            # legacy/unknown persisted value: nothing would be applied, so show 'None' as checked
+            current_theme = THEME_NONE
         for name in (THEME_NONE,) + THEMES:
             action = QAction(name, self)
             action.setCheckable(True)
