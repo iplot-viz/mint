@@ -241,12 +241,14 @@ $ mint
 <li><strong>MARKER</strong>: precise distance by selecting points (only with &lt; 100 points per plot).</li>
 <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via <em>Hide/Show columns</em>.</li>
 <li>Undo / Redo: roll back or replay the last pan/zoom action.</li>
+<li><strong>HOME</strong>: snap every plot back to the time range of the last <em>Draw</em> (or refresh). The data is served from cache, so it is instant. In relative time it also stops the auto-refresh — press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
 <li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
+<p>Right-click a plot for per-plot actions, including <strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</p>
 <h4>Canvas-level preferences</h4>
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), focus all plots on stack.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>

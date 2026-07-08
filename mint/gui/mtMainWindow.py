@@ -670,6 +670,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if self.refreshTimer is not None:
             self.refreshTimer.stop()
 
+    def home(self):
+        # A relative-time canvas keeps refreshing on a timer. Stop it before
+        # restoring the view (order-independent of the base reset); the refresh
+        # resumes only on the next Draw.
+        if self.refreshTimer.isActive():
+            logger.info("Canvas auto-refresh cancelled (Home button; press Draw to resume)")
+            self.stop_auto_refresh()
+        super().home()
+
     def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
