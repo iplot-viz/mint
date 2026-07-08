@@ -10,6 +10,7 @@ import unittest
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
+from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from mint.gui.mtMainWindow import MTMainWindow
 from mint.models.utils import mtBlueprintParser
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
@@ -17,6 +18,10 @@ from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 
 
+# The Home button ships in iplotlib; mint's CI installs iplotlib from develop,
+# so this integration test runs only once that change reaches develop.
+@unittest.skipUnless(hasattr(IplotQtMainWindow, 'home'),
+                     "iplotlib Home button not available in the installed iplotlib")
 class HomeButtonTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
