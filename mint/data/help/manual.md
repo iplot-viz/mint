@@ -166,7 +166,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 <p style="text-align:center;margin:14px 0;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
 
 - **SELECT**: left double-click to put a plot in full-screen; right double-click to go back.
-- **CROSSHAIR**: shows X/Y coordinates and the closest signal value. SELECT disables it.
+- **CROSSHAIR**: a live cursor showing X/Y coordinates and the value of every signal at the cursor's time. Double-click to freeze the cursor as a fixed crosshair (A, B, C…) that stays pinned to that time as you zoom and pan; drag it to move it, or right-click it → *Remove crosshair*. With shared time on, it appears on every plot sharing the time axis. Frozen crosshairs are listed in the *Crosshairs window* (below) and saved with the workspace. SELECT disables the mode.
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
 - **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).
@@ -188,6 +188,15 @@ Opens when you place a ruler. Two layouts:
 - **Columns**: a read-only view with one section per plot, rulers ordered by X value and a Δ column showing the gap between neighbours.
 
 Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* shows the dx/dy between two or more of them, even across plots.
+
+#### Crosshairs window
+
+Opens when you freeze a crosshair (double-click in crosshair mode). Where a ruler measures a single (x, y) point, a frozen crosshair reads a whole instant in time. It offers two layouts:
+
+- **List**: one row per crosshair with its *Time* and one column per signal holding that signal's value at the frozen time (colour-matched to the signal's curve, left blank where the crosshair sits off a signal), plus per-crosshair controls — *Visible* (show or hide it), *Labels* (name tag, value tags, both or neither), *Color* (its lines and label boxes) and *Font color* (adapts to stay readable). *Hide signal values* collapses the per-signal columns when you only need the times.
+- **Compare**: flips the table so signals are the rows and each crosshair is a column, with a Δ (last − first) column that highlights rises and drops. A *Filter* box narrows the signal list, *Sort by* orders signals by value at any crosshair (or by Δ), and *Colour cells* shades each signal's values on a low→high scale. This keeps things readable when many signals would make the List view wide, and answers "which signal moved between two instants".
+
+Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) to paste into a spreadsheet. *Export to CSV* writes the whole table to a semicolon-separated `.scsv` file (or a plain comma `.csv`). *Remove crosshair* deletes the selected crosshairs; *Compute distance* shows the time gap and each signal's value difference between two or more of them, even across plots.
 
 #### Canvas-level preferences
 

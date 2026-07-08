@@ -234,7 +234,7 @@ $ mint
 
 <ul>
 <li><strong>SELECT</strong>: left double-click to put a plot in full-screen; right double-click to go back.</li>
-<li><strong>CROSSHAIR</strong>: shows X/Y coordinates and the closest signal value. SELECT disables it.</li>
+<li><strong>CROSSHAIR</strong>: a live cursor showing X/Y coordinates and the value of every signal at the cursor's time. Double-click to freeze the cursor as a fixed crosshair (A, B, C…) that stays pinned to that time as you zoom and pan; drag it to move it, or right-click it → <em>Remove crosshair</em>. With shared time on, it appears on every plot sharing the time axis. Frozen crosshairs are listed in the <em>Crosshairs window</em> (below) and saved with the workspace. SELECT disables the mode.</li>
 <li><strong>PAN</strong>: drag to pan; left double-click to reset.</li>
 <li><strong>ZOOM</strong>: rubber-band a region (cover both X and Y); left double-click to reset.</li>
 <li><strong>DIST</strong>: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).</li>
@@ -255,6 +255,13 @@ $ mint
 <li><strong>Columns</strong>: a read-only view with one section per plot, rulers ordered by X value and a Δ column showing the gap between neighbours.</li>
 </ul>
 <p>Columns can be resized, and you can copy the selection (Ctrl+C or right-click → <em>Copy</em>) to paste into a spreadsheet. <em>Export to CSV</em> writes the whole table (every ruler and every column) to a semicolon-separated <code>.scsv</code> file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma <code>.csv</code>. <em>Remove ruler</em> deletes the selected rulers; <em>Compute distance</em> shows the dx/dy between two or more of them, even across plots.</p>
+<h4>Crosshairs window</h4>
+<p>Opens when you freeze a crosshair (double-click in crosshair mode). Where a ruler measures a single (x, y) point, a frozen crosshair reads a whole instant in time. It offers two layouts:</p>
+<ul>
+<li><strong>List</strong>: one row per crosshair with its <em>Time</em> and one column per signal holding that signal's value at the frozen time (colour-matched to the signal's curve, left blank where the crosshair sits off a signal), plus per-crosshair controls — <em>Visible</em> (show or hide it), <em>Labels</em> (name tag, value tags, both or neither), <em>Color</em> (its lines and label boxes) and <em>Font color</em> (adapts to stay readable). <em>Hide signal values</em> collapses the per-signal columns when you only need the times.</li>
+<li><strong>Compare</strong>: flips the table so signals are the rows and each crosshair is a column, with a Δ (last − first) column that highlights rises and drops. A <em>Filter</em> box narrows the signal list, <em>Sort by</em> orders signals by value at any crosshair (or by Δ), and <em>Colour cells</em> shades each signal's values on a low→high scale. This keeps things readable when many signals would make the List view wide, and answers "which signal moved between two instants".</li>
+</ul>
+<p>Columns can be resized, and you can copy the selection (Ctrl+C or right-click → <em>Copy</em>) to paste into a spreadsheet. <em>Export to CSV</em> writes the whole table to a semicolon-separated <code>.scsv</code> file (or a plain comma <code>.csv</code>). <em>Remove crosshair</em> deletes the selected crosshairs; <em>Compute distance</em> shows the time gap and each signal's value difference between two or more of them, even across plots.</p>
 <h4>Canvas-level preferences</h4>
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), focus all plots on stack.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>
