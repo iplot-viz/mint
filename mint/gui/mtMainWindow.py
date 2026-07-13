@@ -442,14 +442,23 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def _begin_export_progress(self):
         self._progressBar.setMinimum(0)
+        self._progressBar.setMaximum(100)
         self._progressBar.setValue(0)
         self._progressBar.show()
         QCoreApplication.processEvents()
 
     def _report_export_progress(self, index, total, name):
-        self._progressBar.setMaximum(total)
-        self._progressBar.setValue(index)
+        # The bar tracks completed variables; the extra 1% signals that the
+        # next variable started. 100% is reserved for the fully finished export.
+        if total > 0:
+            percent = min(int((index - 1) * 100 / total) + 1, 99)
+            self._progressBar.setValue(percent)
         self.statusBar().showMessage(f"Exporting {name} ({index}/{total}) ..")
+        QCoreApplication.processEvents()
+
+    def _finish_export_progress(self):
+        self._progressBar.setValue(100)
+        self.statusBar().showMessage("Export completed")
         QCoreApplication.processEvents()
 
     def export_dict(self) -> dict:
@@ -661,6 +670,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             with open(file_path, mode='w') as f:
                 f.write(self.canvas.get_signals_as_csv(**kwargs))
             logger.info(f"Finished exporting data {file_path}")
+            if kwargs:
+                self._finish_export_progress()
             self.indicate_ready()
         except Exception as e:
             box = QMessageBox()
@@ -890,6 +901,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     reason = f"Export failed for data source '{ds_name}': {err_msg}"
                     logger.warning(reason)
                     errors.append(reason)
+
+        if gen_kwargs and success_count:
+            self._finish_export_progress()
 
         if attempt_count > 0 and success_count == 0:
             error_details = "\n".join(f"- {e}" for e in errors)

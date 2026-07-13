@@ -34,11 +34,11 @@ class UiExportConfig(QWidget):
         self.exportWidget = QWidget(self.exportWindowWidget)
         self.exportWidget.setObjectName("exportWidget")
 
-        # Chunks spin box
+        # Chunks spin box: any positive integer, the spin box itself enforces integers
         self.chunksSpinBox = QSpinBox(self.exportWidget)
         self.chunksSpinBox.setObjectName("chunksSpinBox")
-        self.chunksSpinBox.setMinimum(50000)
-        self.chunksSpinBox.setMaximum(200000)
+        self.chunksSpinBox.setMinimum(1)
+        self.chunksSpinBox.setMaximum(2147483647)
         self.chunksSpinBox.setSingleStep(10)
 
         # Output path
