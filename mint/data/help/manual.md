@@ -182,12 +182,12 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 
 #### Rulers window
 
-Opens when you place a ruler. Two layouts:
+Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
 
-- **Rows**: one ruler per row with its X/Y values, its *Signal values* (each crossed signal's value at the ruler, shown as `name: value` and left blank where the ruler sits off a signal) and per-ruler controls — *Visible* (show or hide the ruler), *Labels* (choose whether to show the name tag, the signal-value tags, both or neither), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default).
-- **Columns**: a read-only view with one section per plot, rulers ordered by X value and a Δ column showing the gap between neighbours.
+- **Rows**: one ruler per row with its X/Y values, one column per crossed signal with its value at the ruler (blank where the ruler sits off a signal; with shared time on, the ruler also carries the values of the other plots' signals at its position, which is what makes cross-plot deltas possible) and per-ruler controls — *Visible* (show or hide the ruler), *Labels* (choose whether to show the name tag, the signal-value tags, both or neither), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default). Long signal names wrap over several header lines, and hovering a header shows the full name.
+- **Columns**: a read-only view with one section per plot — rulers ordered by X value as columns, one row per signal below the X/Y rows, and a Δ column showing the gap between neighbours for X, Y and every signal.
 
-Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* shows the dx/dy between two or more of them, even across plots.
+*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
 
 #### Canvas-level preferences
 
