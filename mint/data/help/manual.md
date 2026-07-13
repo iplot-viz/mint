@@ -173,7 +173,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
 - Undo / Redo: roll back or replay the last pan/zoom action.
-- **HOME**: snap every plot back to the time range of the last *Draw* (or refresh). The data is served from cache, so it is instant. In relative time it also stops the auto-refresh — press *Draw* to resume it.
+- **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
