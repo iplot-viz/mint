@@ -41,4 +41,8 @@ def create_app(argv=None) -> (QApplication, Namespace):
     qApp.setOrganizationDomain("www.iter.org")
     qApp.setOrganizationName("ITER")
 
+    # must come after the organization/application names are set: QSettings depends on them
+    from mint.gui.mtAppearance import restore_appearance
+    restore_appearance()
+
     return qApp, args
