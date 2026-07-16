@@ -302,7 +302,8 @@ $ mint
     &quot;rturl&quot;: &quot;https://controls.iter.org/dashboard/backend/sse&quot;,
     &quot;rtheaders&quot;: &quot;REMOTE_USER:$USERNAME,User-Agent:python_client&quot;,
     &quot;rtauth&quot;: null,
-    &quot;default&quot;: true
+    &quot;default&quot;: true,
+    &quot;uda_for_export&quot;: &quot;io-ls-udasrv2.iter.org&quot;
   },
   &quot;imaspy&quot;: {
     &quot;type&quot;: &quot;IMASPY&quot;,
@@ -312,7 +313,7 @@ $ mint
   }
 }
 </code></pre>
-<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none).</p>
+<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>

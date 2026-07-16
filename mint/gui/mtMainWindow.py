@@ -828,7 +828,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.indicate_ready()
             return
 
-        from iplotDataAccess.dataHandling.exportData.exportData import generateData
+        from iplotDataAccess.dataHandling.exportData.exportData import generateData, connectUDA
 
         gen_kwargs = {}
         if _accepts_kwarg(generateData, 'progressCallback'):
@@ -859,6 +859,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 logger.warning(msg)
                 continue
 
+            # When configured, export pulls the data from an alternative UDA server (same port).
+            if conn.uda_for_export:
+                export_conn = connectUDA(conn.uda_for_export, conn.port)
+                if export_conn.errc != 0:
+                    reason = (f"Export failed for data source '{ds_name}': "
+                              f"could not connect to export server '{conn.uda_for_export}'")
+                    logger.warning(reason)
+                    errors.append(reason)
+                    continue
+            else:
+                export_conn = conn
+
             # Pulse mode
             if pulse_number is not None:
                 for pulse in pulse_number:
@@ -874,7 +886,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                     # Use of export data script
                     attempt_count += 1
-                    valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                    valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
                                                   startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
                                                   **gen_kwargs)
                     if valid:
@@ -894,7 +906,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                 # Use of export data script
                 attempt_count += 1
-                valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
+                valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
                                               startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
                                               **gen_kwargs)
                 if valid:

@@ -247,7 +247,8 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
     "rturl": "https://controls.iter.org/dashboard/backend/sse",
     "rtheaders": "REMOTE_USER:$USERNAME,User-Agent:python_client",
     "rtauth": null,
-    "default": true
+    "default": true,
+    "uda_for_export": "io-ls-udasrv2.iter.org"
   },
   "imaspy": {
     "type": "IMASPY",
@@ -258,7 +259,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 }
 ```
 
-Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none).
+Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
