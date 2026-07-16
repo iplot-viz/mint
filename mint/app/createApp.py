@@ -31,6 +31,10 @@ def create_app(argv=None) -> (QApplication, Namespace):
                         type=int, default=1080, help='Exported image height')
     parser.add_argument('--ed', dest='export_dpi', metavar='export_dpi',
                         type=int, default=100, help='Exported image DPI')
+    parser.add_argument('--ea', '--export-autoscale', dest='export_autoscale', action='store_true', default=False,
+                        help='Force an "Autoscale All" on the Y axes of the exported image '
+                             '(instead of keeping the Y limits saved in the workspace). '
+                             'Only used together with -e; has no effect otherwise.')
     parser.add_argument('--version', action='version',
                         version=f"{parser.prog} - {get_versions()['version']}")
     args = parser.parse_args()
