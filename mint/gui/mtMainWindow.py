@@ -39,6 +39,7 @@ from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
+from mint.gui.plotRange import read_x_range_ns, read_x_range_pulse_seconds
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
@@ -257,6 +258,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
+        self._install_set_time_window()
         self._install_help_anchors()
         self.resize(1920, 1080)
 
@@ -273,6 +275,36 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         for widget, anchor in anchors.items():
             if widget is not None:
                 widget.setProperty(HELP_ANCHOR_PROPERTY, anchor)
+
+    def _install_set_time_window(self):
+        # Inject Set as Time Window into the backend's native plot context menu.
+        parser = self.canvasStack.currentWidget()._parser
+        parser.context_menu_extender = self._extend_plot_context_menu
+
+    def _extend_plot_context_menu(self, menu, plot=None):
+        # `plot` is the core Plot under the right-click (passed by the backend
+        # canvas). Acting on it — not the whole canvas — is what makes this
+        # per-plot (#107). Falls back to the first plot when absent.
+        x_is_time = self.dataRangeSelector.is_x_axis_date()
+        x_is_pulse = self.dataRangeSelector.is_x_axis_pulse_relative()
+        menu.addSeparator()
+        set_window = menu.addAction("Set as time window")
+        set_window.setEnabled(x_is_time or x_is_pulse)
+        set_window.triggered.connect(lambda: self.on_set_time_window(plot))
+
+    def on_set_time_window(self, plot=None):
+        parser = self.canvasStack.currentWidget()._parser
+        if self.dataRangeSelector.is_x_axis_pulse_relative():
+            x_range = read_x_range_pulse_seconds(self.canvas, parser, plot)
+            if x_range is None:
+                return
+            self.dataRangeSelector.apply_canvas_range_pulse_seconds(*x_range)
+            return
+        x_range = read_x_range_ns(self.canvas, parser, plot)
+        if x_range is None:
+            return
+        start_ns, end_ns = x_range
+        self.dataRangeSelector.force_apply_canvas_range_ns(start_ns, end_ns)
 
     def wire_connections(self):
         super().wire_connections()

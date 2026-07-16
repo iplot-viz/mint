@@ -128,6 +128,35 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.toTime.setStyleSheet(style)
         self.fromTime.setStyleSheet(style)
 
+    def set_from_ns(self, start_ns: int, end_ns: int) -> None:
+        for w, ns in ((self.fromTime, int(start_ns)), (self.toTime, int(end_ns))):
+            qdt_utc = QDateTime.fromMSecsSinceEpoch(ns // 1_000_000, Qt.UTC)
+            qdt_wall = QDateTime(qdt_utc.date(), qdt_utc.time())
+            w.blockSignals(True)
+            w.setDateTime(qdt_wall)
+            w.blockSignals(False)
+        ns_start = int(start_ns) % 1_000_000_000
+        ns_end = int(end_ns) % 1_000_000_000
+        self.fromTimeNs.blockSignals(True)
+        self.fromTimeNs.setText(str(ns_start).zfill(9))
+        self.fromTimeNs.blockSignals(False)
+        self.toTimeNs.blockSignals(True)
+        self.toTimeNs.setText(str(ns_end).zfill(9))
+        self.toTimeNs.blockSignals(False)
+        # Keep the backing model in sync with the widgets: properties() and
+        # get_time_range() read the range from the model, so "Set as time window"
+        # only takes effect on draw/export once the model is updated too — same
+        # pattern as fill_from_pulse. Without this the widgets show the zoom
+        # range but the plot/export keep the previous one (#107 / IDV-756).
+        self.model.setStringList([
+            self.fromTime.dateTime().toString(MTAbsoluteTime.TIME_FORMAT),
+            self.toTime.dateTime().toString(MTAbsoluteTime.TIME_FORMAT),
+            self.fromTimeNs.text(),
+            self.toTimeNs.text(),
+        ])
+        self.mapper.toFirst()
+        self.handle_time_validation()
+
     def from_dict(self, contents: dict):
         self.mapper.model().setStringList([contents.get("ts_start"),
                                            contents.get("ts_end"),
