@@ -48,7 +48,7 @@ include = ["mint*"]
 
 [tool.setuptools.package-data]
 "mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "canvas_properties/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*"]
-"mint.gui" = ["icons/*.png", "res/*.ui"]
+"mint.gui" = ["icons/*.png", "res/*.ui", "themes/*.qss"]
 "mint" = ["mydatasources.cfg"]
 
 [project.scripts]

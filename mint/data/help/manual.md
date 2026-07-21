@@ -155,6 +155,8 @@ Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON 
 
 The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded.
 
+While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.
+
 <p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
 <div class="err-block">If the export fails or completes only partially, MINT shows a popup with the underlying reason. Common causes are listed under <a href="#errors">Error reference</a>: <a href="#errors-permission-denied">Permission denied</a>, <a href="#errors-export-expression">Expressions in Variable column</a>, <a href="#errors-export-custom-time">Per-signal time overrides</a>, <a href="#errors-export-xyz">Custom x/y/z processing</a>.</div>
@@ -174,11 +176,14 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
 - Undo / Redo: roll back or replay the last pan/zoom action.
+- **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
+
+Right-click a plot for per-plot actions, including **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
 
 #### Rulers window
 
@@ -255,7 +260,8 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
     "rturl": "https://controls.iter.org/dashboard/backend/sse",
     "rtheaders": "REMOTE_USER:$USERNAME,User-Agent:python_client",
     "rtauth": null,
-    "default": true
+    "default": true,
+    "uda_for_export": "io-ls-udasrv2.iter.org"
   },
   "imaspy": {
     "type": "IMASPY",
@@ -266,7 +272,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 }
 ```
 
-Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none).
+Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 

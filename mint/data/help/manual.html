@@ -224,6 +224,7 @@ $ mint
 
 <h3 id="export-data">2.7 Export data</h3>
 <p>The <em>Export</em> button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded.</p>
+<p>While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.</p>
 <p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
 <div class="err-block">If the export fails or completes only partially, MINT shows a popup with the underlying reason. Common causes are listed under <a href="#errors">Error reference</a>: <a href="#errors-permission-denied">Permission denied</a>, <a href="#errors-export-expression">Expressions in Variable column</a>, <a href="#errors-export-custom-time">Per-signal time overrides</a>, <a href="#errors-export-xyz">Custom x/y/z processing</a>.</div>
@@ -242,12 +243,14 @@ $ mint
 <li><strong>RULER</strong>: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → <em>Remove ruler</em>. With shared time on, the ruler appears on every plot and is removed from all of them at once. Rulers are listed in the <em>Rulers window</em> (below) and saved with the workspace.</li>
 <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via <em>Hide/Show columns</em>.</li>
 <li>Undo / Redo: roll back or replay the last pan/zoom action.</li>
+<li><strong>HOME</strong>: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
 <li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
+<p>Right-click a plot for per-plot actions, including <strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</p>
 <h4>Rulers window</h4>
 <p>Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:</p>
 <ul>
@@ -309,7 +312,8 @@ $ mint
     &quot;rturl&quot;: &quot;https://controls.iter.org/dashboard/backend/sse&quot;,
     &quot;rtheaders&quot;: &quot;REMOTE_USER:$USERNAME,User-Agent:python_client&quot;,
     &quot;rtauth&quot;: null,
-    &quot;default&quot;: true
+    &quot;default&quot;: true,
+    &quot;uda_for_export&quot;: &quot;io-ls-udasrv2.iter.org&quot;
   },
   &quot;imaspy&quot;: {
     &quot;type&quot;: &quot;IMASPY&quot;,
@@ -319,7 +323,7 @@ $ mint
   }
 }
 </code></pre>
-<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none).</p>
+<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>

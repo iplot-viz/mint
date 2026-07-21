@@ -126,7 +126,8 @@ def run_app(q_app: QApplication, args=None):
 
         if args.image_file:
             export_to_file(canvas_impl, main_win.canvas, args.image_file, dpi=args.export_dpi,
-                           width=args.export_width, height=args.export_height)
+                           width=args.export_width, height=args.export_height,
+                           autoscale=args.export_autoscale)
             exit(0)
 
     main_win.show()
