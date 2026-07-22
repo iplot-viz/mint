@@ -251,6 +251,13 @@ $ mint
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
 <p>Right-click a plot for per-plot actions, including <strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</p>
+<h4>Reading tick labels with very large values</h4>
+<p>When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in <em>offset + scale</em> form, shown in the corner of the axis. A corner label like <code>1e9+1.121e15</code> is interpreted as follows:</p>
+<ul>
+<li><code>1e9</code> is the multiplier applied to each tick label;</li>
+<li><code>+1.121e15</code> is the offset added afterwards.</li>
+</ul>
+<p>So a tick labelled <code>824</code> really means <code>824 × 1e9 + 1.121e15 = 1,121,824,000,000,000</code>. Either part may appear alone: a corner label with only a power of ten (e.g. <code>1e18</code>) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.</p>
 <h4>Rulers window</h4>
 <p>Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:</p>
 <ul>

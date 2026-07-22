@@ -185,6 +185,15 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 
 Right-click a plot for per-plot actions, including **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
 
+#### Reading tick labels with very large values
+
+When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in *offset + scale* form, shown in the corner of the axis. A corner label like `1e9+1.121e15` is interpreted as follows:
+
+- `1e9` is the multiplier applied to each tick label;
+- `+1.121e15` is the offset added afterwards.
+
+So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000,000`. Either part may appear alone: a corner label with only a power of ten (e.g. `1e18`) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.
+
 #### Rulers window
 
 Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
