@@ -10,6 +10,7 @@ from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 import getpass
+import inspect
 import json
 import os
 import pkgutil
@@ -33,10 +34,12 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
+from mint.gui.mtAppearance import MTAppearanceMenu
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
 from mint.gui.mtStatusBar import MTStatusBar
+from mint.gui.plotRange import read_x_range_ns, read_x_range_pulse_seconds
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
@@ -48,6 +51,15 @@ from mint.gui.shift_handlers import ShiftHandlerMixin
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
+
+
+def _accepts_kwarg(func, name: str) -> bool:
+    # Guards the progress-bar wiring against sibling releases (iplotlib, iplotDataAccess)
+    # that predate the progress_callback parameter.
+    try:
+        return name in inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
@@ -151,7 +163,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._on_rows_about_to_be_removed)
 
         file_menu = self.menuBar().addMenu("&File")
+        view_menu = self.menuBar().addMenu("&View")
         help_menu = self.menuBar().addMenu("&Help")
+        view_menu.addMenu(MTAppearanceMenu(self.menuBar()))
 
         exit_action = QAction("Exit", self.menuBar())
         exit_action.setShortcuts(QKeySequence.StandardKey.Quit)
@@ -244,6 +258,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
+        self._install_set_time_window()
         self._install_help_anchors()
         self.resize(1920, 1080)
 
@@ -260,6 +275,36 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         for widget, anchor in anchors.items():
             if widget is not None:
                 widget.setProperty(HELP_ANCHOR_PROPERTY, anchor)
+
+    def _install_set_time_window(self):
+        # Inject Set as Time Window into the backend's native plot context menu.
+        parser = self.canvasStack.currentWidget()._parser
+        parser.context_menu_extender = self._extend_plot_context_menu
+
+    def _extend_plot_context_menu(self, menu, plot=None):
+        # `plot` is the core Plot under the right-click (passed by the backend
+        # canvas). Acting on it — not the whole canvas — is what makes this
+        # per-plot (#107). Falls back to the first plot when absent.
+        x_is_time = self.dataRangeSelector.is_x_axis_date()
+        x_is_pulse = self.dataRangeSelector.is_x_axis_pulse_relative()
+        menu.addSeparator()
+        set_window = menu.addAction("Set as time window")
+        set_window.setEnabled(x_is_time or x_is_pulse)
+        set_window.triggered.connect(lambda: self.on_set_time_window(plot))
+
+    def on_set_time_window(self, plot=None):
+        parser = self.canvasStack.currentWidget()._parser
+        if self.dataRangeSelector.is_x_axis_pulse_relative():
+            x_range = read_x_range_pulse_seconds(self.canvas, parser, plot)
+            if x_range is None:
+                return
+            self.dataRangeSelector.apply_canvas_range_pulse_seconds(*x_range)
+            return
+        x_range = read_x_range_ns(self.canvas, parser, plot)
+        if x_range is None:
+            return
+        start_ns, end_ns = x_range
+        self.dataRangeSelector.force_apply_canvas_range_ns(start_ns, end_ns)
 
     def wire_connections(self):
         super().wire_connections()
@@ -428,6 +473,27 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self.statusBar().showMessage('Ready.')
+        QCoreApplication.processEvents()
+
+    def _begin_export_progress(self):
+        self._progressBar.setMinimum(0)
+        self._progressBar.setMaximum(100)
+        self._progressBar.setValue(0)
+        self._progressBar.show()
+        QCoreApplication.processEvents()
+
+    def _report_export_progress(self, index, total, name):
+        # The bar tracks completed variables; the extra 1% signals that the
+        # next variable started. 100% is reserved for the fully finished export.
+        if total > 0:
+            percent = min(int((index - 1) * 100 / total) + 1, 99)
+            self._progressBar.setValue(percent)
+        self.statusBar().showMessage(f"Exporting {name} ({index}/{total}) ..")
+        QCoreApplication.processEvents()
+
+    def _finish_export_progress(self):
+        self._progressBar.setValue(100)
+        self.statusBar().showMessage("Export completed")
         QCoreApplication.processEvents()
 
     def export_dict(self) -> dict:
@@ -632,9 +698,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def export_data_plots(self, file_path: str):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
+            kwargs = {}
+            if _accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
+                self._begin_export_progress()
+                kwargs['progress_callback'] = self._report_export_progress
             with open(file_path, mode='w') as f:
-                f.write(self.canvas.get_signals_as_csv())
+                f.write(self.canvas.get_signals_as_csv(**kwargs))
             logger.info(f"Finished exporting data {file_path}")
+            if kwargs:
+                self._finish_export_progress()
+            self.indicate_ready()
         except Exception as e:
             box = QMessageBox()
             box.setIcon(QMessageBox.Icon.Critical)
@@ -669,6 +742,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.dataRangeSelector.refreshDeactivate.emit()
         if self.refreshTimer is not None:
             self.refreshTimer.stop()
+
+    def home(self):
+        # A relative-time canvas keeps refreshing on a timer. Stop it before
+        # restoring the view (order-independent of the base reset); the refresh
+        # resumes only on the next Draw.
+        if self.refreshTimer.isActive():
+            logger.info("Canvas auto-refresh cancelled (Home button; press Draw to resume)")
+            self.stop_auto_refresh()
+        super().home()
 
     def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
@@ -787,6 +869,23 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.indicate_ready()
             return
 
+        from iplotDataAccess.dataHandling.exportData.exportData import generateData, connectUDA
+
+        gen_kwargs = {}
+        if _accepts_kwarg(generateData, 'progressCallback'):
+            pulse_factor = len(pulse_number) if pulse_number else 1
+            total_vars = sum(len(group) * pulse_factor for ds_name, group in table.groupby('DS')
+                             if getattr(self.da.ds_list.get(ds_name), 'source_type', None) == "CODAC_UDA")
+            export_index = 0
+
+            def report_progress(name):
+                nonlocal export_index
+                export_index += 1
+                self._report_export_progress(export_index, total_vars, name)
+
+            gen_kwargs['progressCallback'] = report_progress
+            self._begin_export_progress()
+
         attempt_count = 0
         success_count = 0
         for ds_name, group in table.groupby('DS'):
@@ -801,7 +900,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 logger.warning(msg)
                 continue
 
-            from iplotDataAccess.dataHandling.exportData.exportData import generateData
+            # When configured, export pulls the data from an alternative UDA server (same port).
+            if conn.uda_for_export:
+                export_conn = connectUDA(conn.uda_for_export, conn.port)
+                if export_conn.errc != 0:
+                    reason = (f"Export failed for data source '{ds_name}': "
+                              f"could not connect to export server '{conn.uda_for_export}'")
+                    logger.warning(reason)
+                    errors.append(reason)
+                    continue
+            else:
+                export_conn = conn
 
             # Pulse mode
             if pulse_number is not None:
@@ -818,8 +927,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                     # Use of export data script
                     attempt_count += 1
-                    valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                    valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
+                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
+                                                  **gen_kwargs)
                     if valid:
                         success_count += 1
                         logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
@@ -837,8 +947,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                 # Use of export data script
                 attempt_count += 1
-                valid, err_msg = generateData(logfile=None, conn=conn, csvfile=filename, formatType=export_format,
-                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks)
+                valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
+                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
+                                              **gen_kwargs)
                 if valid:
                     success_count += 1
                     logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
@@ -846,6 +957,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     reason = f"Export failed for data source '{ds_name}': {err_msg}"
                     logger.warning(reason)
                     errors.append(reason)
+
+        if gen_kwargs and success_count:
+            self._finish_export_progress()
 
         if attempt_count > 0 and success_count == 0:
             error_details = "\n".join(f"- {e}" for e in errors)

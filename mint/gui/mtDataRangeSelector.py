@@ -72,6 +72,14 @@ class MTDataRangeSelector(QWidget):
         item = self.accessModes[self.stack.currentIndex()]
         return item.to_dict()
 
+    def force_apply_canvas_range_ns(self, start_ns: int, end_ns: int) -> None:
+        self.accessModes[0].set_from_ns(start_ns, end_ns)
+        if self.stack.currentIndex() != 0:
+            self.radioGroup.layout().itemAt(0).widget().click()
+
+    def apply_canvas_range_pulse_seconds(self, start_sec: float, end_sec: float) -> None:
+        self.accessModes[1].set_from_pulse_seconds(start_sec, end_sec)
+
     def import_dict(self, input_dict: dict):
         # older versions of MINT did not set the appropriate mode in the workspace.
         # for ex: even if pulse numbers were specified, the 'mode' key was set to TIME_RANGE.
@@ -102,6 +110,9 @@ class MTDataRangeSelector(QWidget):
     def is_x_axis_date(self) -> bool:
         mode = self.accessModes[self.stack.currentIndex()].mode
         return mode in [MTGenericAccessMode.TIME_RANGE, MTGenericAccessMode.RELATIVE_TIME]
+
+    def is_x_axis_pulse_relative(self) -> bool:
+        return self.accessModes[self.stack.currentIndex()].mode == MTGenericAccessMode.PULSE_NUMBER
 
     def get_pulse_number(self) -> List[str]:
         """Extracts pulse numbers if present in time_model """

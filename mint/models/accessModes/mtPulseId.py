@@ -1,6 +1,8 @@
 # Description: Implements a data access mode with pulse id's.
 # Author: Jaswant Sai Panchumarti
 
+import math
+
 from PySide6.QtWidgets import QComboBox, QLabel, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout, QFormLayout
 from PySide6.QtCore import QStringListModel, Qt
 from PySide6.QtGui import QDoubleValidator
@@ -90,14 +92,42 @@ class MTPulseId(MTGenericAccessMode):
         self.startTime.setStyleSheet(style)
         self.endTime.setStyleSheet(style)
 
+    def set_from_pulse_seconds(self, start_sec: float, end_sec: float) -> None:
+        base = self.options[self.units.currentIndex()][0]
+        self.model.setStringList([
+            self.pulseNumber.text(),
+            self.units.currentText(),
+            self._format_pulse_time(start_sec / base),
+            self._format_pulse_time(end_sec / base),
+        ])
+        self.mapper.toFirst()
+
+    @staticmethod
+    def _format_pulse_time(value: float) -> str:
+        if not math.isfinite(value):
+            return "0"
+        if value == int(value):
+            return str(int(value))
+        return f"{value:.6g}"
+
     def from_dict(self, contents: dict):
+        unit_label = self._unit_label_from_base(contents.get("base"))
         self.mapper.model().setStringList(
             [",".join(contents.get("pulse_nb") or []),
-             contents.get("base") or 'Seconds',
+             unit_label,
              contents.get("t_start") or '',
              contents.get("t_end") or '']
         )
+        idx = self.units.findText(unit_label)
+        if idx >= 0:
+            self.units.setCurrentIndex(idx)
         super().from_dict(contents)
+
+    def _unit_label_from_base(self, base) -> str:
+        for multiplier, label in self.options:
+            if multiplier == base or str(multiplier) == str(base) or label == base:
+                return label
+        return self.options[0][1]
 
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "pulse_id"
