@@ -194,6 +194,8 @@ When the plotted values are too large for plain tick labels — e.g. a signal wh
 
 So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000,000`. Either part may appear alone: a corner label with only a power of ten (e.g. `1e18`) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.
 
+<p style="text-align:center;margin:14px 0;"><img src="image_19.png" alt="Axis with offset + scale corner label" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Offset + scale tick notation: each tick is multiplied by 1e9, then 1.121e15 is added.</i></p>
+
 #### Rulers window
 
 Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
@@ -254,7 +256,7 @@ The *x* column rewrites the time vector; *y* rewrites the data vector. Example -
 
 NumPy is available via the `np.` prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Using X and Y columns in a complex processing.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 ### 2.10 Data Sources {#data-sources}
 
@@ -329,7 +331,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 5. **An expression fails because one signal has no data.** Currently a missing input signal aborts the expression. This will improve in a future release.
 6. **I loaded a workspace and the canvas is blank.** Click *Draw* - it usually helps.
 7. **A preference change is not visible.** Close the preferences panel - it usually helps.
-8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Moving the canvas toolbar (visible after Detach).</i></p>
+8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p>
 9. **Overlay pulses on all plots?** Comma-separate pulse IDs. See `OverlayPulsesID.json`.
 10. **Overlay or append a pulse on a single plot?** See `CustomizedPulsesPlots.json`.
 11. **Specify a start/end time for pulse IDs?** Use Start/End Time with shared X axis off. See `CustomizedPulsesPlotsWithStartEnd.json`.
