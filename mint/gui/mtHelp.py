@@ -160,7 +160,7 @@ class MTHelp(QMainWindow):
 
     @staticmethod
     def _packaged_image_names() -> list:
-        return [f"image_{i:02d}.png" for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 18]]
+        return [f"image_{i:02d}.png" for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19]]
 
     def _load_manual(self):
         try:

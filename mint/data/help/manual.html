@@ -251,6 +251,15 @@ $ mint
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
 <p>Right-click a plot for per-plot actions, including <strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</p>
+<h4>Reading tick labels with very large values</h4>
+<p>When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in <em>offset + scale</em> form, shown in the corner of the axis. A corner label like <code>1e9+1.121e15</code> is interpreted as follows:</p>
+<ul>
+<li><code>1e9</code> is the multiplier applied to each tick label;</li>
+<li><code>+1.121e15</code> is the offset added afterwards.</li>
+</ul>
+<p>So a tick labelled <code>824</code> really means <code>824 × 1e9 + 1.121e15 = 1,121,824,000,000,000</code>. Either part may appear alone: a corner label with only a power of ten (e.g. <code>1e18</code>) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.</p>
+<p style="text-align:center;margin:14px 0;"><img src="image_19.png" alt="Axis with offset + scale corner label" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Offset + scale tick notation: each tick is multiplied by 1e9, then 1.121e15 is added.</i></p>
+
 <h4>Rulers window</h4>
 <p>Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:</p>
 <ul>
@@ -300,7 +309,7 @@ $ mint
 </tbody>
 </table>
 <p>NumPy is available via the <code>np.</code> prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.</p>
-<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Using X and Y columns in a complex processing.</i></p>
+<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 <h3 id="data-sources">2.10 Data Sources</h3>
 <p>The default configuration lives under <code>/etc/opt/codac/mint/datasources_def.cfg</code>. Example:</p>
@@ -373,7 +382,7 @@ $ mint
 <li><strong>An expression fails because one signal has no data.</strong> Currently a missing input signal aborts the expression. This will improve in a future release.</li>
 <li><strong>I loaded a workspace and the canvas is blank.</strong> Click <em>Draw</em> - it usually helps.</li>
 <li><strong>A preference change is not visible.</strong> Close the preferences panel - it usually helps.</li>
-<li><strong>Can I move the canvas toolbar?</strong> Only when the canvas is detached. Click <em>Detach</em> first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Moving the canvas toolbar (visible after Detach).</i></p></li>
+<li><strong>Can I move the canvas toolbar?</strong> Only when the canvas is detached. Click <em>Detach</em> first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p></li>
 <li><strong>Overlay pulses on all plots?</strong> Comma-separate pulse IDs. See <code>OverlayPulsesID.json</code>.</li>
 <li><strong>Overlay or append a pulse on a single plot?</strong> See <code>CustomizedPulsesPlots.json</code>.</li>
 <li><strong>Specify a start/end time for pulse IDs?</strong> Use Start/End Time with shared X axis off. See <code>CustomizedPulsesPlotsWithStartEnd.json</code>.</li>
