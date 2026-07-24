@@ -118,5 +118,19 @@ class RemoveRowsTest(unittest.TestCase):
         self.assertEqual(len(seen), 1)
 
 
+class CopyToClipboardGuardTest(unittest.TestCase):
+    """Copy with no cells selected must be a no-op instead of raising."""
+
+    def test_copy_with_empty_selection_is_a_noop(self):
+        from unittest.mock import MagicMock
+        from mint.gui.mtSignalConfigurator import MTSignalConfigurator
+
+        fake = MagicMock()
+        fake._tabs.currentIndex.return_value = 0
+        view = fake._signal_item_widgets.__getitem__.return_value.view.return_value
+        view.selectionModel.return_value.selectedIndexes.return_value = []
+        MTSignalConfigurator.copy_contents_to_clipboard(fake)  # must not raise
+
+
 if __name__ == '__main__':
     unittest.main()

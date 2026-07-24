@@ -35,11 +35,12 @@ from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtAppearance import MTAppearanceMenu
+from mint.gui.mtCreatePulseDialog import MTCreatePulseDialog
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.gui.mtMemoryMonitor import MTMemoryMonitor
-from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.plotRange import read_x_range_ns, read_x_range_pulse_seconds
+from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
@@ -143,6 +144,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.graphicsArea.layout().addWidget(self.canvasStack)
         self.streamerCfgWidget = MTStreamConfigurator(self)
         self.exportCfgWidget = MTExportConfigurator(self)
+        self.createPulseDialog = MTCreatePulseDialog(self)
         self.aboutMINT = MTAbout(self)
         self.setAcceptDrops(True)
 
@@ -212,11 +214,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
         self.console_button.clicked.connect(self.sigCfgWidget.console.show_console)
 
+        # Canvas-centric actions (pulse creation/update, save as image) live in
+        # the toolbar, not in the File menu.
         file_menu.addAction(self.sigCfgWidget.tool_bar().openAction)
         file_menu.addAction(self.sigCfgWidget.tool_bar().saveAction)
         file_menu.addAction(self.toolBar.importAction)
         file_menu.addAction(self.toolBar.exportAction)
-        file_menu.addAction(self.toolBar.saveImageAction)
         file_menu.addAction(show_console_action)
         file_menu.addAction(exit_action)
 
@@ -258,6 +261,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
         self.exportCfgWidget.ui.browseExport.connect(self.export_file)
         self.dataRangeSelector.cancelRefresh.connect(self.stop_auto_refresh)
+        self._install_pulse_creation()
+        self._install_update_pulse()
         self._install_set_time_window()
         self._install_help_anchors()
         self.resize(1920, 1080)
@@ -276,6 +281,26 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if widget is not None:
                 widget.setProperty(HELP_ANCHOR_PROPERTY, anchor)
 
+    def _install_pulse_creation(self):
+        # Toolbar action shown only when the active UDA source can write.
+        uda = self._writeable_uda_source()
+        if uda is None:
+            return
+        create_pulse_action = getattr(self.toolBar, 'createPulseAction', None)
+        if create_pulse_action is None:
+            return
+        create_pulse_action.setVisible(True)
+        # `triggered` passes `checked` on newer PySide6; *_ keeps it out of `plot`.
+        create_pulse_action.triggered.connect(lambda *_: self.on_create_pulse())
+        self.createPulseDialog.submitted.connect(self._on_pulse_submitted)
+
+    def _writeable_uda_source(self):
+        for name in self.da.get_connected_data_source_names():
+            ds = self.da.get_data_source(name)
+            if hasattr(ds, "is_write_capable") and ds.is_write_capable():
+                return ds
+        return None
+
     def _install_set_time_window(self):
         # Inject Set as Time Window into the backend's native plot context menu.
         parser = self.canvasStack.currentWidget()._parser
@@ -291,6 +316,147 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         set_window = menu.addAction("Set as time window")
         set_window.setEnabled(x_is_time or x_is_pulse)
         set_window.triggered.connect(lambda: self.on_set_time_window(plot))
+
+    def on_create_pulse(self):
+        uda = self._writeable_uda_source()
+        if uda is None:
+            return
+        if not self.dataRangeSelector.is_x_axis_date():
+            QMessageBox.information(
+                self, "Create Pulse",
+                "Switch to Time Range or Relative mode and draw before "
+                "creating a pulse — the canvas x-axis must be absolute time.")
+            return
+        parser = self.canvasStack.currentWidget()._parser
+        x_range = read_x_range_ns(self.canvas, parser)
+        if x_range is None:
+            QMessageBox.information(self, "Create Pulse",
+                                    "No visible time range to create a pulse from. "
+                                    "Draw at least one signal first.")
+            return
+        start_ns, end_ns = x_range
+        # The category field is free text, so an empty catalog does not block.
+        categories = uda.get_pulse_categories()
+        self.createPulseDialog.populate(categories, start_ns, end_ns)
+        self.createPulseDialog.show()
+
+    def _on_pulse_submitted(self, data: dict):
+        uda = self._writeable_uda_source()
+        if uda is None:
+            return
+        pulse_id = data.get("pulse_id")
+        if pulse_id:
+            result = uda.update_pulse_info(pulse_id, data["start_ns"],
+                                           data["end_ns"], data["status"],
+                                           data["description"])
+            success_msg = "Pulse {pulse_id} updated."
+            error_title = "Update Pulse"
+        else:
+            scope = f"{data['location']}:{data['category']}"
+            try:
+                result = uda.add_pulse_info(scope, data["start_ns"],
+                                            data["end_ns"], data["status"],
+                                            data["description"],
+                                            pulse_number=data.get("pulse_number"))
+            except TypeError:
+                # Older iplotdataaccess without pulse_number support.
+                if data.get("pulse_number") is not None:
+                    QMessageBox.warning(
+                        self, "Create Pulse",
+                        "The installed data-access layer cannot create a pulse "
+                        "with a chosen number. Leave the number empty to number "
+                        "it automatically.")
+                    return
+                result = uda.add_pulse_info(scope, data["start_ns"],
+                                            data["end_ns"], data["status"],
+                                            data["description"])
+            success_msg = "Pulse {pulse_id} created."
+            error_title = "Create Pulse"
+        if result.get("ok"):
+            saved_id = result.get("pulse_id") or pulse_id
+            message = success_msg.format(pulse_id=saved_id)
+            logger.info("%s range=[%s, %s] status=%s", message,
+                        data["start_ns"], data["end_ns"], data["status"])
+            self._statusBar.showMessage(message, 5000)
+            self.createPulseDialog.accept()
+            QMessageBox.information(self, error_title, message)
+        else:
+            QMessageBox.warning(self, error_title,
+                                f"Could not save pulse: {result.get('error', 'unknown error')}")
+
+    def _install_update_pulse(self):
+        # Same gating as _install_pulse_creation; also requires the
+        # pulseBrowser to expose update_finish (newer iplotwidgets).
+        uda = self._writeable_uda_source()
+        if uda is None:
+            return
+        action = getattr(self.toolBar, 'updatePulseAction', None)
+        if action is None:
+            return
+        browser = self._get_pulse_browser_for_update()
+        if browser is None:
+            return
+        action.setVisible(True)
+        action.triggered.connect(lambda *_: self.on_open_update_pulse_browser())
+
+    def _get_pulse_browser_for_update(self):
+        # Lazy-init the singleton and connect update_finish exactly once.
+        # Returns None when iplotwidgets does not expose Update Pulse yet.
+        existing = getattr(self, '_update_pulse_browser', None)
+        if existing is not None:
+            return existing
+        try:
+            from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
+            browser = PulseBrowser()
+        except Exception:
+            logger.exception("could not initialise PulseBrowser for update")
+            return None
+        if not hasattr(browser, 'update_finish') or not hasattr(browser, 'set_update_mode'):
+            return None
+        browser.update_finish.connect(self._on_update_pulse_selected)
+        self._update_pulse_browser = browser
+        return browser
+
+    def on_open_update_pulse_browser(self):
+        browser = self._get_pulse_browser_for_update()
+        if browser is None:
+            return
+        browser.set_update_mode(True)
+        # Freshly created pulses must be listed without a manual Refresh.
+        refresh = getattr(browser, 'refresh', None)
+        if callable(refresh):
+            try:
+                refresh()
+            except Exception:
+                logger.exception("pulse browser refresh failed")
+        browser.show()
+        browser.raise_()
+
+    def _on_update_pulse_selected(self, pulse_id):
+        browser = getattr(self, '_update_pulse_browser', None)
+        if browser is not None:
+            browser.set_update_mode(False)
+            browser.hide()
+        if not isinstance(pulse_id, str) or not pulse_id:
+            return
+        uda = self._writeable_uda_source()
+        if uda is None:
+            return
+        pulse_info = uda.get_pulse_info(pulse_id)
+        if pulse_info is None:
+            QMessageBox.warning(self, "Update Pulse",
+                                f"Could not read pulse {pulse_id} from UDA.")
+            return
+        categories = uda.get_pulse_categories() or [pulse_id.rsplit("/", 1)[0]]
+        self.createPulseDialog.populate(
+            categories=categories,
+            start_ns=int(getattr(pulse_info, 'timeFrom', 0) or 0),
+            end_ns=int(getattr(pulse_info, 'timeTo', 0) or 0),
+            pulse_id=pulse_id,
+            current_status=(getattr(pulse_info, 'status', '') or '').strip(),
+            current_description=getattr(pulse_info, 'description', '') or '',
+        )
+        self.createPulseDialog.show()
 
     def on_set_time_window(self, plot=None):
         parser = self.canvasStack.currentWidget()._parser

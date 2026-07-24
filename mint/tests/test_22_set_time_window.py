@@ -305,6 +305,7 @@ class SetTimeWindowTests(unittest.TestCase):
         from mint.gui import mtMainWindow as mw_mod
 
         fake_self = MagicMock()
+        fake_self._writeable_uda_source.return_value = None
         fake_self.dataRangeSelector.is_x_axis_date.return_value = False
         fake_self.dataRangeSelector.is_x_axis_pulse_relative.return_value = False
         menu = MagicMock()
@@ -317,6 +318,7 @@ class SetTimeWindowTests(unittest.TestCase):
         from mint.gui import mtMainWindow as mw_mod
 
         fake_self = MagicMock()
+        fake_self._writeable_uda_source.return_value = None
         fake_self.dataRangeSelector.is_x_axis_date.return_value = False
         fake_self.dataRangeSelector.is_x_axis_pulse_relative.return_value = True
         menu = MagicMock()
