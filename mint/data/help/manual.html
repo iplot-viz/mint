@@ -246,11 +246,17 @@ $ mint
 <li><strong>HOME</strong>: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
+<li><img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> <strong>Create Pulse</strong>: create a UDA pulse from the visible time range — set category, status and description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.</li>
+<li><img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> <strong>Update Pulse</strong>: search for an existing pulse and update its time range, status or description.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
 <li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
-<p>Right-click a plot for per-plot actions, including <strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</p>
+<p>Right-click a plot for per-plot actions:</p>
+<ul>
+<li><strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</li>
+<li><strong>Set as time window</strong> — copies the plot's visible range into the query time range (switching to the <em>Time Range</em> tab, or keeping relative seconds in pulse mode), so the next <em>Draw</em> fetches exactly what you zoomed into.</li>
+</ul>
 <h4>Reading tick labels with very large values</h4>
 <p>When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in <em>offset + scale</em> form, shown in the corner of the axis. A corner label like <code>1e9+1.121e15</code> is interpreted as follows:</p>
 <ul>

@@ -532,6 +532,10 @@ class MTSignalConfigurator(QWidget):
     def copy_contents_to_clipboard(self):
         current_tab_id = self._tabs.currentIndex()
         selected_ids = self._signal_item_widgets[current_tab_id].view().selectionModel().selectedIndexes()
+        # With nothing selected the rectangularity check below passes (0 == 0)
+        # and min()/max() on the empty row set would raise.
+        if not selected_ids:
+            return
         contents = defaultdict(lambda: defaultdict(str))
         rows = set()
         columns = set()
