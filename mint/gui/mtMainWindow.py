@@ -229,6 +229,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.drawBtn.setIcon(QIcon(pxmap))
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(QIcon(pxmap))
+        # Reserve the size hint of the longest label so toggling never shifts neighbouring buttons.
+        self.streamBtn.setText("Streamer Settings")
+        self.streamBtn.setMinimumWidth(self.streamBtn.sizeHint().width())
+        self.streamBtn.setText("Stream")
         self.exportBtn = QPushButton("Export")
         self.exportBtn.setIcon(QIcon(pxmap))
         self.daWidgetButtons = QWidget(self)
@@ -574,6 +578,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def on_import(self):
         file = QFileDialog.getOpenFileName(self, "Open a workspace ..", dir=self._data_dir)
         if file and file[0]:
+            # A running stream is bound to the current workspace's signals;
+            # importing replaces them and rebuilds the canvas, so stop it first
+            # (as the Stop button does) instead of leaving the streamer redrawing
+            # into the new canvas.
+            if self.streamerCfgWidget.is_activated():
+                self.streamerCfgWidget.stop()
             self._data_dir = os.path.dirname(file[0])
             self.import_json(file[0])
 
@@ -770,7 +780,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if not plot:
                 continue
             plot.parent = weakref.ref(self.canvas)
-            old_signal = plot.signals[waypt.stack_num][waypt.signal_stack_id]
+            # Stored positions can exceed the built canvas when sibling
+            # signals failed to load; skip them instead of aborting the import.
+            stack_signals = plot.signals.get(waypt.stack_num, [])
+            if waypt.signal_stack_id >= len(stack_signals):
+                logger.warning(f"Skipping workspace signal at stack {waypt.stack_num}, "
+                               f"position {waypt.signal_stack_id}: canvas has {len(stack_signals)} signals there")
+                continue
+            old_signal = stack_signals[waypt.signal_stack_id]
 
             params = dict()
             for f in fields(old_signal):
@@ -958,9 +975,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_ready()
 
     def stream_clicked(self):
-        """This function shows the streaming dialog and then creates a canvas that is used when streaming"""
+        """While streaming, stop directly. Otherwise open the streamer dialog."""
         if self.streamerCfgWidget.is_activated():
-            self.streamBtn.setText("Stopping")
             self.streamerCfgWidget.stop()
         else:
             self.streamerCfgWidget.show()
@@ -971,24 +987,42 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportCfgWidget.show()
 
     def stream_callback(self, signal):
-        self.canvasStack.currentWidget()._parser.process_ipl_signal(signal)
+        # Coalesce bursts on the parser instead of one redraw per sample.
+        self.canvasStack.currentWidget()._parser.request_signal_redraw(signal)
 
     def on_stream_started(self):
         self.streamerCfgWidget.hide()
         self.streamBtn.setText("Stop")
-        self.build(stream=True)
+        # Draw would rebuild the canvas under the live stream.
+        self.drawBtn.setEnabled(False)
+        self.stop_auto_refresh()
+        logger.info("Canvas auto-refresh cancelled (entered streaming mode)")
 
-        self.indicate_busy('Connecting to stream and drawing...')
-        self.canvasStack.currentWidget().unfocus_plot()
-        self.canvasStack.currentWidget().set_canvas(self.canvas)
-        self.canvasStack.refreshLinks()
+        # Freeze canvas repaints across the whole rebuild: build() empties the
+        # scene and indicate_busy() spins the event loop, which would paint the
+        # emptied canvas (a blank flash) before set_canvas repopulates it.
+        canvas_widget = self.canvasStack.currentWidget()
+        canvas_widget.setUpdatesEnabled(False)
+        try:
+            self.build(stream=True)
+
+            self.indicate_busy('Connecting to stream and drawing...')
+            canvas_widget.unfocus_plot()
+            canvas_widget.set_canvas(self.canvas)
+            self.canvasStack.refreshLinks()
+        finally:
+            canvas_widget.setUpdatesEnabled(True)
 
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
-        self.streamerCfgWidget.streamer.start(self.canvas, self.stream_callback)
+        window_ns = self.streamerCfgWidget.time_window() * 1_000_000_000
+        max_points = self.streamerCfgWidget.max_points()
+        self.streamerCfgWidget.streamer.start(self.canvas, self.stream_callback,
+                                              window_ns=window_ns, max_points=max_points)
         self.indicate_ready()
 
     def on_stream_stopped(self):
         self.streamBtn.setText("Stream")
+        self.drawBtn.setEnabled(True)
 
     def export_file(self):
         file, export_filter = QFileDialog.getSaveFileName(self,
@@ -1147,6 +1181,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_ready()
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # Stop streaming workers before teardown: unlike daemon threads,
+        # QThreads must not be destroyed while still running.
+        if self.streamerCfgWidget.is_activated():
+            self.streamerCfgWidget.streamer.stop()
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
@@ -1219,14 +1257,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 if not stream:
                     self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                 else:
-                    # In the case of streaming, only simple variables are kept
+                    # Streaming supports plain variables, y/z expressions and
+                    # single-child expressions; the time axis must stay native.
                     conditions = (
                         ts != signal.ts_start,
                         te != signal.ts_end,
-                        signal.envelope,
                         signal.x_expr != '${self}.time',
-                        signal.y_expr != '${self}.data',
-                        signal.z_expr != '${self}.data_store[2]',
                         len(signal.children) > 1  # Only support one level processing
                     )
                     if any(conditions):

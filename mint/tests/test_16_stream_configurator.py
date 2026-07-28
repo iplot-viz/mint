@@ -12,6 +12,7 @@ CI test flaky. The configurator's state machine is the high-value piece
 and it's fully unit-testable.
 """
 
+import os
 import unittest
 
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -73,9 +74,41 @@ class StreamConfiguratorStateTest(unittest.TestCase):
     def test_time_window_reads_spinbox_value(self):
         cfg = self._configurator()
         try:
+            # Pin unit to seconds so the spinbox value maps 1:1 to time_window.
+            cfg.ui.windowComboBox.setCurrentIndex(
+                list(cfg.stwOptions).index("seconds")
+            )
             cfg.ui.windowSpinBox.setValue(120)
             self.assertEqual(cfg.time_window(), 120)
         finally:
+            cfg.close()
+
+    def test_max_points_defaults_when_env_absent(self):
+        cfg = self._configurator()
+        os.environ.pop('MINT_MAX_STREAMING_POINTS', None)
+        try:
+            self.assertEqual(cfg.max_points(), cfg.DEFAULT_MAX_POINTS)
+        finally:
+            cfg.close()
+
+    def test_max_points_reads_env_override(self):
+        cfg = self._configurator()
+        os.environ['MINT_MAX_STREAMING_POINTS'] = '2500'
+        try:
+            self.assertEqual(cfg.max_points(), 2500)
+        finally:
+            os.environ.pop('MINT_MAX_STREAMING_POINTS', None)
+            cfg.close()
+
+    def test_max_points_clamps_and_ignores_garbage(self):
+        cfg = self._configurator()
+        try:
+            os.environ['MINT_MAX_STREAMING_POINTS'] = '999999999'
+            self.assertEqual(cfg.max_points(), cfg.MAX_POINTS_LIMIT)
+            os.environ['MINT_MAX_STREAMING_POINTS'] = 'notanumber'
+            self.assertEqual(cfg.max_points(), cfg.DEFAULT_MAX_POINTS)
+        finally:
+            os.environ.pop('MINT_MAX_STREAMING_POINTS', None)
             cfg.close()
 
 
