@@ -138,12 +138,12 @@ Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*.
 
 ### 2.5 Draw, Stream {#draw-stream}
 
-Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a window in seconds (max 3600 s).
+Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the value is converted automatically when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
 
-<div class="note">Preferences are unavailable while streaming. Apply preferences via <em>Draw</em> first, then start the stream.</div>
+<div class="note">Preferences are unavailable while streaming. Apply preferences via <em>Draw</em> first, then start the stream. The <em>Draw</em> button is disabled while a stream is running; stop the stream to draw again.</div>
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 

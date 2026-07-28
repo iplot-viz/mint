@@ -67,9 +67,8 @@ class MainWindowImportErrorsTest(unittest.TestCase):
         try:
             with open(path, 'w') as fh:
                 fh.write('this is { not valid json')
-            # Must return normally — import_json catches and surfaces a
-            # QMessageBox on any exception.
-            win.import_json(path)
+            with self.assertLogs(level='WARNING'):
+                win.import_json(path)
         finally:
             os.remove(path)
             win.close()
@@ -79,7 +78,8 @@ class MainWindowImportErrorsTest(unittest.TestCase):
         fd, path = tempfile.mkstemp(suffix='.json')
         os.close(fd)
         try:
-            win.import_json(path)
+            with self.assertLogs(level='WARNING'):
+                win.import_json(path)
         finally:
             os.remove(path)
             win.close()
@@ -97,7 +97,8 @@ class MainWindowImportErrorsTest(unittest.TestCase):
             }
             # Should not raise: missing sections are handled gracefully.
             try:
-                win.import_dict(partial)
+                with self.assertLogs(level='WARNING'):
+                    win.import_dict(partial)
             except Exception as exc:  # pragma: no cover - diagnostic
                 # Some missing-key paths may still raise; we only require
                 # a controlled exception, not a hard crash of the app.
@@ -114,7 +115,8 @@ class MainWindowImportErrorsTest(unittest.TestCase):
         try:
             with open(path, 'w') as fh:
                 json.dump({}, fh)
-            win.import_json(path)
+            with self.assertLogs(level='WARNING'):
+                win.import_json(path)
         finally:
             os.remove(path)
             win.close()
