@@ -24,6 +24,16 @@ def _ensure_data_access():
     return AppDataAccess.get_data_access()
 
 
+def _minimap_guards_streaming() -> bool:
+    """Whether the installed iplotlib already rejects a streaming canvas. The
+    guard ships in iplotlib and mint's CI installs it from develop, so the
+    integration test below runs only once that change reaches develop."""
+    probe = Canvas(1, 1)
+    probe.add_plot(PlotXY(), 0)
+    probe.streaming = True
+    return not probe.is_minimap_eligible()
+
+
 def _build_main_window(impl: str = 'matplotlib') -> MTMainWindow:
     canvas = Canvas()
     time_model = {"range": {}}
@@ -49,6 +59,8 @@ class StreamHandlersTest(unittest.TestCase):
         finally:
             win.close()
 
+    @unittest.skipUnless(_minimap_guards_streaming(),
+                         "installed iplotlib still allows the mini-map while streaming")
     def test_on_stream_started_turns_the_minimap_off(self):
         win = _build_main_window()
         try:
