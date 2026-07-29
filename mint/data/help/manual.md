@@ -182,7 +182,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range — set category, status and description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
-- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
+- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
 
 Right-click a plot for per-plot actions:
@@ -355,7 +355,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
-21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode.
+21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode — and not while streaming.
 
 ## 6. Error reference {#errors}
 

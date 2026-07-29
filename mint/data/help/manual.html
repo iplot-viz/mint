@@ -249,7 +249,7 @@ $ mint
 <li><img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> <strong>Create Pulse</strong>: create a UDA pulse from the visible time range — set category, status and description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.</li>
 <li><img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> <strong>Update Pulse</strong>: search for an existing pulse and update its time range, status or description.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
-<li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
+<li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
 <li><strong>DETACH</strong> / <strong>REATTACH</strong>: float the canvas in its own window.</li>
 </ul>
 <p>Right-click a plot for per-plot actions:</p>
@@ -407,7 +407,7 @@ $ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SD
 </li>
 <li><strong>Hide unused columns?</strong> Use <em>Hide/Show columns</em> above the table.</li>
 <li><strong>Drag-and-drop a signal across plots?</strong> Yes - in SELECT mode.</li>
-<li><strong>Why is the mini-map button greyed out?</strong> It is only available when a single PlotXY is visible — a single-plot canvas or focus mode.</li>
+<li><strong>Why is the mini-map button greyed out?</strong> It is only available when a single PlotXY is visible — a single-plot canvas or focus mode — and not while streaming.</li>
 </ol>
 <h2 id="errors">6. Error reference</h2>
 <p>MINT reports two kinds of feedback. <em>Validation messages</em> (e.g. <code>Invalid date format</code>, <code>Alias already in use</code>) are written to the log when you edit the table; they are self-explanatory and not duplicated here. <em>Conceptual errors</em> (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.</p>
