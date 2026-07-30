@@ -1013,6 +1013,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         finally:
             canvas_widget.setUpdatesEnabled(True)
 
+        # Streaming makes the mini-map ineligible, and the rebuild above does not
+        # go through the paths that keep the toolbar in sync. Do it here, before
+        # the stream starts feeding the canvas.
+        self.refresh_minimap_availability()
+
         self.streamerCfgWidget.streamer = CanvasStreamer(self.da)
         window_ns = self.streamerCfgWidget.time_window() * 1_000_000_000
         max_points = self.streamerCfgWidget.max_points()

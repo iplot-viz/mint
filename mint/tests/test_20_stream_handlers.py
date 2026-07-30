@@ -1,10 +1,15 @@
 """Tests for MTMainWindow stream handler wiring: Stream/Stop button text
-toggle."""
+toggle and mini-map availability."""
 
 import unittest
+from unittest import mock
 
+import numpy as np
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
+from iplotlib.core.plot import PlotXY
+from iplotlib.core.signal import SignalXY
+from iplotlib.data_access.streamer import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 
 from mint.gui.mtMainWindow import MTMainWindow
@@ -17,6 +22,16 @@ def _ensure_data_access():
     if AppDataAccess.da is None:
         AppDataAccess.initialize(write_csv_datasource_config())
     return AppDataAccess.get_data_access()
+
+
+def _minimap_guards_streaming() -> bool:
+    """Whether the installed iplotlib already rejects a streaming canvas. The
+    guard ships in iplotlib and mint's CI installs it from develop, so the
+    integration test below runs only once that change reaches develop."""
+    probe = Canvas(1, 1)
+    probe.add_plot(PlotXY(), 0)
+    probe.streaming = True
+    return not probe.is_minimap_eligible()
 
 
 def _build_main_window(impl: str = 'matplotlib') -> MTMainWindow:
@@ -41,6 +56,40 @@ class StreamHandlersTest(unittest.TestCase):
             win.streamBtn.setText("Stop")
             win.on_stream_stopped()
             self.assertEqual(win.streamBtn.text(), "Stream")
+        finally:
+            win.close()
+
+    @unittest.skipUnless(_minimap_guards_streaming(),
+                         "installed iplotlib still allows the mini-map while streaming")
+    def test_on_stream_started_turns_the_minimap_off(self):
+        win = _build_main_window()
+        try:
+            plot = PlotXY()
+            signal = SignalXY(label='s')
+            signal.set_data([np.linspace(0, 1, 10), np.zeros(10)])
+            plot.add_signal(signal)
+            win.canvas.add_plot(plot, 0)
+            w = win.canvasStack.currentWidget()
+            w.set_canvas(win.canvas)
+            win.refresh_minimap_availability()
+            win.toolBar.minimapAction.setChecked(True)
+            self.app.processEvents()
+            self.assertTrue(win.canvas.show_minimap)
+
+            # Stand in for build(stream=True): the rebuild needs a populated
+            # signals table, and the only part of it that matters here is the
+            # streaming flag it raises on the canvas.
+            def fake_build(stream=False):
+                win.canvas.streaming = stream
+
+            with mock.patch.object(win, 'build', fake_build), \
+                    mock.patch.object(CanvasStreamer, 'start'):
+                win.on_stream_started()
+            self.app.processEvents()
+
+            self.assertFalse(win.toolBar.minimapAction.isEnabled())
+            self.assertFalse(win.toolBar.minimapAction.isChecked())
+            self.assertFalse(win.canvas.show_minimap)
         finally:
             win.close()
 
