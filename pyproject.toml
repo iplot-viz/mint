@@ -23,11 +23,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "iplotLogging >= 1.2.0",
-    "iplotlib >= 1.3.2",
-    "iplotDataAccess >= 1.3.1",
-    "iplotWidgets >= 1.3.0",
-    "iplotProcessing >= 1.1.5",
+    "iplotLogging >= 1.2.2",
+    "iplotlib >= 1.5.0",
+    "iplotDataAccess >= 1.5.0",
+    "iplotWidgets >= 1.5.0",
+    "iplotProcessing >= 1.2.1",
     "pandas >= 2.2.0",
     "psutil >= 5.8.0",
 ]
