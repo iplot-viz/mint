@@ -29,5 +29,6 @@ class MTExportConfigurator(QDialog):
         data['format'] = file_format
         data['chunks'] = chunks
         data['output_path'] = output_path
+        data['relative_time'] = self.ui.timeComboBox.currentIndex() == 1
 
         self.exportStarted.emit(data)

@@ -1091,6 +1091,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             gen_kwargs['progressCallback'] = report_progress
             self._begin_export_progress()
 
+        # Relative time only applies to time-range exports; pulse exports
+        # keep absolute timestamps.
+        if data.get('relative_time') and pulse_number is None:
+            if _accepts_kwarg(generateData, 'relativeTime'):
+                gen_kwargs['relativeTime'] = True
+            else:
+                logger.warning("Relative time export requires a newer iplotDataAccess; "
+                               "exporting absolute timestamps instead")
+
         attempt_count = 0
         success_count = 0
         for ds_name, group in table.groupby('DS'):

@@ -24,11 +24,14 @@ class UiExportConfig(QWidget):
         self.formLayout.setObjectName("formLayout")
         self.chunksLabel = QLabel(self.exportWindowWidget)
         self.chunksLabel.setObjectName("chunksLabel")
+        self.timeLabel = QLabel(self.exportWindowWidget)
+        self.timeLabel.setObjectName("timeLabel")
         self.outputPathLabel = QLabel(self.exportWindowWidget)
         self.outputPathLabel.setObjectName("outputPathLabel")
 
         self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.chunksLabel)
-        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.outputPathLabel)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.timeLabel)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.outputPathLabel)
 
         # Add widgets
         self.exportWidget = QWidget(self.exportWindowWidget)
@@ -40,6 +43,11 @@ class UiExportConfig(QWidget):
         self.chunksSpinBox.setMinimum(1)
         self.chunksSpinBox.setMaximum(2147483647)
         self.chunksSpinBox.setSingleStep(10)
+
+        # Time column mode; ignored for pulse exports, which keep absolute time
+        self.timeComboBox = QComboBox(self.exportWidget)
+        self.timeComboBox.setObjectName("timeComboBox")
+        self.timeComboBox.addItems(["Absolute time", "Relative time (s)"])
 
         # Output path
         self.pathWidget = QWidget(self.exportWindowWidget)
@@ -58,7 +66,8 @@ class UiExportConfig(QWidget):
         self.horizontalLayout.addWidget(self.pathButton)
 
         self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.chunksSpinBox)
-        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.pathWidget)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.timeComboBox)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.pathWidget)
 
         self.verticalLayout.addWidget(self.exportWindowWidget)
 
@@ -91,6 +100,7 @@ class UiExportConfig(QWidget):
         parent.setWindowTitle("Export Configuration")
         self.titleLabel.setText("Export settings")
         self.chunksLabel.setText("Chunks")
+        self.timeLabel.setText("Time")
         self.outputPathLabel.setText("Output Path")
         self.pathButton.setText("Browse")
         self.exportButton.setText("Export")
