@@ -153,7 +153,7 @@ Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON 
 
 ### 2.7 Export data {#export-data}
 
-The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect.
+The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The *Sampling* box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a `.resampling.log` file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. *Native* keeps the original samples.
 
 While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.
 

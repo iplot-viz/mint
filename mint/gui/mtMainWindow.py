@@ -1100,6 +1100,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 logger.warning("Relative time export requires a newer iplotDataAccess; "
                                "exporting absolute timestamps instead")
 
+        # Resampling applies to time-range and pulse exports alike.
+        if data.get('resample_freq'):
+            if _accepts_kwarg(generateData, 'resampleFreq'):
+                gen_kwargs['resampleFreq'] = data['resample_freq']
+            else:
+                logger.warning("Resampling on export requires a newer iplotDataAccess; "
+                               "exporting the original samples instead")
+
         attempt_count = 0
         success_count = 0
         for ds_name, group in table.groupby('DS'):
