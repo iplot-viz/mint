@@ -26,12 +26,15 @@ class UiExportConfig(QWidget):
         self.chunksLabel.setObjectName("chunksLabel")
         self.timeLabel = QLabel(self.exportWindowWidget)
         self.timeLabel.setObjectName("timeLabel")
+        self.samplingLabel = QLabel(self.exportWindowWidget)
+        self.samplingLabel.setObjectName("samplingLabel")
         self.outputPathLabel = QLabel(self.exportWindowWidget)
         self.outputPathLabel.setObjectName("outputPathLabel")
 
         self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.chunksLabel)
         self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.timeLabel)
-        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.outputPathLabel)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.samplingLabel)
+        self.formLayout.setWidget(3, QFormLayout.ItemRole.LabelRole, self.outputPathLabel)
 
         # Add widgets
         self.exportWidget = QWidget(self.exportWindowWidget)
@@ -48,6 +51,13 @@ class UiExportConfig(QWidget):
         self.timeComboBox = QComboBox(self.exportWidget)
         self.timeComboBox.setObjectName("timeComboBox")
         self.timeComboBox.addItems(["Absolute time", "Relative time (s)"])
+
+        # Sampling frequency; Native keeps the original samples and layout
+        self.samplingComboBox = QComboBox(self.exportWidget)
+        self.samplingComboBox.setObjectName("samplingComboBox")
+        for label, freq in [("Native", None), ("1 Hz", 1), ("10 Hz", 10),
+                            ("100 Hz", 100), ("1 kHz", 1000), ("10 kHz", 10000)]:
+            self.samplingComboBox.addItem(label, freq)
 
         # Output path
         self.pathWidget = QWidget(self.exportWindowWidget)
@@ -67,7 +77,8 @@ class UiExportConfig(QWidget):
 
         self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.chunksSpinBox)
         self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.timeComboBox)
-        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.pathWidget)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.samplingComboBox)
+        self.formLayout.setWidget(3, QFormLayout.ItemRole.FieldRole, self.pathWidget)
 
         self.verticalLayout.addWidget(self.exportWindowWidget)
 
@@ -101,6 +112,7 @@ class UiExportConfig(QWidget):
         self.titleLabel.setText("Export settings")
         self.chunksLabel.setText("Chunks")
         self.timeLabel.setText("Time")
+        self.samplingLabel.setText("Sampling")
         self.outputPathLabel.setText("Output Path")
         self.pathButton.setText("Browse")
         self.exportButton.setText("Export")

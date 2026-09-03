@@ -30,5 +30,6 @@ class MTExportConfigurator(QDialog):
         data['chunks'] = chunks
         data['output_path'] = output_path
         data['relative_time'] = self.ui.timeComboBox.currentIndex() == 1
+        data['resample_freq'] = self.ui.samplingComboBox.currentData()
 
         self.exportStarted.emit(data)
