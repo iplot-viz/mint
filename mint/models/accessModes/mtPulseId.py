@@ -39,7 +39,6 @@ class MTPulseId(MTGenericAccessMode):
         self.mode = MTGenericAccessMode.PULSE_NUMBER
 
         self.pulseNumber = QLineEdit(parent=self.form)
-        self.pulseNumber.textChanged.connect(self._on_pulses_edited)
         self.searchPulses = QPushButton("Search", parent=self.form)
         self.searchPulses.clicked.connect(self.on_search_pulse)
 
@@ -133,24 +132,11 @@ class MTPulseId(MTGenericAccessMode):
     def on_search_pulse(self):
         self.selectPulseDialog.flag = "pulse_id"
         self.selectPulseDialog.set_selection_mode(single=False, require_timestamps=False)
-        self._sync_browser_selection()
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 
-    def _pulses_in_use(self):
+    def pulses_in_use(self) -> list:
         return [p.strip() for p in self.pulseNumber.text().split(',') if p.strip()]
-
-    def _sync_browser_selection(self):
-        # Older iplotwidgets have no Selected column in the pulse browser.
-        setter = getattr(self.selectPulseDialog, 'set_selected_pulses', None)
-        if setter:
-            setter(self._pulses_in_use())
-
-    def _on_pulses_edited(self):
-        # The browser is shared with the other access modes: only follow the
-        # field while it was opened from here.
-        if self.selectPulseDialog.flag == "pulse_id":
-            self._sync_browser_selection()
 
     def append_pulse(self, pulses):
         # Only process if opened from PulseId
