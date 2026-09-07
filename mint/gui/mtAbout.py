@@ -58,7 +58,11 @@ class MTAbout(QDialog):
 
         self.setLayout(self._layout)
         self.setWindowTitle("About MINT")
-        self.resize(1100, 420)
+        # Clamp to the screen: a fixed size overflows a small or unscaled
+        # display and leaves the window partly off-screen.
+        _avail = self.screen().availableGeometry() if self.screen() else None
+        self.resize(min(1100, int(_avail.width() * 0.9)) if _avail else 1100,
+                    min(420, int(_avail.height() * 0.9)) if _avail else 420)
 
     def _prepare_buttons(self):
         self._copyBtn = QPushButton("Copy to clipboard", self)
@@ -78,7 +82,7 @@ class MTAbout(QDialog):
         self._descriptionWidget = QWidget(self)
         self._descriptionWidget.setLayout(QVBoxLayout())
         heading = QLabel("About MINT")
-        heading.setStyleSheet("font-weight: bold; color: black")
+        heading.setStyleSheet("font-weight: bold;")
         description = QLabel()
         description.setText("A Python Qt application for ITER Data Visualtization using the iplotlib framework.")
         jira = QLabel()

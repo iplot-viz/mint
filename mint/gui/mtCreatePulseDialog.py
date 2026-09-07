@@ -108,7 +108,11 @@ class MTCategoryPicker(QDialog):
 
         # Production serves hundreds of categories: keep the window bounded so
         # the list scrolls instead of growing (still resizable by the user).
-        self.resize(380, 480)
+        # Clamp to the screen: a fixed size overflows a small or unscaled
+        # display and leaves the window partly off-screen.
+        _avail = self.screen().availableGeometry() if self.screen() else None
+        self.resize(min(380, int(_avail.width() * 0.9)) if _avail else 380,
+                    min(480, int(_avail.height() * 0.9)) if _avail else 480)
 
     def selected_category(self) -> Optional[str]:
         item = self.listWidget.currentItem()
@@ -167,7 +171,7 @@ class MTCreatePulseDialog(QDialog):
         self.statusCombo.addItems(PULSE_STATUS_OPTIONS)
 
         self.rangePreview = QLabel("", self)
-        self.rangePreview.setStyleSheet("color: #555; font-style: italic;")
+        self.rangePreview.setStyleSheet("color: palette(mid); font-style: italic;")
 
         # Built before the editors below, which refresh it as soon as they change.
         fraction_validator = QRegularExpressionValidator(
