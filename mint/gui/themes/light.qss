@@ -1,6 +1,10 @@
 /* MINT light theme
  * A flat, self-contained light look, independent of the desktop theme and of
  * which Qt style plugins are installed on the host.
+ *
+ * Lengths are in em, so the whole UI follows the application font, which
+ * Appearance > UI scale adjusts. Borders stay in px: a hairline should
+ * remain a hairline at any scale.
  */
 
 QWidget {
@@ -21,7 +25,7 @@ QDateEdit, QTimeEdit, QDateTimeEdit, QComboBox {
     background-color: #ffffff;
     border: 1px solid #b6b9bf;
     border-radius: 3px;
-    padding: 2px 4px;
+    padding: 0.167em 0.333em;
 }
 
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
@@ -32,7 +36,7 @@ QComboBox:focus {
 
 QComboBox::drop-down {
     border: none;
-    width: 18px;
+    width: 1.5em;
 }
 
 QComboBox QAbstractItemView {
@@ -46,11 +50,11 @@ QPushButton, QToolButton {
     background-color: #e2e4e8;
     border: 1px solid #b6b9bf;
     border-radius: 3px;
-    padding: 3px 10px;
+    padding: 0.25em 0.833em;
 }
 
 QToolButton {
-    padding: 3px;
+    padding: 0.25em;
 }
 
 QPushButton:hover, QToolButton:hover {
@@ -91,15 +95,15 @@ QMenu::item:selected {
 }
 
 QMenu::separator {
-    height: 1px;
+    height: 0.083em;
     background: #d6d9de;
-    margin: 3px 6px;
+    margin: 0.25em 0.5em;
 }
 
 QToolBar {
     background-color: #f2f3f5;
     border: none;
-    spacing: 2px;
+    spacing: 0.167em;
 }
 
 /* --- item views --------------------------------------------------------- */
@@ -116,7 +120,7 @@ QHeaderView::section {
     border: none;
     border-right: 1px solid #b6b9bf;
     border-bottom: 1px solid #b6b9bf;
-    padding: 3px 6px;
+    padding: 0.25em 0.5em;
 }
 
 QTableCornerButton::section {
@@ -132,7 +136,7 @@ QTabWidget::pane {
 QTabBar::tab {
     background: #e9eaee;
     border: 1px solid #b6b9bf;
-    padding: 4px 10px;
+    padding: 0.333em 0.833em;
 }
 
 QTabBar::tab:selected {
@@ -143,28 +147,28 @@ QTabBar::tab:selected {
 
 QScrollBar:vertical {
     background: #e9eaee;
-    width: 12px;
+    width: 1em;
     margin: 0;
 }
 
 QScrollBar:horizontal {
     background: #e9eaee;
-    height: 12px;
+    height: 1em;
     margin: 0;
 }
 
 QScrollBar::handle:vertical {
     background: #c2c6cc;
-    min-height: 24px;
+    min-height: 2em;
     border-radius: 5px;
-    margin: 2px;
+    margin: 0.167em;
 }
 
 QScrollBar::handle:horizontal {
     background: #c2c6cc;
-    min-width: 24px;
+    min-width: 2em;
     border-radius: 5px;
-    margin: 2px;
+    margin: 0.167em;
 }
 
 QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
@@ -183,8 +187,8 @@ QScrollBar::add-page, QScrollBar::sub-page {
 /* --- checkable indicators ------------------------------------------------ */
 
 QCheckBox::indicator, QRadioButton::indicator {
-    width: 14px;
-    height: 14px;
+    width: 1.167em;
+    height: 1.167em;
     border: 1px solid #b6b9bf;
     background-color: #ffffff;
     border-radius: 3px;
@@ -208,13 +212,13 @@ QCheckBox::indicator:indeterminate {
 QGroupBox {
     border: 1px solid #d6d9de;
     border-radius: 3px;
-    margin-top: 8px;
+    margin-top: 0.667em;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
-    left: 8px;
-    padding: 0 3px;
+    left: 0.667em;
+    padding: 0 0.25em;
 }
 
 QSplitter::handle {
