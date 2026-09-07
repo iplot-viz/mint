@@ -4,6 +4,7 @@
 from PySide6.QtWidgets import QApplication
 
 from argparse import ArgumentParser, Namespace
+from iplotlib.core.display import apply_hidpi_policy
 from mint._version import get_versions
 
 
@@ -35,9 +36,20 @@ def create_app(argv=None) -> (QApplication, Namespace):
                         help='Force an "Autoscale All" on the Y axes of the exported image '
                              '(instead of keeping the Y limits saved in the workspace). '
                              'Only used together with -e; has no effect otherwise.')
+    parser.add_argument('--ui-scale', dest='ui_scale', metavar='ui_scale', default=None,
+                        help='UI scale: auto, off, or a factor such as 1.5. Overrides the '
+                             'persisted Appearance setting for this run; IPLOT_UI_SCALE '
+                             'overrides both.')
+    parser.add_argument('--display-info', dest='display_info', action='store_true', default=False,
+                        help='Print the detected screen metrics and the resolved UI scale, '
+                             'then exit. Use this when reporting a rendering problem.')
     parser.add_argument('--version', action='version',
                         version=f"{parser.prog} - {get_versions()['version']}")
     args = parser.parse_args()
+
+    # The high-DPI scale factor rounding policy has no effect once the
+    # QApplication exists, so it has to be set here rather than in entryPoint.
+    apply_hidpi_policy()
 
     qApp = QApplication(argv)
     qApp.setApplicationName("MINT")
@@ -46,7 +58,10 @@ def create_app(argv=None) -> (QApplication, Namespace):
     qApp.setOrganizationName("ITER")
 
     # must come after the organization/application names are set: QSettings depends on them
-    from mint.gui.mtAppearance import restore_appearance
+    from mint.gui.mtAppearance import apply_ui_scale, restore_appearance
     restore_appearance()
+    if args.ui_scale is not None:
+        # A command-line factor applies to this run only and is not persisted.
+        apply_ui_scale(args.ui_scale, persist=False)
 
     return qApp, args
