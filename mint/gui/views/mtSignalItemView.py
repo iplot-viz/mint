@@ -25,9 +25,10 @@ class MTSignalItemView(QWidget):
         self._view.setStyleSheet("""
             QTableView, QTreeView { background: palette(Base); gridline-color: palette(Mid); }
             QTableView::viewport, QTreeView::viewport { background: palette(Base); }
-            QTableView::item, QTreeView::item { color: #000; }
-            QTableView::item:selected, QTreeView::item:selected { background: #0078D4; color: #000; }
-            QHeaderView::section { background: palette(Window); color: palette(WindowText); border: 0; padding: 3px 6px; }
+            QTableView::item, QTreeView::item { color: palette(Text); }
+            QTableView::item:selected, QTreeView::item:selected {
+                background: palette(Highlight); color: palette(HighlightedText); }
+            QHeaderView::section { background: palette(Window); color: palette(WindowText); border: 0; padding: 0.25em 0.5em; }
             QTableCornerButton::section { background: palette(Window); border: 0; }
         """)
 
