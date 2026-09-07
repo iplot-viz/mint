@@ -88,7 +88,7 @@ $ mint
 
 ### 2.3 Time configuration {#time-configuration}
 
-MINT always assumes UTC time, regardless of the host time zone. Timestamps follow ISO 8601.
+MINT always assumes UTC time, regardless of the host time zone. Timestamps follow ISO 8601. On the time axis the part of the timestamp shared by the whole view sits in the corner (`UTC:2026-08-13T05:52:`) and each tick shows only what changes; a tick reduced to a bare number carries its unit, e.g. `06s`, `20min`, `500ms`.
 
 Data can be queried by:
 
