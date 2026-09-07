@@ -22,10 +22,10 @@ class MTErrorHoverPopup(QFrame):
                 border-radius: 4px;
             }
             QLabel { background: transparent; color: #222; }
-            QLabel#mtErrorTitle { color: #1a4d80; font-weight: bold; font-size: 11pt; }
+            QLabel#mtErrorTitle { color: #1a4d80; font-weight: bold; font-size: 1.2em; }
             QPushButton {
                 background: #1a4d80; color: white; border: 0; border-radius: 3px;
-                padding: 4px 12px;
+                padding: 0.3em 1em;
             }
             QPushButton:hover { background: #2a5d90; }
         """)
@@ -36,8 +36,12 @@ class MTErrorHoverPopup(QFrame):
 
         self._explanation = QLabel(self)
         self._explanation.setWordWrap(True)
-        self._explanation.setMinimumWidth(360)
-        self._explanation.setMaximumWidth(420)
+        # Size the callout in characters rather than pixels so it stays a
+        # readable measure at any UI scale instead of turning into a narrow
+        # column of wrapped text.
+        _em = self.fontMetrics().averageCharWidth() or 8
+        self._explanation.setMinimumWidth(_em * 55)
+        self._explanation.setMaximumWidth(_em * 65)
 
         self._more_btn = QPushButton("More info →", self)
         self._more_btn.setCursor(Qt.PointingHandCursor)

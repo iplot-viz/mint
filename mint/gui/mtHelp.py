@@ -25,7 +25,11 @@ class MTHelp(QMainWindow):
     def __init__(self, parent: typing.Optional[QWidget] = None):
         super().__init__(parent=parent)
         self.setWindowTitle("MINT - User Manual")
-        self.resize(1100, 750)
+        # Clamp to the screen: a fixed size overflows a small or unscaled
+        # display and leaves the window partly off-screen.
+        _avail = self.screen().availableGeometry() if self.screen() else None
+        self.resize(min(1100, int(_avail.width() * 0.9)) if _avail else 1100,
+                    min(750, int(_avail.height() * 0.9)) if _avail else 750)
 
         self._image_dir_ctx = None
         self._image_dir: typing.Optional[Path] = None
@@ -51,7 +55,7 @@ class MTHelp(QMainWindow):
         self._next_btn.clicked.connect(self._find_next)
 
         self._match_label = QLabel("", self)
-        self._match_label.setStyleSheet("color: #666; padding: 0 6px;")
+        self._match_label.setStyleSheet("color: palette(mid); padding: 0 0.5em;")
 
         for w in (self._prev_btn, self._next_btn):
             w.setAutoRaise(True)
