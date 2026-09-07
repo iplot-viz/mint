@@ -206,6 +206,12 @@ class MTAbsoluteTime(MTGenericAccessMode):
         """Open the pulse browser dialog."""
         self.selectPulseDialog.flag = "time_range"
         self.selectPulseDialog.set_selection_mode(single=True, require_timestamps=True)
+        # In this mode the only pulse in use is the one the range was taken
+        # from; older iplotwidgets have no Selected column to tell.
+        setter = getattr(self.selectPulseDialog, 'set_selected_pulses', None)
+        if setter:
+            pulse = self.pulseUsed.text().split(' (')[0].strip()
+            setter([pulse] if pulse else [])
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 

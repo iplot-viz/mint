@@ -189,6 +189,43 @@ class PulseIdTest(unittest.TestCase):
         self.assertEqual(props['t_start'], '0')
         self.assertEqual(props['t_end'], '5')
 
+    def _record_browser_selection(self, mode):
+        # The browser is a shared singleton: stub it on the instance and
+        # undo it afterwards so the other tests see the real methods.
+        dialog = mode.selectPulseDialog
+        received = []
+        previous_flag = dialog.flag
+        dialog.set_selected_pulses = received.append
+        dialog.show = lambda: None
+        dialog.activateWindow = lambda: None
+        for name in ('set_selected_pulses', 'show', 'activateWindow'):
+            self.addCleanup(delattr, dialog, name)
+        self.addCleanup(setattr, dialog, 'flag', previous_flag)
+        return received
+
+    def test_search_hands_the_pulses_in_use_to_the_browser(self):
+        mode = MTPulseId({})
+        received = self._record_browser_selection(mode)
+        mode.pulseNumber.setText('ITER:A/1, ITER:B/2,')
+        mode.on_search_pulse()
+        self.assertEqual(received[-1], ['ITER:A/1', 'ITER:B/2'])
+
+    def test_editing_the_field_refreshes_the_browser_while_opened_from_here(self):
+        mode = MTPulseId({})
+        received = self._record_browser_selection(mode)
+        mode.selectPulseDialog.flag = 'pulse_id'
+        mode.pulseNumber.setText('ITER:A/1')
+        self.assertEqual(received[-1], ['ITER:A/1'])
+        mode.pulseNumber.setText('')
+        self.assertEqual(received[-1], [])
+
+    def test_editing_the_field_leaves_the_browser_alone_for_other_modes(self):
+        mode = MTPulseId({})
+        received = self._record_browser_selection(mode)
+        mode.selectPulseDialog.flag = 'time_range'
+        mode.pulseNumber.setText('ITER:A/1')
+        self.assertEqual(received, [])
+
 
 class RelativeTimeTest(unittest.TestCase):
     @classmethod
