@@ -279,8 +279,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
     "rtheaders": "REMOTE_USER:$USERNAME,User-Agent:python_client",
     "rtauth": null,
     "default": true,
-    "uda_for_export": "io-ls-udasrv2.iter.org",
-    "variable_group_limit": 200
+    "uda_for_export": "io-ls-udasrv2.iter.org"
   },
   "imaspy": {
     "type": "IMASPY",
