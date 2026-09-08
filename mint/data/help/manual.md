@@ -277,7 +277,8 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
     "rtheaders": "REMOTE_USER:$USERNAME,User-Agent:python_client",
     "rtauth": null,
     "default": true,
-    "uda_for_export": "io-ls-udasrv2.iter.org"
+    "uda_for_export": "io-ls-udasrv2.iter.org",
+    "variable_group_limit": 200
   },
   "imaspy": {
     "type": "IMASPY",
@@ -288,7 +289,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 }
 ```
 
-Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used.
+Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional (default 200): a node of the variable tree with more variables than this is split into sub-folders on `-`, `.` and `_` until none holds more; `null` keeps every node flat.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
