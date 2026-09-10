@@ -24,6 +24,18 @@ def _compare_or_bootstrap(actual_path: str, baseline_path: str, tol: float) -> N
             f"Image mismatch vs baseline {os.path.basename(baseline_path)}: {diff}")
 
 
+def _discard(actual_path: str) -> None:
+    """Drop the rendered image once the baseline is established or matches.
+
+    On a mismatch the caller raises before reaching this, so the image stays
+    next to its baseline for the CI artifact and for local review.
+    """
+    try:
+        os.remove(actual_path)
+    except OSError:
+        pass
+
+
 def _rescale_to_match(actual_path: str, baseline_path: str) -> None:
     """Resize the actual image to the baseline's dimensions if they drift
     by at most a few pixels. pyqtgraph's Qt-based rendering varies by one
@@ -51,14 +63,8 @@ def compare_pixmap_to_baseline(pixmap, baseline_path: str, tol: float = 5.0) -> 
     actual_path = baseline_path.replace('.png', '_actual.png')
     pixmap.save(actual_path, 'PNG')
     assert os.path.exists(actual_path), f"pixmap.save produced no file: {actual_path}"
-    try:
-        _compare_or_bootstrap(actual_path, baseline_path, tol)
-    finally:
-        if os.path.exists(actual_path):
-            try:
-                os.remove(actual_path)
-            except OSError:
-                pass
+    _compare_or_bootstrap(actual_path, baseline_path, tol)
+    _discard(actual_path)
 
 
 def compare_figure_to_baseline(figure, baseline_path: str, tol: float = 5.0,
@@ -72,14 +78,8 @@ def compare_figure_to_baseline(figure, baseline_path: str, tol: float = 5.0,
     actual_path = baseline_path.replace('.png', '_actual.png')
     figure.set_size_inches(*figsize)
     figure.savefig(actual_path, dpi=dpi)
-    try:
-        _compare_or_bootstrap(actual_path, baseline_path, tol)
-    finally:
-        if os.path.exists(actual_path):
-            try:
-                os.remove(actual_path)
-            except OSError:
-                pass
+    _compare_or_bootstrap(actual_path, baseline_path, tol)
+    _discard(actual_path)
 
 
 def compare_pyqtgraph_layout_to_baseline(figure, baseline_path: str,
@@ -124,13 +124,7 @@ def compare_pyqtgraph_layout_to_baseline(figure, baseline_path: str,
     exporter = pg.exporters.ImageExporter(scene)
     exporter.parameters()['width'] = width
     exporter.export(actual_path)
-    try:
-        if os.path.exists(baseline_path):
-            _rescale_to_match(actual_path, baseline_path)
-        _compare_or_bootstrap(actual_path, baseline_path, tol)
-    finally:
-        if os.path.exists(actual_path):
-            try:
-                os.remove(actual_path)
-            except OSError:
-                pass
+    if os.path.exists(baseline_path):
+        _rescale_to_match(actual_path, baseline_path)
+    _compare_or_bootstrap(actual_path, baseline_path, tol)
+    _discard(actual_path)
