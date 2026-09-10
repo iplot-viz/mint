@@ -93,7 +93,7 @@ QMenu::item:selected {
 }
 
 QMenu::separator {
-    height: 0.083em;
+    height: 1px;
     background: #3a3d42;
     margin: 0.25em 0.5em;
 }

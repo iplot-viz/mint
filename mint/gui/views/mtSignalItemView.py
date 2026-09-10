@@ -9,7 +9,20 @@ from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt, QEvent
 from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QTableView, QTreeView, QVBoxLayout, QWidget, \
     QWidgetAction, QAbstractButton
 
+from iplotWidgets.sizing import FontScaledView
 from mint.models.mtSignalsModel import MTSignalsModel
+
+
+class _FontScaledTableView(FontScaledView, QTableView):
+    pass
+
+
+class _FontScaledTreeView(FontScaledView, QTreeView):
+    pass
+
+
+# The rows follow the application font, as the tables of iplotWidgets do.
+_FONT_SCALED_VIEWS = {QTableView: _FontScaledTableView, QTreeView: _FontScaledTreeView}
 
 
 class MTSignalItemView(QWidget):
@@ -20,7 +33,7 @@ class MTSignalItemView(QWidget):
         self.setWindowTitle(title)
         self.setLayout(QVBoxLayout())
 
-        self._view = view_type(parent=self)
+        self._view = _FONT_SCALED_VIEWS.get(view_type, view_type)(parent=self)
 
         self._view.setStyleSheet("""
             QTableView, QTreeView { background: palette(Base); gridline-color: palette(Mid); }
@@ -45,6 +58,8 @@ class MTSignalItemView(QWidget):
 
     def set_model(self, model: QAbstractItemModel):
         self._view.setModel(model)
+        if isinstance(self._view, FontScaledView):
+            self._view.apply_font_metrics()
 
         # remove old actions.
         for act in self._actions:

@@ -3,6 +3,8 @@ from typing import Optional
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from iplotWidgets.sizing import scaled_px
+
 
 class MTErrorHoverPopup(QFrame):
     moreInfoRequested = Signal(str)
@@ -22,7 +24,7 @@ class MTErrorHoverPopup(QFrame):
                 border-radius: 4px;
             }
             QLabel { background: transparent; color: #222; }
-            QLabel#mtErrorTitle { color: #1a4d80; font-weight: bold; font-size: 1.2em; }
+            QLabel#mtErrorTitle { color: #1a4d80; font-weight: bold; }
             QPushButton {
                 background: #1a4d80; color: white; border: 0; border-radius: 3px;
                 padding: 0.3em 1em;
@@ -33,15 +35,18 @@ class MTErrorHoverPopup(QFrame):
         self._title = QLabel(self)
         self._title.setObjectName("mtErrorTitle")
         self._title.setWordWrap(True)
+        # Relative to the widget font, which is what the UI scale moves; a
+        # style-sheet font-size only takes absolute units.
+        title_font = self._title.font()
+        title_font.setPointSizeF(title_font.pointSizeF() * 1.2)
+        self._title.setFont(title_font)
 
         self._explanation = QLabel(self)
         self._explanation.setWordWrap(True)
-        # Size the callout in characters rather than pixels so it stays a
-        # readable measure at any UI scale instead of turning into a narrow
-        # column of wrapped text.
-        _em = self.fontMetrics().averageCharWidth() or 8
-        self._explanation.setMinimumWidth(_em * 55)
-        self._explanation.setMaximumWidth(_em * 65)
+        # Grown with the font so the callout keeps its measure at any UI scale
+        # instead of turning into a narrow column of wrapped text.
+        self._explanation.setMinimumWidth(scaled_px(self, 360))
+        self._explanation.setMaximumWidth(scaled_px(self, 420))
 
         self._more_btn = QPushButton("More info →", self)
         self._more_btn.setCursor(Qt.PointingHandCursor)
