@@ -19,6 +19,7 @@ def run_app(q_app: QApplication, args=None):
     from PySide6.QtWidgets import QLabel
 
     from iplotlib.core import Canvas
+    from iplotlib.core.display import DisplayScale, screen_pixel_width
     from iplotlib.interface.iplotSignalAdapter import AccessHelper
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
@@ -56,6 +57,12 @@ def run_app(q_app: QApplication, args=None):
             logger.error(f"Unable to open file: {canvas_filename}")
 
     logger.info("Running version {} iplotlib version {}".format(q_app.applicationVersion(), iplotlib_version))
+    # Recorded on every start: the first question about a rendering complaint is
+    # which screen metrics were seen and which scaling rule fired.
+    logger.info("Display: {}".format(DisplayScale.instance().describe()))
+    if getattr(args, 'display_info', False):
+        from iplotlib.core.display import print_display_info
+        return print_display_info()
     if not AppDataAccess.initialize():
         logger.error("no data sources found, exiting")
         sys.exit(-1)
@@ -91,9 +98,10 @@ def run_app(q_app: QApplication, args=None):
         blueprint = mtBlueprintParser.DEFAULT_BLUEPRINT
 
     logger.debug(f"Detected {len(QGuiApplication.screens())} screen (s)")
-    max_width = 0
-    for screen in QGuiApplication.screens():
-        max_width = max(screen.geometry().width(), max_width)
+    # Physical pixels, not device-independent ones: QScreen.geometry() reports
+    # 1920 for a 4K panel at 200%, which asked for half the samples the
+    # hardware can actually resolve.
+    max_width = screen_pixel_width()
     logger.debug(f"Detected max screen width: {max_width}")
     AccessHelper.num_samples = max_width
     AccessHelper.num_samples_override = args.use_fallback_samples

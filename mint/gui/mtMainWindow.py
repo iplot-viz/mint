@@ -13,13 +13,12 @@ import getpass
 import inspect
 import json
 import os
-import pkgutil
 import socket
 import typing
 import pandas as pd
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
-from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
+from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
 
@@ -31,10 +30,12 @@ from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
+from iplotWidgets.sizing import clamp_to_screen
 
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
-from mint.gui.mtAppearance import MTAppearanceMenu
+from mint.gui.mtAppearance import MTAppearanceMenu, register_scale_listener
+from mint.tools.icon_loader import create_icon
 from mint.gui.mtCreatePulseDialog import MTCreatePulseDialog
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
@@ -111,9 +112,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Console button and Icon
         self.console_button = QPushButton()
-        console_pxmap = QPixmap()
-        console_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/terminal.png'))
-        self.console_button.setIcon(QIcon(console_pxmap))
+        console_icon = create_icon('terminal')
+        self.console_button.setIcon(console_icon)
 
         self.refreshTimer = QTimer(self)
         self.refreshTimer.setTimerType(Qt.TimerType.CoarseTimer)
@@ -210,7 +210,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         help_menu.addAction(about_qt_action)
 
         # QAction console widget
-        show_console_action = QAction(QIcon(console_pxmap), "&Show Console", self)
+        show_console_action = QAction(console_icon, "&Show Console", self)
         show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
         self.console_button.clicked.connect(self.sigCfgWidget.console.show_console)
 
@@ -224,17 +224,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
-        pxmap = QPixmap()
-        pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/plot.png'))
-        self.drawBtn.setIcon(QIcon(pxmap))
+        plot_icon = create_icon('plot')
+        self.drawBtn.setIcon(plot_icon)
         self.streamBtn = QPushButton("Stream")
-        self.streamBtn.setIcon(QIcon(pxmap))
+        self.streamBtn.setIcon(plot_icon)
         # Reserve the size hint of the longest label so toggling never shifts neighbouring buttons.
         self.streamBtn.setText("Streamer Settings")
         self.streamBtn.setMinimumWidth(self.streamBtn.sizeHint().width())
         self.streamBtn.setText("Stream")
         self.exportBtn = QPushButton("Export")
-        self.exportBtn.setIcon(QIcon(pxmap))
+        self.exportBtn.setIcon(plot_icon)
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
@@ -269,7 +268,24 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._install_update_pulse()
         self._install_set_time_window()
         self._install_help_anchors()
-        self.resize(1920, 1080)
+        # 1920x1080 is the whole panel on a FullHD screen and the whole logical
+        # desktop on a 4K screen at 200%.
+        clamp_to_screen(self, 1920, 1080, share=0.95)
+        register_scale_listener(self._on_ui_scale_changed)
+
+    def _on_ui_scale_changed(self, factor: float):
+        """Rebuild the canvas so plot primitives pick up the new scale.
+
+        The widget font change propagates on its own, but the backends resolve
+        font/line/marker sizes while building the figure, so they need a rebuild.
+        """
+        widget = self.canvasStack.currentWidget()
+        if widget is None:
+            return
+        try:
+            widget.set_canvas(self.canvas)
+        except Exception as e:
+            logger.warning(f"Could not refresh the canvas after a UI scale change: {e}")
 
     def _install_help_anchors(self):
         # F1 over any of these widgets jumps to the matching manual
