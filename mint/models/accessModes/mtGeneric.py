@@ -43,6 +43,10 @@ class MTGenericAccessMode(QObject):
     def properties(self):
         return {}
 
+    def pulses_in_use(self) -> list:
+        """Pulse identifiers this mode currently feeds to the canvas."""
+        return []
+
     def label(self) -> str:
         if self.mode == MTGenericAccessMode.PULSE_NUMBER:
             return "Pulse Id"

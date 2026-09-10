@@ -131,7 +131,7 @@ $ mint
 <p style="text-align:center;margin:14px 0;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
 
-<p>Multiple pulse IDs can be overlaid by separating them with commas. Use the <em>Search</em> button next to the Pulse ID field to browse pulses.</p>
+<p>Multiple pulse IDs can be overlaid by separating them with commas. Use the <em>Search</em> button next to the Pulse ID field to browse pulses; the <em>Selected</em> column marks the pulses the canvas uses (this field, the pulse a time range was taken from, and any <em>PulseId</em> typed in the signals table), it follows those while the search stays open, and sorting by it brings them to the top. The page numbers next to the <code>&lt;</code> <code>&gt;</code> arrows jump straight to a page.</p>
 <h3 id="table">2.4 Table</h3>
 <h4>2.4.1 Icons and buttons</h4>
 <p>The toolbar above the variable table provides import / save / append actions, a <em>Hide/Show columns</em> menu, a <em>Search Vars</em> button (browse variables per data source), and <em>Load new module</em> to register an extra Python module for processing.</p>
@@ -339,7 +339,7 @@ $ mint
   }
 }
 </code></pre>
-<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used.</p>
+<p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used. <em>variable_group_limit</em> is optional and unset by default, leaving the variable tree flat: set it to a number and a node holding more variables than that is split into sub-folders on <code>-</code>, <code>.</code> and <code>_</code> until none holds more.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>

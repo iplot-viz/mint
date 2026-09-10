@@ -189,6 +189,22 @@ class PulseIdTest(unittest.TestCase):
         self.assertEqual(props['t_start'], '0')
         self.assertEqual(props['t_end'], '5')
 
+    def test_pulses_in_use_strips_and_drops_blanks(self):
+        mode = MTPulseId({})
+        mode.pulseNumber.setText(' ITER:A/1, ITER:B/2,,')
+        self.assertEqual(mode.pulses_in_use(), ['ITER:A/1', 'ITER:B/2'])
+        mode.pulseNumber.setText('')
+        self.assertEqual(mode.pulses_in_use(), [])
+
+    def test_absolute_time_pulse_in_use_is_the_bare_identifier(self):
+        mode = MTAbsoluteTime({})
+        self.assertEqual(mode.pulses_in_use(), [])
+        mode.pulseUsed.setText('ITER:A/1 (not found)')
+        self.assertEqual(mode.pulses_in_use(), ['ITER:A/1'])
+
+    def test_relative_time_uses_no_pulses(self):
+        self.assertEqual(MTRelativeTime({}).pulses_in_use(), [])
+
 
 class RelativeTimeTest(unittest.TestCase):
     @classmethod
