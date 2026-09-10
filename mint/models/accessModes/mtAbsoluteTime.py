@@ -1,12 +1,12 @@
 # Description: Implements an absolute time model.
 # Author: Jaswant Sai Panchumarti
 
-import pandas as pd
 from PySide6.QtGui import QRegularExpressionValidator, QFontMetrics
 from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy, QPushButton
 from PySide6.QtCore import Qt, QRegularExpression, Signal, QDateTime
 
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
+from mint.gui.mtCreatePulseDialog import split_ns
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
@@ -233,21 +233,10 @@ class MTAbsoluteTime(MTGenericAccessMode):
             self.pulseUsed.setText(f"{pulse} (not found)")
             return
 
-        # Convert nanoseconds timestamps to QDateTime + nanoseconds part
-        time_from_ns = pulse_info.timeFrom
-        time_to_ns = pulse_info.timeTo
-
-        # Convert to pandas Timestamp for easy manipulation
-        ts_from = pd.Timestamp(time_from_ns)
-        ts_to = pd.Timestamp(time_to_ns)
-
-        # Create QDateTime (seconds precision)
-        qdt_from = QDateTime.fromString(ts_from.strftime("%Y-%m-%dT%H:%M:%S"), MTAbsoluteTime.TIME_FORMAT)
-        qdt_to = QDateTime.fromString(ts_to.strftime("%Y-%m-%dT%H:%M:%S"), MTAbsoluteTime.TIME_FORMAT)
-
-        # Extract nanoseconds part (nanoseconds within the second)
-        ns_from = str(ts_from.nanosecond).zfill(9)
-        ns_to = str(ts_to.nanosecond).zfill(9)
+        # The ns field takes the whole sub-second remainder, split the same
+        # way the create-pulse dialog shows it.
+        qdt_from, ns_from = split_ns(pulse_info.timeFrom)
+        qdt_to, ns_to = split_ns(pulse_info.timeTo)
 
         # Set the values in the UI
         # Save current time values before overwriting so Clear can restore them
