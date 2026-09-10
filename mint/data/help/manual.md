@@ -102,7 +102,7 @@ Data can be queried by:
 <p style="text-align:center;margin:14px 0;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
 
-Multiple pulse IDs can be overlaid by separating them with commas. Use the *Search* button next to the Pulse ID field to browse pulses; the *Selected* column marks the pulses the canvas uses (this field, the pulse a time range was taken from, and any *PulseId* typed in the signals table), it follows those while the search stays open, and sorting by it brings them to the top.
+Multiple pulse IDs can be overlaid by separating them with commas. Use the *Search* button next to the Pulse ID field to browse pulses; the *Selected* column marks the pulses the canvas uses (this field, the pulse a time range was taken from, and any *PulseId* typed in the signals table), it follows those while the search stays open, and sorting by it brings them to the top. The page numbers next to the `<` `>` arrows jump straight to a page.
 
 ### 2.4 Table {#table}
 
