@@ -19,9 +19,12 @@ logger = setupLog.get_logger(__name__)
 STYLE_KEY = 'appearance/style'
 THEME_KEY = 'appearance/theme'
 SCALE_KEY = 'appearance/ui_scale'
-#: The unscaled application font size, captured once. Everything else is derived
-#: from it, so applying 1.5 twice in a session does not compound.
-BASE_FONT_PT_KEY = 'appearance/base_font_pt'
+#: What applies until the user picks otherwise.
+DEFAULT_SCALE = MODE_AUTO
+#: The application font size before any scaling, captured once per process so
+#: applying 1.5 twice does not compound. Not persisted: the platform default
+#: differs between machines sharing the same settings file.
+_base_font_pt = None  # type: typing.Optional[float]
 
 #: Offered in the menu. 'Auto' asks iplotlib to work it out from the screen.
 SCALE_CHOICES = (
@@ -50,22 +53,14 @@ def register_scale_listener(callback: typing.Callable[[float], None]):
         _scale_listeners.append(callback)
 
 
-def _base_font_pt() -> float:
+def base_font_pt() -> float:
     """The application font size before any scaling was applied."""
-    settings = QSettings()
-    stored = settings.value(BASE_FONT_PT_KEY)
-    if stored:
-        try:
-            return float(stored)
-        except (TypeError, ValueError):
-            settings.remove(BASE_FONT_PT_KEY)
-    size = QApplication.font().pointSizeF()
-    if size <= 0:
-        # A pixel-sized font gives pointSizeF() == -1; fall back to the Qt
-        # default rather than persisting a nonsense base.
-        size = 9.0
-    settings.setValue(BASE_FONT_PT_KEY, size)
-    return size
+    global _base_font_pt
+    if _base_font_pt is None:
+        size = QApplication.font().pointSizeF()
+        # A pixel-sized font gives pointSizeF() == -1.
+        _base_font_pt = size if size > 0 else 9.0
+    return _base_font_pt
 
 
 def apply_ui_scale(value, persist: bool = True):
@@ -80,8 +75,18 @@ def apply_ui_scale(value, persist: bool = True):
     factor = DisplayScale.instance().configure(mode=mode, value=factor_value)
 
     font = QApplication.font()
-    font.setPointSizeF(_base_font_pt() * factor)
-    QApplication.instance().setFont(font)
+    size = base_font_pt() * factor
+    if abs(font.pointSizeF() - size) > 1e-6:
+        # Only when it changes, so a session at 100% keeps the platform font
+        # untouched.
+        font.setPointSizeF(size)
+        QApplication.instance().setFont(font)
+        # Qt documents setFont as not meant for style-sheet driven widgets:
+        # one with a sheet of its own keeps the font it was polished with.
+        # Re-setting the sheet makes it take the new font.
+        for widget in QApplication.allWidgets():
+            if widget.styleSheet():
+                widget.setStyleSheet(widget.styleSheet())
 
     if persist:
         QSettings().setValue(SCALE_KEY, value if isinstance(value, str) else str(value))
@@ -128,14 +133,14 @@ def apply_theme(name: str):
     QApplication.instance().setStyleSheet(qss)
     QSettings().setValue(THEME_KEY, name)
     # A style sheet can carry font settings, so re-assert the scaled font.
-    apply_ui_scale(QSettings().value(SCALE_KEY, MODE_AUTO), persist=False)
+    apply_ui_scale(QSettings().value(SCALE_KEY, DEFAULT_SCALE), persist=False)
 
 
 def restore_appearance():
     """Re-apply the persisted appearance. Call once, right after the QApplication is created."""
     settings = QSettings()
     # Capture the untouched font before a theme style sheet can change it.
-    _base_font_pt()
+    base_font_pt()
     style = settings.value(STYLE_KEY)
     if style and QApplication.setStyle(style) is None:
         # self-heal legacy/renamed style names so settings and menu state stay consistent
@@ -150,7 +155,7 @@ def restore_appearance():
             settings.setValue(THEME_KEY, THEME_NONE)
         else:
             QApplication.instance().setStyleSheet(qss)
-    apply_ui_scale(settings.value(SCALE_KEY, MODE_AUTO), persist=False)
+    apply_ui_scale(settings.value(SCALE_KEY, DEFAULT_SCALE), persist=False)
 
 
 class MTAppearanceMenu(QMenu):
@@ -196,9 +201,9 @@ class MTAppearanceMenu(QMenu):
         self._scale_menu = QMenu("UI &scale", self)
         self.addMenu(self._scale_menu)
         scale_group = QActionGroup(self)
-        current_scale = str(QSettings().value(SCALE_KEY, MODE_AUTO))
+        current_scale = str(QSettings().value(SCALE_KEY, DEFAULT_SCALE))
         if current_scale not in (value for _, value in SCALE_CHOICES):
-            current_scale = MODE_AUTO
+            current_scale = DEFAULT_SCALE
         for label, value in SCALE_CHOICES:
             action = QAction(label, self)
             action.setCheckable(True)

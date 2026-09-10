@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPus
                                QVBoxLayout, QWidget)
 
 from iplotLogging import setupLogger as setupLog
+from iplotWidgets.sizing import clamp_to_screen
 from mint.gui.mtErrorCatalog import ErrorCatalog
 
 logger = setupLog.get_logger(__name__)
@@ -25,11 +26,7 @@ class MTHelp(QMainWindow):
     def __init__(self, parent: typing.Optional[QWidget] = None):
         super().__init__(parent=parent)
         self.setWindowTitle("MINT - User Manual")
-        # Clamp to the screen: a fixed size overflows a small or unscaled
-        # display and leaves the window partly off-screen.
-        _avail = self.screen().availableGeometry() if self.screen() else None
-        self.resize(min(1100, int(_avail.width() * 0.9)) if _avail else 1100,
-                    min(750, int(_avail.height() * 0.9)) if _avail else 750)
+        clamp_to_screen(self, 1100, 750)
 
         self._image_dir_ctx = None
         self._image_dir: typing.Optional[Path] = None

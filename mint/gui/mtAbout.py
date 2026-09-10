@@ -13,6 +13,7 @@ from PySide6.QtGui import QShowEvent, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, \
     QWidget, QMainWindow
 
+from iplotWidgets.sizing import clamp_to_screen
 from mint.tools.icon_loader import create_pxmap
 
 # TODO Change packages to not be hardcoded
@@ -58,11 +59,7 @@ class MTAbout(QDialog):
 
         self.setLayout(self._layout)
         self.setWindowTitle("About MINT")
-        # Clamp to the screen: a fixed size overflows a small or unscaled
-        # display and leaves the window partly off-screen.
-        _avail = self.screen().availableGeometry() if self.screen() else None
-        self.resize(min(1100, int(_avail.width() * 0.9)) if _avail else 1100,
-                    min(420, int(_avail.height() * 0.9)) if _avail else 420)
+        clamp_to_screen(self, 1100, 420)
 
     def _prepare_buttons(self):
         self._copyBtn = QPushButton("Copy to clipboard", self)

@@ -16,9 +16,9 @@ from PySide6.QtCore import QSettings, QStandardPaths
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from iplotlib.core.display import DisplayScale
-from mint.gui.mtAppearance import (BASE_FONT_PT_KEY, MTAppearanceMenu, SCALE_KEY, STYLE_KEY,
-                                   THEME_KEY, THEME_NONE, THEMES, apply_style, apply_theme,
-                                   apply_ui_scale, register_scale_listener, restore_appearance)
+from mint.gui.mtAppearance import (MTAppearanceMenu, SCALE_KEY, STYLE_KEY, THEME_KEY, THEME_NONE,
+                                   THEMES, apply_style, apply_theme, apply_ui_scale, base_font_pt,
+                                   register_scale_listener, restore_appearance)
 from mint.tests.qAppSingleton import ensure_qapp
 
 
@@ -158,7 +158,7 @@ class UiScaleTest(SettingsSandbox):
     """The UI scale lever: it must move the widget font and the canvas together."""
 
     def test_apply_ui_scale_scales_the_application_font(self):
-        base = float(QSettings().value(BASE_FONT_PT_KEY) or QApplication.font().pointSizeF())
+        base = base_font_pt()
         apply_ui_scale('2.0')
         self.assertAlmostEqual(QApplication.font().pointSizeF(), base * 2.0, places=3)
         self.assertEqual(QSettings().value(SCALE_KEY), '2.0')
@@ -189,6 +189,18 @@ class UiScaleTest(SettingsSandbox):
         restore_appearance()
         self.assertEqual(DisplayScale.instance().mode, 'auto')
 
+    def test_nothing_persisted_means_auto_and_an_untouched_font_on_a_plain_screen(self):
+        # The test screen reports no high DPI, so the automatic mode must
+        # resolve to 1.0 and leave the application font exactly as it was.
+        base = QApplication.font().pointSizeF()
+        restore_appearance()
+        self.assertEqual(DisplayScale.instance().mode, 'auto')
+        self.assertEqual(DisplayScale.instance().factor(), 1.0)
+        self.assertAlmostEqual(QApplication.font().pointSizeF(), base, places=3)
+        menu = MTAppearanceMenu()
+        checked = [a.text() for a in self._scale_actions(menu) if a.isChecked()]
+        self.assertEqual(checked, ['Auto'])
+
     def test_listeners_are_notified(self):
         seen = []
         register_scale_listener(seen.append)
@@ -202,6 +214,18 @@ class UiScaleTest(SettingsSandbox):
         register_scale_listener(boom)
         apply_ui_scale('1.25')
         self.assertAlmostEqual(DisplayScale.instance().factor(), 1.25, places=3)
+
+    def test_widgets_with_their_own_style_sheet_follow_the_scale(self):
+        # Such a widget keeps the font it was polished with unless its sheet
+        # is re-applied; the signals table and the console are styled this way.
+        from PySide6.QtWidgets import QLabel
+        label = QLabel('styled')
+        label.setStyleSheet('QLabel { color: red; }')
+        label.ensurePolished()
+        apply_ui_scale('2.0')
+        self.assertAlmostEqual(label.font().pointSizeF(), base_font_pt() * 2.0, places=3)
+        apply_ui_scale('off')
+        self.assertAlmostEqual(label.font().pointSizeF(), base_font_pt(), places=3)
 
     def test_theme_change_keeps_the_scaled_font(self):
         # Installing a style sheet can reset the application font.

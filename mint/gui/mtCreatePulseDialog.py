@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QStyle, QToolButton, QVBoxLayout, QWidget,
 )
 
+from iplotWidgets.sizing import clamp_to_screen
+
 PULSE_STATUS_OPTIONS = ["completed", "aborted", "terminated", "failed"]
 DESCRIPTION_MAX_CHARS = 200
 DEFAULT_PULSE_LOCATION = "ITER"
@@ -108,11 +110,7 @@ class MTCategoryPicker(QDialog):
 
         # Production serves hundreds of categories: keep the window bounded so
         # the list scrolls instead of growing (still resizable by the user).
-        # Clamp to the screen: a fixed size overflows a small or unscaled
-        # display and leaves the window partly off-screen.
-        _avail = self.screen().availableGeometry() if self.screen() else None
-        self.resize(min(380, int(_avail.width() * 0.9)) if _avail else 380,
-                    min(480, int(_avail.height() * 0.9)) if _avail else 480)
+        clamp_to_screen(self, 380, 480)
 
     def selected_category(self) -> Optional[str]:
         item = self.listWidget.currentItem()

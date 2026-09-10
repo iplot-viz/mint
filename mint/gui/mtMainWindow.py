@@ -30,6 +30,7 @@ from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
+from iplotWidgets.sizing import clamp_to_screen
 
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
@@ -267,15 +268,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._install_update_pulse()
         self._install_set_time_window()
         self._install_help_anchors()
-        # Clamp against the screen rather than resizing unconditionally: 1920x1080
-        # is the whole panel on a FullHD screen (no room for decorations or a
-        # task bar) and the whole logical desktop on a 4K screen at 200%.
-        available = self.screen().availableGeometry() if self.screen() else None
-        if available is not None:
-            self.resize(min(1920, int(available.width() * 0.95)),
-                        min(1080, int(available.height() * 0.95)))
-        else:
-            self.resize(1920, 1080)
+        # 1920x1080 is the whole panel on a FullHD screen and the whole logical
+        # desktop on a 4K screen at 200%.
+        clamp_to_screen(self, 1920, 1080, share=0.95)
         register_scale_listener(self._on_ui_scale_changed)
 
     def _on_ui_scale_changed(self, factor: float):
