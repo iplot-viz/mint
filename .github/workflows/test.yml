@@ -54,6 +54,18 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: pytest
 
+      # The image tests always write the rendered PNG next to its baseline
+      # as *_actual.png. Publishing them on failure lets a visual change that
+      # comes from iplotlib be reviewed and committed as the new baseline
+      # straight from the canonical runner, without a local Linux environment.
+      - name: Upload rendered images on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-images-${{ matrix.os }}
+          path: '**/tests/baseline/*_actual.png'
+          if-no-files-found: ignore
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
