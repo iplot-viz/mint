@@ -50,7 +50,7 @@ class TestCalibratedParams(unittest.TestCase):
         self.assertNotIn('retType', params)
 
     def test_calibrated_true_on_non_codac_does_not_add_rettype(self):
-        self._install_data_access('IMASPY')
+        self._install_data_access('IMAS')
         params = AccessHelper.construct_da_params(_signal(
             calibrated=True, data_source='imas_source'))
         self.assertNotIn('retType', params)

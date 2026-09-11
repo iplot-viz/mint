@@ -281,8 +281,8 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
     "default": true,
     "uda_for_export": "io-ls-udasrv2.iter.org"
   },
-  "imaspy": {
-    "type": "IMASPY",
+  "imas": {
+    "type": "IMAS",
     "database": "iter",
     "path": "public",
     "backend": "MDSPLUS"
