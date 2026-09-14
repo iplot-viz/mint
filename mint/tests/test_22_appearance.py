@@ -9,6 +9,7 @@ QSettings is redirected to a temporary directory so the tests never read
 or write a real user configuration file.
 """
 
+import os
 import tempfile
 import unittest
 
@@ -16,9 +17,11 @@ from PySide6.QtCore import QSettings, QStandardPaths
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from iplotlib.core.display import DisplayScale
-from mint.gui.mtAppearance import (MTAppearanceMenu, SCALE_KEY, STYLE_KEY, THEME_KEY, THEME_NONE,
-                                   THEMES, apply_style, apply_theme, apply_ui_scale, base_font_pt,
-                                   register_scale_listener, restore_appearance)
+from mint.gui.mtAppearance import (MTAppearanceMenu, QT_SCALE_KEY, SCALE_KEY, STYLE_KEY, THEME_KEY,
+                                   THEME_NONE, THEMES, apply_style, apply_theme, apply_ui_scale,
+                                   base_font_pt, register_scale_listener,
+                                   remember_detected_qt_scale, restore_appearance,
+                                   startup_qt_scale_factor)
 from mint.tests.qAppSingleton import ensure_qapp
 
 
@@ -257,6 +260,53 @@ class UiScaleTest(SettingsSandbox):
         action = next(a for a in self._scale_actions(menu) if a.text() == '200%')
         action.trigger()
         self.assertAlmostEqual(DisplayScale.instance().factor(), 2.0, places=3)
+
+
+class QtScaleFactorTest(SettingsSandbox):
+    """QT_SCALE_FACTOR is per machine and never travels with a workspace."""
+
+    def setUp(self):
+        super().setUp()
+        self._env = os.environ.pop('QT_SCALE_FACTOR', None)
+
+    def tearDown(self):
+        os.environ.pop('QT_SCALE_FACTOR', None)
+        if self._env is not None:
+            os.environ['QT_SCALE_FACTOR'] = self._env
+        super().tearDown()
+
+    def test_nothing_to_export_without_a_stored_factor(self):
+        self.assertIsNone(startup_qt_scale_factor(QSettings()))
+
+    def test_stored_factor_is_exported(self):
+        QSettings().setValue(QT_SCALE_KEY, '1.75')
+        self.assertEqual(startup_qt_scale_factor(QSettings()), '1.75')
+
+    def test_a_factor_of_one_exports_nothing(self):
+        QSettings().setValue(QT_SCALE_KEY, '1')
+        self.assertIsNone(startup_qt_scale_factor(QSettings()))
+
+    def test_an_invalid_stored_factor_is_discarded(self):
+        # A hand-edited or stale settings file must not stop MINT starting.
+        QSettings().setValue(QT_SCALE_KEY, 'big')
+        self.assertIsNone(startup_qt_scale_factor(QSettings()))
+        self.assertIsNone(QSettings().value(QT_SCALE_KEY))
+
+    def test_the_environment_wins(self):
+        # A launcher script or a site profile stays in control.
+        QSettings().setValue(QT_SCALE_KEY, '1.75')
+        os.environ['QT_SCALE_FACTOR'] = '2'
+        self.assertIsNone(startup_qt_scale_factor(QSettings()))
+        self.assertIsNone(remember_detected_qt_scale())
+
+    def test_an_explicit_percentage_is_stored_for_the_next_start(self):
+        apply_ui_scale('1.5')
+        self.assertEqual(QSettings().value(QT_SCALE_KEY), '1.5')
+
+    def test_choosing_off_stores_one(self):
+        apply_ui_scale('1.5')
+        apply_ui_scale('off')
+        self.assertEqual(QSettings().value(QT_SCALE_KEY), '1')
 
 
 if __name__ == "__main__":

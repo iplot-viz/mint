@@ -1,8 +1,10 @@
 # Description: The MINT application attributes and arguments can be configured here.
 # Author: Jaswant Sai Panchumarti
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
+import os
 from argparse import ArgumentParser, Namespace
 from iplotlib.core.display import apply_hidpi_policy
 from mint._version import get_versions
@@ -47,9 +49,10 @@ def create_app(argv=None) -> (QApplication, Namespace):
                         version=f"{parser.prog} - {get_versions()['version']}")
     args = parser.parse_args()
 
-    # The high-DPI scale factor rounding policy has no effect once the
-    # QApplication exists, so it has to be set here rather than in entryPoint.
+    # Both of these are read once, when the QApplication is constructed, so
+    # they have to be set here rather than in entryPoint.
     apply_hidpi_policy()
+    _export_qt_scale_factor(args)
 
     qApp = QApplication(argv)
     qApp.setApplicationName("MINT")
@@ -58,10 +61,47 @@ def create_app(argv=None) -> (QApplication, Namespace):
     qApp.setOrganizationName("ITER")
 
     # must come after the organization/application names are set: QSettings depends on them
-    from mint.gui.mtAppearance import apply_ui_scale, restore_appearance
+    from mint.gui.mtAppearance import (apply_ui_scale, remember_detected_qt_scale,
+                                       restore_appearance)
     restore_appearance()
     if args.ui_scale is not None:
         # A command-line factor applies to this run only and is not persisted.
         apply_ui_scale(args.ui_scale, persist=False)
+    else:
+        # The screen can only be queried now that the QApplication exists, so a
+        # newly detected factor takes effect at the next start.
+        qApp.pending_ui_scale = remember_detected_qt_scale()
 
     return qApp, args
+
+
+def _export_qt_scale_factor(args):
+    """Put QT_SCALE_FACTOR in the environment before Qt reads it.
+
+    QT_SCALE_FACTOR is the only lever that scales every part of the interface
+    together -- fonts, style primitives, icons, spacing -- and Qt reads it once,
+    at QGuiApplication construction. Scaling the application font afterwards
+    reaches the fonts and leaves radio indicators, checkboxes and scroll bars at
+    their unscaled pixel size.
+
+    The value is per user and per machine (QSettings), never part of a
+    workspace: the same workspace must open identically on a 4K and a FullHD
+    workstation. Anything already in the environment wins, so a launcher script
+    or a site-wide profile stays in control.
+    """
+    if args.ui_scale is not None:
+        from iplotlib.core.display import MODE_FIXED, parse_scale_setting
+        mode, value = parse_scale_setting(args.ui_scale)
+        if mode == MODE_FIXED and abs(value - 1.0) > 1e-6 and not os.environ.get('QT_SCALE_FACTOR'):
+            os.environ['QT_SCALE_FACTOR'] = f"{value:g}"
+            return
+    # QSettings needs the organization/application names, which are set below on
+    # the QApplication; read the same store directly so this can run first.
+    # Same store the application uses once setOrganizationName/setApplicationName
+    # have run; named explicitly so this can execute before the QApplication.
+    settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
+                         "ITER", "MINT")
+    from mint.gui.mtAppearance import startup_qt_scale_factor
+    factor = startup_qt_scale_factor(settings)
+    if factor:
+        os.environ['QT_SCALE_FACTOR'] = factor

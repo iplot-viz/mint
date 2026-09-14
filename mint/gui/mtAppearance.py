@@ -19,6 +19,11 @@ logger = setupLog.get_logger(__name__)
 STYLE_KEY = 'appearance/style'
 THEME_KEY = 'appearance/theme'
 SCALE_KEY = 'appearance/ui_scale'
+#: Factor handed to Qt through QT_SCALE_FACTOR at the next start, per screen.
+#: Kept in QSettings, which is per user and per machine -- deliberately NOT in
+#: the workspace, so the same workspace opens identically on a 4K and a FullHD
+#: workstation. The screen is what varies, not the plot.
+QT_SCALE_KEY = 'appearance/qt_scale_factor'
 #: What applies until the user picks otherwise.
 DEFAULT_SCALE = MODE_AUTO
 #: The application font size before any scaling, captured once per process so
@@ -41,6 +46,67 @@ SCALE_CHOICES = (
 #: A registry rather than a signal because the Appearance menu is parented to
 #: the menu bar and has no handle on the main window.
 _scale_listeners = []  # type: typing.List[typing.Callable[[float], None]]
+
+
+def startup_qt_scale_factor(settings=None) -> typing.Optional[str]:
+    """The QT_SCALE_FACTOR to export before the QApplication is built.
+
+    Qt reads QT_SCALE_FACTOR once, at QGuiApplication construction, and it is
+    the only lever that scales *everything*: fonts, style primitives (radio
+    indicators, checkboxes, scroll bars), icons and spacing alike. Scaling the
+    application font instead moves the fonts and leaves the style primitives
+    behind, which is what made a 4K session look unbalanced rather than large.
+
+    Returns None when nothing should be set: no stored factor, a factor of 1,
+    or a QT_SCALE_FACTOR already in the environment (the session or a launcher
+    script wins over us).
+    """
+    if os.environ.get('QT_SCALE_FACTOR'):
+        return None
+    settings = QSettings() if settings is None else settings
+    stored = settings.value(QT_SCALE_KEY)
+    if not stored:
+        return None
+    try:
+        factor = float(stored)
+    except (TypeError, ValueError):
+        logger.warning(f"Ignoring invalid {QT_SCALE_KEY}={stored!r}")
+        settings.remove(QT_SCALE_KEY)
+        return None
+    if abs(factor - 1.0) < 1e-6:
+        return None
+    return f"{factor:g}"
+
+
+def remember_detected_qt_scale() -> typing.Optional[float]:
+    """Detect the panel and store the factor Qt should use from the next start.
+
+    Called once the QApplication exists, which is the earliest a screen can be
+    queried -- hence "from the next start". Returns the newly detected factor
+    when it differs from what is in effect, so the caller can tell the user a
+    restart would improve things, or None when nothing should change.
+
+    Only ever stored per machine in QSettings. A workspace never carries it.
+    """
+    if os.environ.get('QT_SCALE_FACTOR'):
+        # Someone else is driving; do not second-guess or overwrite.
+        return None
+    scale = DisplayScale.instance()
+    if scale.mode != MODE_AUTO:
+        return None
+    detected = scale.factor()
+    settings = QSettings()
+    previous = settings.value(QT_SCALE_KEY)
+    settings.setValue(QT_SCALE_KEY, f"{detected:g}")
+    try:
+        in_effect = float(previous) if previous else 1.0
+    except (TypeError, ValueError):
+        in_effect = 1.0
+    if abs(detected - in_effect) < 1e-6:
+        return None
+    logger.info(f"Detected a UI scale of {detected:g} ({scale.reason}); "
+                f"it will be applied from the next start")
+    return detected
 
 
 def scale_pinned_by_env() -> bool:
@@ -81,6 +147,13 @@ def apply_ui_scale(value, persist: bool = True):
     mode, factor_value = parse_scale_setting(value)
     scale = DisplayScale.instance()
     factor = scale.configure(mode=mode, value=factor_value)
+    if persist and not os.environ.get('QT_SCALE_FACTOR'):
+        # An explicit choice is what Qt should use from the next start; Auto is
+        # left to remember_detected_qt_scale.
+        if mode == MODE_FIXED:
+            QSettings().setValue(QT_SCALE_KEY, f"{factor:g}")
+        elif mode == MODE_OFF:
+            QSettings().setValue(QT_SCALE_KEY, '1')
     # scale.mode rather than mode: IPLOT_UI_SCALE, when set, wins over the request.
     font_factor = factor if scale.mode == MODE_FIXED else 1.0
 
