@@ -11,6 +11,7 @@ but the serialisation behaviour is testable headlessly.
 """
 
 import unittest
+from types import SimpleNamespace
 
 from PySide6.QtCore import QDateTime
 
@@ -79,6 +80,69 @@ class AbsoluteTimeTest(unittest.TestCase):
         props = mode.properties()
         self.assertEqual(props['ts_ns_start'], '000000000')
         self.assertEqual(props['ts_ns_end'], '000000000')
+
+
+class AbsoluteTimeFillFromPulseTest(unittest.TestCase):
+    """A pulse picked in the search fills both parts of each time: the
+    wall-clock seconds and the full nanosecond remainder (#129)."""
+
+    FMT = MTAbsoluteTime.TIME_FORMAT
+    PULSE = 'ITER:EC-GN-P01__20260604/24'
+    TIME_FROM = 1780579819800926000
+    TIME_TO = 1780579820902926000
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _fill(self, mode, source_type='CODAC_UDA'):
+        source = SimpleNamespace(
+            source_type=source_type,
+            get_pulse_info=lambda pulse_id: SimpleNamespace(timeFrom=self.TIME_FROM, timeTo=self.TIME_TO))
+        dialog = mode.selectPulseDialog
+        original = dialog.__dict__.get('get_current_source')
+        dialog.flag = 'time_range'
+        dialog.get_current_source = lambda: source
+        try:
+            mode.fill_from_pulse([self.PULSE])
+        finally:
+            if original is None:
+                del dialog.get_current_source
+            else:
+                dialog.get_current_source = original
+
+    def test_pulse_times_fill_seconds_and_nanoseconds(self):
+        mode = MTAbsoluteTime({})
+        self._fill(mode)
+        self.assertEqual(mode.fromTime.dateTime().toString(self.FMT), '2026-06-04T13:30:19')
+        self.assertEqual(mode.toTime.dateTime().toString(self.FMT), '2026-06-04T13:30:20')
+        self.assertEqual(mode.fromTimeNs.text(), '800926000')
+        self.assertEqual(mode.toTimeNs.text(), '902926000')
+        self.assertEqual(mode.pulseUsed.text(), self.PULSE)
+
+    def test_properties_carry_the_exact_pulse_times(self):
+        mode = MTAbsoluteTime({})
+        self._fill(mode)
+        props = mode.properties()
+        self.assertEqual(props['ts_start'] + '.' + props['ts_ns_start'], '2026-06-04T13:30:19.800926000')
+        self.assertEqual(props['ts_end'] + '.' + props['ts_ns_end'], '2026-06-04T13:30:20.902926000')
+
+    def test_clear_after_an_untouched_pulse_restores_the_previous_times(self):
+        mode = MTAbsoluteTime({})
+        mode.fromTimeNs.setText('111111111')
+        mode.toTimeNs.setText('222222222')
+        self._fill(mode)
+        mode.clear_pulse()
+        self.assertEqual(mode.fromTimeNs.text(), '111111111')
+        self.assertEqual(mode.toTimeNs.text(), '222222222')
+
+    def test_non_uda_source_leaves_the_times_alone(self):
+        mode = MTAbsoluteTime({})
+        mode.fromTimeNs.setText('111111111')
+        self._fill(mode, source_type='CSV')
+        self.assertEqual(mode.fromTimeNs.text(), '111111111')
+        self.assertEqual(mode.pulseUsed.text(), f'{self.PULSE} (timestamps not available)')
 
 
 class AbsoluteTimeClearPulseTest(unittest.TestCase):
