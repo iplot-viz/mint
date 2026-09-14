@@ -10,7 +10,7 @@ from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QMenu, QStyleFactory
 
-from iplotlib.core.display import (DisplayScale, MODE_AUTO, MODE_OFF,
+from iplotlib.core.display import (DisplayScale, MODE_AUTO, MODE_FIXED, MODE_OFF,
                                    parse_scale_setting)
 from iplotLogging import setupLogger as setupLog
 
@@ -26,7 +26,8 @@ DEFAULT_SCALE = MODE_AUTO
 #: differs between machines sharing the same settings file.
 _base_font_pt = None  # type: typing.Optional[float]
 
-#: Offered in the menu. 'Auto' asks iplotlib to work it out from the screen.
+#: Offered in the menu. 'Auto' sizes the plot text from the screen and leaves
+#: the widget font to the platform.
 SCALE_CHOICES = (
     ('Auto', MODE_AUTO),
     ('100% (off)', MODE_OFF),
@@ -64,18 +65,27 @@ def base_font_pt() -> float:
 
 
 def apply_ui_scale(value, persist: bool = True):
-    """Scale the widget font and the iplotlib canvas primitives together.
+    """Scale the iplotlib canvas primitives and, for an explicit percentage,
+    the widget font with them.
 
     Scaling the *application font* is what makes the widgets follow: a fair
     amount of MINT's layout is already font-derived (the time-field widths in
     mtAbsoluteTime, the reserved button width in mtMainWindow), and the style
     sheets use em units for the rest.
+
+    ``auto`` leaves that font alone. The platform font already reflects the
+    desktop's own answer to the screen (GNOME's font size, Windows text
+    scaling, Xft.dpi), whereas the canvas sizes are absolute numbers tuned for
+    a FullHD panel that follow no such setting.
     """
     mode, factor_value = parse_scale_setting(value)
-    factor = DisplayScale.instance().configure(mode=mode, value=factor_value)
+    scale = DisplayScale.instance()
+    factor = scale.configure(mode=mode, value=factor_value)
+    # scale.mode rather than mode: IPLOT_UI_SCALE, when set, wins over the request.
+    font_factor = factor if scale.mode == MODE_FIXED else 1.0
 
     font = QApplication.font()
-    size = base_font_pt() * factor
+    size = base_font_pt() * font_factor
     if abs(font.pointSizeF() - size) > 1e-6:
         # Only when it changes, so a session at 100% keeps the platform font
         # untouched.
@@ -90,7 +100,8 @@ def apply_ui_scale(value, persist: bool = True):
 
     if persist:
         QSettings().setValue(SCALE_KEY, value if isinstance(value, str) else str(value))
-    logger.info(f"UI scale set to {factor:g} ({DisplayScale.instance().reason})")
+    logger.info(f"UI scale set to {factor:g} for the canvas, {font_factor:g} for the widgets "
+                f"({scale.reason})")
 
     for callback in list(_scale_listeners):
         try:

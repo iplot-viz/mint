@@ -201,6 +201,18 @@ class UiScaleTest(SettingsSandbox):
         checked = [a.text() for a in self._scale_actions(menu) if a.isChecked()]
         self.assertEqual(checked, ['Auto'])
 
+    def test_auto_scales_the_canvas_but_not_the_widget_font(self):
+        # The platform font already reflects the desktop's settings for the
+        # screen; only an explicit percentage enlarges it.
+        from unittest.mock import patch
+        unscaled_4k = dict(available=True, device_pixel_ratio=1.0, logical_dpi=96.0,
+                           physical_dpi=163.0, width_px=3840, height_px=2160, remote_markers=[])
+        base = QApplication.font().pointSizeF()
+        with patch('iplotlib.core.display.collect_metrics', return_value=unscaled_4k):
+            apply_ui_scale('auto')
+            self.assertEqual(DisplayScale.instance().factor(), 1.75)
+        self.assertAlmostEqual(QApplication.font().pointSizeF(), base, places=3)
+
     def test_listeners_are_notified(self):
         seen = []
         register_scale_listener(seen.append)
