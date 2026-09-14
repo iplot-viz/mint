@@ -1211,9 +1211,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         super().closeEvent(event)
 
     def build(self, stream=False):
-        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        # Clear shared parser environment to ensure a clean rebuild. The parser itself
+        # is cleared by set_canvas right before drawing: doing it here would blank the
+        # plots for as long as the data fetch below takes (visible on every refresh tick).
         ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
 
         # Clear shift tracking so stale state from previous canvas does not
         # interfere with future shift operations (UIDs are regenerated on each build).
