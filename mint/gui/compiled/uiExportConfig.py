@@ -37,23 +37,21 @@ class UiExportConfig(QWidget):
         self.formLayout.setWidget(3, QFormLayout.ItemRole.LabelRole, self.outputPathLabel)
 
         # Add widgets
-        self.exportWidget = QWidget(self.exportWindowWidget)
-        self.exportWidget.setObjectName("exportWidget")
 
         # Chunks spin box: any positive integer, the spin box itself enforces integers
-        self.chunksSpinBox = QSpinBox(self.exportWidget)
+        self.chunksSpinBox = QSpinBox(self.exportWindowWidget)
         self.chunksSpinBox.setObjectName("chunksSpinBox")
         self.chunksSpinBox.setMinimum(1)
         self.chunksSpinBox.setMaximum(2147483647)
         self.chunksSpinBox.setSingleStep(10)
 
         # Time column mode; ignored for pulse exports, which keep absolute time
-        self.timeComboBox = QComboBox(self.exportWidget)
+        self.timeComboBox = QComboBox(self.exportWindowWidget)
         self.timeComboBox.setObjectName("timeComboBox")
         self.timeComboBox.addItems(["Absolute time", "Relative time (s)"])
 
         # Sampling frequency; Native keeps the original samples and layout
-        self.samplingComboBox = QComboBox(self.exportWidget)
+        self.samplingComboBox = QComboBox(self.exportWindowWidget)
         self.samplingComboBox.setObjectName("samplingComboBox")
         for label, freq in [("Native", None), ("1 Hz", 1), ("10 Hz", 10),
                             ("100 Hz", 100), ("1 kHz", 1000), ("10 kHz", 10000)]:
