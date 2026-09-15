@@ -331,7 +331,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 
 ## 5. FAQ {#faq}
 
-1. **Font is too small.** Two options. From the GUI: open the canvas preferences (gear icon in the canvas toolbar) and raise *Font size*. Globally for the whole application: set `QT_SCALE_FACTOR=2` (or another value) before starting MINT.
+1. **Font is too small.** *View > Appearance > UI scale* enlarges the whole interface (125% to 200%); *Auto*, the default, only adapts the plot text to the screen. For the plots alone, open the canvas preferences (gear icon in the canvas toolbar) and raise *Font size*.
 2. **The tool crashed - did I lose my table?** Every *Draw* dumps the table; copies live in `~/.local/1Dtool/dumps`.
 3. **Can I run two instances?** Yes.
 4. **PON data:** set *Extremities* to 1 to retrieve the first point of the interval.
