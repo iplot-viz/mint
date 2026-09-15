@@ -22,7 +22,7 @@ from iplotProcessing.tools import Parser
 
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.models.utils import mtBlueprintParser as mtBP
-from mint.tools.table_parser import get_value
+from mint.tools.table_parser import get_value, str_to_arr
 
 from iplotDataAccess.appDataAccess import AppDataAccess
 
@@ -57,6 +57,7 @@ class MTSignalsModel(QAbstractItemModel):
     SignalRole = Qt.ItemDataRole.UserRole + 10
 
     ROWUID_COLNAME = 'uid'
+    PULSE_COLNAME = 'PulseId'
 
     def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
@@ -270,6 +271,20 @@ class MTSignalsModel(QAbstractItemModel):
         self.endRemoveRows()
 
         return success
+
+    def pulse_column(self) -> typing.Optional[int]:
+        columns = list(self._table.columns)
+        return columns.index(self.PULSE_COLNAME) if self.PULSE_COLNAME in columns else None
+
+    def pulses_in_table(self) -> typing.List[str]:
+        """Pulse identifiers typed in the PulseId column, in row order."""
+        if self.pulse_column() is None:
+            return []
+        pulses = []
+        for cell in self._table[self.PULSE_COLNAME]:
+            if isinstance(cell, str):
+                pulses.extend(str_to_arr(cell) or [])
+        return pulses
 
     def get_dataframe(self):
         filtered_rows = self._table[self._table.iloc[:, 1:-5].any(axis=1)]
