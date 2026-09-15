@@ -3,9 +3,9 @@
  * which Qt style plugins are installed on the host.
  *
  * Horizontal lengths are in em so the UI follows the application font.
- * Vertical lengths stay in px: Qt's em is the width of 'M', a horizontal
- * unit, and the two diverge badly with a monospace UI font -- using it for
- * vertical padding clipped button text. Borders stay in px too.
+ * Vertical lengths and borders stay in px: Qt's em is the width of 'M', which
+ * says nothing about the line height (with a monospace font the two differ
+ * enough to clip button text).
  */
 
 QWidget {

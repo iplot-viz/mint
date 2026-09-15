@@ -19,10 +19,8 @@ logger = setupLog.get_logger(__name__)
 STYLE_KEY = 'appearance/style'
 THEME_KEY = 'appearance/theme'
 SCALE_KEY = 'appearance/ui_scale'
-#: Factor handed to Qt through QT_SCALE_FACTOR at the next start, per screen.
-#: Kept in QSettings, which is per user and per machine -- deliberately NOT in
-#: the workspace, so the same workspace opens identically on a 4K and a FullHD
-#: workstation. The screen is what varies, not the plot.
+#: Factor exported as QT_SCALE_FACTOR at the next start. Per user and machine
+#: (QSettings), never in a workspace: the screen is what varies, not the plot.
 QT_SCALE_KEY = 'appearance/qt_scale_factor'
 #: What applies until the user picks otherwise.
 DEFAULT_SCALE = MODE_AUTO
@@ -51,15 +49,13 @@ _scale_listeners = []  # type: typing.List[typing.Callable[[float], None]]
 def startup_qt_scale_factor(settings=None) -> typing.Optional[str]:
     """The QT_SCALE_FACTOR to export before the QApplication is built.
 
-    Qt reads QT_SCALE_FACTOR once, at QGuiApplication construction, and it is
-    the only lever that scales *everything*: fonts, style primitives (radio
-    indicators, checkboxes, scroll bars), icons and spacing alike. Scaling the
-    application font instead moves the fonts and leaves the style primitives
-    behind, which is what made a 4K session look unbalanced rather than large.
+    Qt reads it once, at QGuiApplication construction, and it is the only
+    lever that scales everything alike: fonts, style primitives (radio
+    indicators, check boxes, scroll bars), icons and spacing. Scaling the
+    application font reaches the fonts only.
 
-    Returns None when nothing should be set: no stored factor, a factor of 1,
-    or a QT_SCALE_FACTOR already in the environment (the session or a launcher
-    script wins over us).
+    None when there is nothing to set: no stored factor, a factor of 1, or a
+    QT_SCALE_FACTOR already in the environment, which wins.
     """
     if os.environ.get('QT_SCALE_FACTOR'):
         return None
@@ -79,17 +75,15 @@ def startup_qt_scale_factor(settings=None) -> typing.Optional[str]:
 
 
 def remember_detected_qt_scale() -> typing.Optional[float]:
-    """Detect the panel and store the factor Qt should use from the next start.
+    """Store the factor detected for this screen, for Qt to use from the next
+    start: a screen can only be queried once the QApplication exists, and by
+    then Qt has read QT_SCALE_FACTOR.
 
-    Called once the QApplication exists, which is the earliest a screen can be
-    queried -- hence "from the next start". Returns the newly detected factor
-    when it differs from what is in effect, so the caller can tell the user a
-    restart would improve things, or None when nothing should change.
-
-    Only ever stored per machine in QSettings. A workspace never carries it.
+    Returns the detected factor when it differs from the one in effect, None
+    otherwise.
     """
     if os.environ.get('QT_SCALE_FACTOR'):
-        # Someone else is driving; do not second-guess or overwrite.
+        # Set by the session or a launcher: leave it alone.
         return None
     scale = DisplayScale.instance()
     if scale.mode != MODE_AUTO:

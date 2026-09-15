@@ -78,16 +78,11 @@ def create_app(argv=None) -> (QApplication, Namespace):
 def _export_qt_scale_factor(args):
     """Put QT_SCALE_FACTOR in the environment before Qt reads it.
 
-    QT_SCALE_FACTOR is the only lever that scales every part of the interface
-    together -- fonts, style primitives, icons, spacing -- and Qt reads it once,
-    at QGuiApplication construction. Scaling the application font afterwards
-    reaches the fonts and leaves radio indicators, checkboxes and scroll bars at
-    their unscaled pixel size.
-
-    The value is per user and per machine (QSettings), never part of a
-    workspace: the same workspace must open identically on a 4K and a FullHD
-    workstation. Anything already in the environment wins, so a launcher script
-    or a site-wide profile stays in control.
+    Qt reads it once, at QGuiApplication construction, and it is the only
+    lever that scales fonts, style primitives, icons and spacing together:
+    scaling the application font afterwards leaves radio indicators, check
+    boxes and scroll bars at their pixel size. Anything already in the
+    environment wins, so a launcher script or a site profile stays in control.
     """
     if args.ui_scale is not None:
         from iplotlib.core.display import MODE_FIXED, parse_scale_setting
@@ -95,10 +90,8 @@ def _export_qt_scale_factor(args):
         if mode == MODE_FIXED and abs(value - 1.0) > 1e-6 and not os.environ.get('QT_SCALE_FACTOR'):
             os.environ['QT_SCALE_FACTOR'] = f"{value:g}"
             return
-    # QSettings needs the organization/application names, which are set below on
-    # the QApplication; read the same store directly so this can run first.
-    # Same store the application uses once setOrganizationName/setApplicationName
-    # have run; named explicitly so this can execute before the QApplication.
+    # Named explicitly: QSettings() takes the organization and application
+    # names from the QApplication, which does not exist yet.
     settings = QSettings(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
                          "ITER", "MINT")
     from mint.gui.mtAppearance import startup_qt_scale_factor
