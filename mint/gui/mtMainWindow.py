@@ -489,6 +489,40 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.toolBar.exportAction.triggered.connect(self.on_export)
         self.toolBar.exportDataAction.triggered.connect(self.on_export_data)
         self.toolBar.importAction.triggered.connect(self.on_import)
+        self._wire_pulse_browser_selection()
+
+    def pulses_in_use(self):
+        """Every pulse the next draw would use: the data range selection plus
+        the per-row overrides typed in the signals table."""
+        pulses = list(self.dataRangeSelector.get_pulses_in_use())
+        pulses.extend(self.sigCfgWidget.model.pulses_in_table())
+        return list(dict.fromkeys(pulses))
+
+    def _wire_pulse_browser_selection(self):
+        # The pulse browser is a singleton opened from the pulse field, the
+        # time range and the table context menu. It asks this window what is
+        # in use, so no opener has to know about the others.
+        try:
+            from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
+            browser = PulseBrowser()
+        except Exception:
+            logger.exception("could not initialise PulseBrowser for the Selected column")
+            return
+        register = getattr(browser, 'set_selected_pulses_provider', None)
+        if register is None:
+            return
+        register(self.pulses_in_use)
+        self._refresh_pulse_selection = browser.refresh_selected_pulses
+        self.dataRangeSelector.pulsesChanged.connect(lambda *_: self._refresh_pulse_selection())
+        model = self.sigCfgWidget.model
+        model.dataChanged.connect(lambda tl, br, *_: self._on_signal_cells_changed(tl, br))
+        model.rowsRemoved.connect(lambda *_: self._refresh_pulse_selection())
+        model.modelReset.connect(lambda *_: self._refresh_pulse_selection())
+
+    def _on_signal_cells_changed(self, top_left, bottom_right):
+        column = self.sigCfgWidget.model.pulse_column()
+        if column is not None and top_left.column() <= column <= bottom_right.column():
+            self._refresh_pulse_selection()
 
     @staticmethod
     def on_table_abort(message):
@@ -972,6 +1006,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.drop_history()  # clean zoom history
         self.start_auto_refresh()
+        refresh = getattr(self, '_refresh_pulse_selection', None)
+        if refresh is not None:
+            refresh()
         self.indicate_ready()
 
     def stream_clicked(self):

@@ -209,6 +209,11 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 
+    def pulses_in_use(self) -> list:
+        # The field reads "<pulse> (<status>)" once a pulse fed the range.
+        pulse = self.pulseUsed.text().split(' (')[0].strip()
+        return [pulse] if pulse else []
+
     def fill_from_pulse(self, pulses):
         """Fill the timestamp fields from the selected pulse."""
         # Only process if opened from Time Range
