@@ -220,11 +220,7 @@ Plot-level preferences mirror the canvas-level ones. Signal-level preferences ar
 
 Most preference changes survive subsequent *Draw* calls; axis-limit changes do not. Click *Apply* to commit and close the panel.
 
-To persist preferences, save them and add to your profile:
-
-```
-IPLOT_CANVAS_CONFIG=~/.local/1DPreferences/default_properties.json
-```
+To persist preferences, save them: they are written to `~/.local/1DPreferences/default_properties.json` and read back on the next start. To share one file across users, point `IPLOT_CANVAS_CONFIG` at it; it takes precedence over the saved preferences.
 
 ### 2.9 Expressions {#expressions}
 

@@ -278,9 +278,7 @@ $ mint
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), focus all plots on stack.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>
 <p>Most preference changes survive subsequent <em>Draw</em> calls; axis-limit changes do not. Click <em>Apply</em> to commit and close the panel.</p>
-<p>To persist preferences, save them and add to your profile:</p>
-<pre><code>IPLOT_CANVAS_CONFIG=~/.local/1DPreferences/default_properties.json
-</code></pre>
+<p>To persist preferences, save them: they are written to <code>~/.local/1DPreferences/default_properties.json</code> and read back on the next start. To share one file across users, point <code>IPLOT_CANVAS_CONFIG</code> at it; it takes precedence over the saved preferences.</p>
 <h3 id="expressions">2.9 Expressions</h3>
 <h4>2.9.1 Simple processing</h4>
 <p>Wrap a variable in <code>${...}</code> and combine with NumPy operations. <code>${X}.data</code> and <code>${X}.time</code> refer to the data and time vectors of variable X.</p>
