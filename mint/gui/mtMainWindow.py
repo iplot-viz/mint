@@ -13,13 +13,12 @@ import getpass
 import inspect
 import json
 import os
-import pkgutil
 import socket
 import typing
 import pandas as pd
 
 from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
-from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPixmap, QAction
+from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
 
@@ -31,10 +30,12 @@ from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
+from iplotWidgets.sizing import clamp_to_screen
 
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
-from mint.gui.mtAppearance import MTAppearanceMenu
+from mint.gui.mtAppearance import MTAppearanceMenu, register_scale_listener
+from mint.tools.icon_loader import create_icon
 from mint.gui.mtCreatePulseDialog import MTCreatePulseDialog
 from mint.gui.mtDataRangeSelector import MTDataRangeSelector
 from mint.gui.mtErrorCatalog import ErrorCatalog
@@ -111,9 +112,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Console button and Icon
         self.console_button = QPushButton()
-        console_pxmap = QPixmap()
-        console_pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/terminal.png'))
-        self.console_button.setIcon(QIcon(console_pxmap))
+        console_icon = create_icon('terminal')
+        self.console_button.setIcon(console_icon)
 
         self.refreshTimer = QTimer(self)
         self.refreshTimer.setTimerType(Qt.TimerType.CoarseTimer)
@@ -210,7 +210,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         help_menu.addAction(about_qt_action)
 
         # QAction console widget
-        show_console_action = QAction(QIcon(console_pxmap), "&Show Console", self)
+        show_console_action = QAction(console_icon, "&Show Console", self)
         show_console_action.triggered.connect(self.sigCfgWidget.console.show_console)
         self.console_button.clicked.connect(self.sigCfgWidget.console.show_console)
 
@@ -224,17 +224,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
-        pxmap = QPixmap()
-        pxmap.loadFromData(pkgutil.get_data('mint.gui', 'icons/plot.png'))
-        self.drawBtn.setIcon(QIcon(pxmap))
+        plot_icon = create_icon('plot')
+        self.drawBtn.setIcon(plot_icon)
         self.streamBtn = QPushButton("Stream")
-        self.streamBtn.setIcon(QIcon(pxmap))
+        self.streamBtn.setIcon(plot_icon)
         # Reserve the size hint of the longest label so toggling never shifts neighbouring buttons.
         self.streamBtn.setText("Streamer Settings")
         self.streamBtn.setMinimumWidth(self.streamBtn.sizeHint().width())
         self.streamBtn.setText("Stream")
         self.exportBtn = QPushButton("Export")
-        self.exportBtn.setIcon(QIcon(pxmap))
+        self.exportBtn.setIcon(plot_icon)
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
@@ -269,7 +268,24 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._install_update_pulse()
         self._install_set_time_window()
         self._install_help_anchors()
-        self.resize(1920, 1080)
+        # 1920x1080 is the whole panel on a FullHD screen and the whole logical
+        # desktop on a 4K screen at 200%.
+        clamp_to_screen(self, 1920, 1080, share=0.95)
+        register_scale_listener(self._on_ui_scale_changed)
+
+    def _on_ui_scale_changed(self, factor: float):
+        """Rebuild the canvas so plot primitives pick up the new scale.
+
+        The widget font change propagates on its own, but the backends resolve
+        font/line/marker sizes while building the figure, so they need a rebuild.
+        """
+        widget = self.canvasStack.currentWidget()
+        if widget is None:
+            return
+        try:
+            widget.set_canvas(self.canvas)
+        except Exception as e:
+            logger.warning(f"Could not refresh the canvas after a UI scale change: {e}")
 
     def _install_help_anchors(self):
         # F1 over any of these widgets jumps to the matching manual
@@ -489,6 +505,40 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.toolBar.exportAction.triggered.connect(self.on_export)
         self.toolBar.exportDataAction.triggered.connect(self.on_export_data)
         self.toolBar.importAction.triggered.connect(self.on_import)
+        self._wire_pulse_browser_selection()
+
+    def pulses_in_use(self):
+        """Every pulse the next draw would use: the data range selection plus
+        the per-row overrides typed in the signals table."""
+        pulses = list(self.dataRangeSelector.get_pulses_in_use())
+        pulses.extend(self.sigCfgWidget.model.pulses_in_table())
+        return list(dict.fromkeys(pulses))
+
+    def _wire_pulse_browser_selection(self):
+        # The pulse browser is a singleton opened from the pulse field, the
+        # time range and the table context menu. It asks this window what is
+        # in use, so no opener has to know about the others.
+        try:
+            from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
+            browser = PulseBrowser()
+        except Exception:
+            logger.exception("could not initialise PulseBrowser for the Selected column")
+            return
+        register = getattr(browser, 'set_selected_pulses_provider', None)
+        if register is None:
+            return
+        register(self.pulses_in_use)
+        self._refresh_pulse_selection = browser.refresh_selected_pulses
+        self.dataRangeSelector.pulsesChanged.connect(lambda *_: self._refresh_pulse_selection())
+        model = self.sigCfgWidget.model
+        model.dataChanged.connect(lambda tl, br, *_: self._on_signal_cells_changed(tl, br))
+        model.rowsRemoved.connect(lambda *_: self._refresh_pulse_selection())
+        model.modelReset.connect(lambda *_: self._refresh_pulse_selection())
+
+    def _on_signal_cells_changed(self, top_left, bottom_right):
+        column = self.sigCfgWidget.model.pulse_column()
+        if column is not None and top_left.column() <= column <= bottom_right.column():
+            self._refresh_pulse_selection()
 
     @staticmethod
     def on_table_abort(message):
@@ -972,6 +1022,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.drop_history()  # clean zoom history
         self.start_auto_refresh()
+        refresh = getattr(self, '_refresh_pulse_selection', None)
+        if refresh is not None:
+            refresh()
         self.indicate_ready()
 
     def stream_clicked(self):
@@ -1211,9 +1264,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         super().closeEvent(event)
 
     def build(self, stream=False):
-        # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
+        # Clear shared parser environment to ensure a clean rebuild. The parser itself
+        # is cleared by set_canvas right before drawing: doing it here would blank the
+        # plots for as long as the data fetch below takes (visible on every refresh tick).
         ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
 
         # Clear shift tracking so stale state from previous canvas does not
         # interfere with future shift operations (UIDs are regenerated on each build).

@@ -23,6 +23,7 @@ logger = setupLogger.get_logger(__name__)
 
 class MTDataRangeSelector(QWidget):
     modeChanged = Signal()
+    pulsesChanged = Signal()
     cancelRefresh = Signal()
     refreshActivate = Signal()
     refreshDeactivate = Signal()
@@ -67,6 +68,12 @@ class MTDataRangeSelector(QWidget):
         self.accessModes[2].cancelButton.clicked.connect(self.cancelRefresh.emit)
         self.refreshActivate.connect(partial(self.accessModes[2].cancelButton.setDisabled, False))
         self.refreshDeactivate.connect(partial(self.accessModes[2].cancelButton.setDisabled, True))
+
+        # Whatever changes the pulses feeding the canvas: the mode, the pulse
+        # list, or the pulse a time range was taken from.
+        self.modeChanged.connect(self.pulsesChanged.emit)
+        self.accessModes[0].pulseUsed.textChanged.connect(lambda *_: self.pulsesChanged.emit())
+        self.accessModes[1].pulseNumber.textChanged.connect(lambda *_: self.pulsesChanged.emit())
 
     def export_dict(self) -> dict:
         item = self.accessModes[self.stack.currentIndex()]
@@ -119,6 +126,10 @@ class MTDataRangeSelector(QWidget):
         model = self.accessModes[self.stack.currentIndex()]
         if model.mode == MTGenericAccessMode.PULSE_NUMBER:
             return model.properties().get("pulse_nb")
+
+    def get_pulses_in_use(self) -> List[str]:
+        """Pulses the current mode feeds to the canvas (none for relative time)."""
+        return self.accessModes[self.stack.currentIndex()].pulses_in_use()
 
     @staticmethod
     def get_time_now() -> int:

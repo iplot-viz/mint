@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QPlainTextEdit, QStyle, QToolButton, QVBoxLayout, QWidget,
 )
 
+from iplotWidgets.sizing import clamp_to_screen
+
 PULSE_STATUS_OPTIONS = ["completed", "aborted", "terminated", "failed"]
 DESCRIPTION_MAX_CHARS = 200
 DEFAULT_PULSE_LOCATION = "ITER"
@@ -108,7 +110,7 @@ class MTCategoryPicker(QDialog):
 
         # Production serves hundreds of categories: keep the window bounded so
         # the list scrolls instead of growing (still resizable by the user).
-        self.resize(380, 480)
+        clamp_to_screen(self, 380, 480)
 
     def selected_category(self) -> Optional[str]:
         item = self.listWidget.currentItem()
@@ -167,7 +169,7 @@ class MTCreatePulseDialog(QDialog):
         self.statusCombo.addItems(PULSE_STATUS_OPTIONS)
 
         self.rangePreview = QLabel("", self)
-        self.rangePreview.setStyleSheet("color: #555; font-style: italic;")
+        self.rangePreview.setStyleSheet("color: palette(mid); font-style: italic;")
 
         # Built before the editors below, which refresh it as soon as they change.
         fraction_validator = QRegularExpressionValidator(
