@@ -10,13 +10,22 @@ from iplotlib.core.display import apply_hidpi_policy
 from mint._version import get_versions
 
 
+CANVAS_IMPLS = ('matplotlib', 'pyqt')
+
+
+def default_canvas_impl() -> str:
+    """Canvas implementation used without --impl: MINT_IMPL when it names one, matplotlib otherwise."""
+    value = os.environ.get('MINT_IMPL', '').strip().lower()
+    return value if value in CANVAS_IMPLS else 'matplotlib'
+
+
 def create_app(argv=None) -> (QApplication, Namespace):
     if argv is None:
         argv = []
     parser = ArgumentParser(description='MINT application')
     parser.add_argument('--impl', metavar='canvas_impl',
-                        help='Use canvas implementation (matplotlib/pyqt)', choices=['matplotlib', 'pyqt'],
-                        default="matplotlib")
+                        help='Use canvas implementation (matplotlib/pyqt); MINT_IMPL sets the default',
+                        choices=list(CANVAS_IMPLS), default=default_canvas_impl())
     parser.add_argument('--use-fallback-samples', dest='use_fallback_samples', action='store_true', default=False)
     parser.add_argument('-b', dest='blueprint_file', metavar='blueprint_file',
                         help='Load blueprint from .json file', default=None)
