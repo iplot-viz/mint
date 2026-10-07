@@ -194,6 +194,10 @@ Right-click a plot for per-plot actions:
 - **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
 - **Set as time window** — copies the plot's visible range into the query time range (switching to the *Time Range* tab, or keeping relative seconds in pulse mode), so the next *Draw* fetches exactly what you zoomed into.
 
+#### Legend
+
+Click a signal's line or name to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and what you did to the legend are kept by *Draw* and saved with the workspace.
+
 #### Reading tick labels with very large values
 
 When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in *offset + scale* form, shown in the corner of the axis. A corner label like `1e9+1.121e15` is interpreted as follows:
