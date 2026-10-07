@@ -98,15 +98,18 @@ class ShiftHandlerMixin:
             return
 
         if signal_uid not in self._shift_original_exprs:
+            original_signal, _ = self._find_signal_in_canvas(signal_uid)
             self._shift_original_exprs[signal_uid] = {
                 'x': df.at[row_idx, 'x'] if 'x' in df.columns else '',
                 'y': df.at[row_idx, 'y'] if 'y' in df.columns else '',
-                'original_alias': df.at[row_idx, 'Alias'] if 'Alias' in df.columns else ''
+                'original_alias': df.at[row_idx, 'Alias'] if 'Alias' in df.columns else '',
+                'original_label': getattr(original_signal, 'label', '') or getattr(original_signal, 'name', '')
             }
-            self._shift_accumulated[signal_uid] = {'dx': 0.0, 'dy': 0.0}
+            self._shift_accumulated[signal_uid] = {'dx': 0.0, 'dy': 0.0, 'count': 0}
 
         self._shift_accumulated[signal_uid]['dx'] += dx
         self._shift_accumulated[signal_uid]['dy'] += dy
+        self._shift_accumulated[signal_uid]['count'] += 1
         new_x, new_y = self._build_offset_expressions(
             model, signal_uid,
             self._shift_accumulated[signal_uid]['dx'],
@@ -133,30 +136,31 @@ class ShiftHandlerMixin:
         df = model.get_dataframe()
 
         row_idx = self._find_row_by_uid(df, signal_uid)
-        if row_idx is None:
+        # Untracked: the canvas was rebuilt since the shift and the row already keeps it.
+        if row_idx is None or signal_uid not in self._shift_accumulated:
             return
 
-        if signal_uid in self._shift_accumulated:
-            self._shift_accumulated[signal_uid]['dx'] -= dx
-            self._shift_accumulated[signal_uid]['dy'] -= dy
+        accumulated = self._shift_accumulated[signal_uid]
+        accumulated['dx'] -= dx
+        accumulated['dy'] -= dy
+        accumulated['count'] -= 1
+        if accumulated['count'] <= 0:
+            # Adding and subtracting large offsets does not always give back 0.0.
+            accumulated.update(dx=0.0, dy=0.0, count=0)
 
-        new_x, new_y = self._build_offset_expressions(
-            model, signal_uid,
-            self._shift_accumulated.get(signal_uid, {}).get('dx', 0.0),
-            self._shift_accumulated.get(signal_uid, {}).get('dy', 0.0)
-        )
+        new_x, new_y = self._build_offset_expressions(model, signal_uid, accumulated['dx'], accumulated['dy'])
         self._set_row_xy(model, row_idx, new_x, new_y)
 
-        # Restore original alias when offset goes back to zero
-        remaining_dx = self._shift_accumulated.get(signal_uid, {}).get('dx', 0.0)
-        remaining_dy = self._shift_accumulated.get(signal_uid, {}).get('dy', 0.0)
-        if abs(remaining_dx) < 1e-10 and abs(remaining_dy) < 1e-10:
-            if signal_uid in self._shift_original_exprs:
-                df = model.get_dataframe()
-                if 'Alias' in df.columns:
-                    original_alias = self._shift_original_exprs[signal_uid].get('original_alias', '')
-                    model.setData(model.createIndex(row_idx, df.columns.get_loc('Alias')), original_alias, 2)
-                    self._update_signal_label_and_legend(signal_uid, original_alias)
+        # Restore original alias and label when every shift is undone
+        if accumulated['count'] == 0:
+            tracking = self._shift_original_exprs[signal_uid]
+            df = model.get_dataframe()
+            if 'Alias' in df.columns:
+                model.setData(model.createIndex(row_idx, df.columns.get_loc('Alias')),
+                              tracking.get('original_alias', ''), 2)
+            # A row without alias showed the variable name, not an empty label.
+            self._update_signal_label_and_legend(
+                signal_uid, tracking.get('original_label') or tracking.get('original_alias', ''))
 
     def _on_signal_shift_pulse_applied(self, signal_uid: str, pulse_id: str, dx: float, dy: float, source: str):
         """Create or update dedicated row when pulse mode shift is applied."""

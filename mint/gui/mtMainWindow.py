@@ -1508,6 +1508,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.prefWindow.formsStack.currentWidget().widgetMapper.revert()
         self.prefWindow.update()
         self.canvasStack.currentWidget().stats(self.canvas)
+        # The history acts on the canvas just replaced: undoing a shift would draw
+        # its old signal again and leave the new one shifted.
+        self.drop_history()
 
         self.indicate_ready()
 
