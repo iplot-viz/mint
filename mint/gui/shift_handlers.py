@@ -1,16 +1,46 @@
 """Signal shift handlers for DIST dialog and drag operations."""
 
 import re
+import uuid
+import weakref
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QModelIndex
 
+from iplotlib.core.command import IplotCommand
 import iplotLogging.setupLogger as Sl
 
 logger = Sl.get_logger(__name__)
 
 if TYPE_CHECKING:
     from iplotlib.core.canvas import Canvas
+
+
+class ShiftedCopyCommand(IplotCommand):
+    """Undo/redo of a shifted copy of a signal: its row in the table and its curve.
+
+    The copy is found by the uid of its row. Its signals are built once and drawn
+    again on redo: a later command on the copy (a shift) holds those objects.
+    """
+
+    def __init__(self, window, row: dict, row_idx: int) -> None:
+        super().__init__('Shift')
+        self._window = weakref.ref(window)
+        self._row = row
+        self._row_idx = row_idx
+        self._signals = None
+
+    def __call__(self):
+        super().__call__()
+        window = self._window()
+        if window is not None:
+            self._signals = window._add_shifted_copy(self._row, self._row_idx, self._signals)
+
+    def undo(self):
+        super().undo()
+        window = self._window()
+        if window is not None:
+            window._remove_shifted_copy(self._row['uid'])
 
 
 class ShiftHandlerMixin:
@@ -486,9 +516,6 @@ class ShiftHandlerMixin:
 
         if duplicate:
             self._handle_dist_duplicate(model, original_signal, signal_uid, dx, dy)
-            self.canvasStack.refreshLinks()
-            w.check_markers(self.canvas)
-            w.stats(self.canvas)
             return
 
         signal_pulse = getattr(original_signal, 'pulse_nb', None)
@@ -532,7 +559,8 @@ class ShiftHandlerMixin:
         w.stats(self.canvas)
 
     def _handle_dist_duplicate(self, model, original_signal, signal_uid: str, dx: float, dy: float):
-        """Create a new shifted row while keeping the original unchanged."""
+        """Add a shifted copy of the signal next to it, drawn at once and undoable,
+        while keeping the original unchanged."""
         df = model.get_dataframe()
         row_idx = self._find_row_by_uid_or_variable(df, signal_uid, original_signal)
         if row_idx is None:
@@ -541,33 +569,101 @@ class ShiftHandlerMixin:
         var_name = df.at[row_idx, 'Variable'] if 'Variable' in df.columns else ''
         original_x = df.at[row_idx, 'x'] if 'x' in df.columns else ''
         original_y = df.at[row_idx, 'y'] if 'y' in df.columns else ''
-        original_stack = df.at[row_idx, 'Stack'] if 'Stack' in df.columns else ''
-
         new_x, new_y = self._build_offset_expressions_from(model, original_x, original_y, dx, dy)
+
+        # Like a shifted pulse in pulse mode, the copy is only the pulse that was picked.
+        pulse = str(getattr(original_signal, 'pulse_nb', None) or '').strip()
         row_alias = df.at[row_idx, 'Alias'] if 'Alias' in df.columns else ''
-        new_alias = self._generate_unique_alias(model, var_name, 'shifted', row_alias=row_alias)
+        new_alias = self._generate_unique_alias(model, var_name, 'shifted', pulse or None, row_alias=row_alias)
 
-        new_row_idx = row_idx + 1
-        model.insertRows(new_row_idx, 1, QModelIndex())
+        row = {col_name: df.at[row_idx, col_name] for col_name in df.columns
+               if col_name not in ('Status', 'Output Datatype')}
+        row.update({'uid': str(uuid.uuid4()), 'x': new_x, 'y': new_y, 'Alias': new_alias})
+        if pulse and 'PulseId' in df.columns:
+            row['PulseId'] = pulse
+
+        cmd = ShiftedCopyCommand(self, row, row_idx + 1)
+        cmd()
+        w = self.canvasStack.currentWidget()
+        w._parser._hm.done(cmd)
+        w.cmdDone.emit(cmd)
+
+    def _add_shifted_copy(self, row: dict, row_idx: int, signals=None):
+        """Insert the row of a shifted copy at `row_idx` and draw its signals.
+
+        `signals` are the (plot, stack, signal) of the copy drawn before; without them
+        they are built from the row, which fetches their data. Returns them.
+        """
+        model = self.sigCfgWidget.model
+        model.insertRows(row_idx, 1, QModelIndex())
         df = model.get_dataframe()
-
         for col_idx, col_name in enumerate(df.columns):
-            if col_name == 'uid':
+            if row.get(col_name) is not None:
+                model.setData(model.createIndex(row_idx, col_idx), row[col_name], 2)
+
+        w = self.canvasStack.currentWidget()
+        # An iplotlib without add_signal leaves the copy in the table until the next Draw.
+        add_signal = getattr(w._parser, 'add_signal', None)
+        if add_signal is None:
+            self._refresh_after_copy(w)
+            return signals
+        if signals is None:
+            signals = self._build_copy_signals(model, row, row_idx)
+        for plot, stack_num, signal in signals:
+            impl_plot = self._drawn_stack(w, plot, stack_num)
+            if impl_plot is not None:
+                add_signal(impl_plot, plot, signal, stack_num)
+        self._refresh_after_copy(w)
+        return signals
+
+    def _build_copy_signals(self, model, row: dict, row_idx: int):
+        """Build and fetch the signals of the copy's row, the way Draw does."""
+        signals = []
+        with model.init_create_signals():
+            waypoints = list(model.create_signals(row_idx, self.sigCfgWidget.invalid_stacks))
+        for waypt in waypoints:
+            if not waypt.stack_num or not waypt.col_num or not waypt.row_num:
                 continue
-            elif col_name == 'x':
-                val = new_x
-            elif col_name == 'y':
-                val = new_y
-            elif col_name == 'Alias':
-                val = new_alias
-            elif col_name == 'Stack':
-                val = original_stack
-            elif col_name not in ['Status', 'Output Datatype']:
-                val = df.at[row_idx, col_name]
-            else:
+            signal = waypt.func(*waypt.args, **waypt.kwargs)
+            if not signal.label:
                 continue
-            if val is not None:
-                model.setData(model.createIndex(new_row_idx, col_idx), val, 2)
+            model.update_signal_data(waypt.idx, signal, True)
+            if signal.status_info.result == 'Fail':
+                continue
+            signals.append((self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1], waypt.stack_num, signal))
+        # Redo inserts the row again with the status its data access left.
+        df = model.get_dataframe()
+        for col_name in ('Status', 'Output Datatype'):
+            if col_name in df.columns:
+                row[col_name] = df.at[row_idx, col_name]
+        return signals
+
+    def _remove_shifted_copy(self, uid: str):
+        """Take a shifted copy off the canvas and remove its row."""
+        w = self.canvasStack.currentWidget()
+        remove_signal = getattr(w._parser, 'remove_signal', None)
+        if remove_signal is not None:
+            for signal in [s for s in w.get_signals(self.canvas) if s.uid == uid]:
+                remove_signal(signal)
+        model = self.sigCfgWidget.model
+        row_idx = self._find_row_by_uid(model.get_dataframe(), uid)
+        if row_idx is not None:
+            model.removeRows(row_idx, 1, QModelIndex())
+        self._refresh_after_copy(w)
+
+    @staticmethod
+    def _drawn_stack(w, plot, stack_num):
+        """The drawn stack `stack_num` of `plot`, found through a signal already drawn on it."""
+        for sibling in plot.signals.get(stack_num, []):
+            impl_plot = w._parser._signal_impl_plot_lut.get(w._parser.signal_lut_key(sibling))
+            if impl_plot is not None:
+                return impl_plot
+        return None
+
+    def _refresh_after_copy(self, w):
+        self.canvasStack.refreshLinks()
+        w.check_markers(self.canvas)
+        w.stats(self.canvas)
 
     def _find_row_by_uid(self, df, signal_uid: str):
         """Find row index by signal uid."""

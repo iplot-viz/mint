@@ -17,9 +17,11 @@ the shift entirely.
 
 import unittest
 
+import numpy as np
 import pandas as pd
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
+from iplotlib.core.impl_base import BackendParserBase
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 
 from mint.gui.mtMainWindow import MTMainWindow
@@ -196,6 +198,58 @@ class ShiftAppliedUpdatesModelTest(unittest.TestCase):
 
             self.assertFalse(qt_canvas.can_undo())
             self.assertIn('+ 2.5', win.sigCfgWidget.model.get_dataframe().at[0, 'y'])
+        finally:
+            win.close()
+
+    @staticmethod
+    def _duplicate(win, uid, dy):
+        """Apply Shift with 'Duplicate signal' ticked in the DIST dialog."""
+        signal, _ = win._find_signal_in_canvas(uid)
+        win._on_signal_shift_requested(uid, signal.name, signal.data_source,
+                                       str(signal.pulse_nb), 0.0, dy, True)
+        return signal
+
+    def test_duplicate_adds_a_shifted_row_that_undo_removes(self):
+        """The copy is a row of its own, for the pulse that was picked, and it
+        goes away on undo and comes back on redo."""
+        win = _build_main_window()
+        try:
+            uid = _populate_and_draw(win, alias='')
+            self._duplicate(win, uid, 2.5)
+
+            df = win.sigCfgWidget.model.get_dataframe()
+            self.assertEqual(df.at[0, 'Alias'], '')
+            self.assertTrue(df.at[1, 'Alias'].startswith('shifted_'))
+            self.assertIn('+ 2.5', df.at[1, 'y'])
+            self.assertEqual(df.at[1, 'PulseId'], PULSE_ID)
+            copy_alias = df.at[1, 'Alias']
+
+            win.undo()
+            self.assertNotIn(copy_alias, win.sigCfgWidget.model.get_dataframe()['Alias'].tolist())
+
+            win.redo()
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[1, 'Alias'], copy_alias)
+        finally:
+            win.close()
+
+    @unittest.skipUnless(hasattr(BackendParserBase, 'add_signal'),
+                         "drawing the copy needs an iplotlib with add_signal")
+    def test_duplicate_is_drawn_at_once_and_undo_takes_it_off(self):
+        win = _build_main_window()
+        try:
+            uid = _populate_and_draw(win, alias='')
+            plot = win.canvas.plots[0][0]
+            original = self._duplicate(win, uid, 2.5)
+
+            copy_alias = win.sigCfgWidget.model.get_dataframe().at[1, 'Alias']
+            self.assertEqual([s.label for s in plot.signals[1]], [original.label, copy_alias])
+            np.testing.assert_allclose(plot.signals[1][1].y_data, np.asarray(original.y_data) + 2.5)
+
+            win.undo()
+            self.assertEqual([s.label for s in plot.signals[1]], [original.label])
+
+            win.redo()
+            self.assertEqual([s.label for s in plot.signals[1]], [original.label, copy_alias])
         finally:
             win.close()
 
