@@ -102,6 +102,32 @@ class AccessModeSwitchingTest(unittest.TestCase):
         finally:
             sel.close()
 
+    def test_pulses_in_use_follow_the_current_mode(self):
+        sel = self._selector()
+        try:
+            sel.accessModes[1].pulseNumber.setText('ITER:A/1, ITER:B/2,')
+            sel.accessModes[0].pulseUsed.setText('ITER:C/3 (not found)')
+            sel.select_page(1)
+            self.assertEqual(sel.get_pulses_in_use(), ['ITER:A/1', 'ITER:B/2'])
+            sel.select_page(0)
+            self.assertEqual(sel.get_pulses_in_use(), ['ITER:C/3'])
+            sel.select_page(2)
+            self.assertEqual(sel.get_pulses_in_use(), [])
+        finally:
+            sel.close()
+
+    def test_pulses_changed_fires_on_mode_switch_and_pulse_edits(self):
+        sel = self._selector()
+        fired = []
+        sel.pulsesChanged.connect(lambda *_: fired.append(True))
+        try:
+            sel.select_page(1)
+            sel.accessModes[1].pulseNumber.setText('ITER:A/1')
+            sel.accessModes[0].pulseUsed.setText('ITER:C/3 (not found)')
+            self.assertEqual(len(fired), 3)
+        finally:
+            sel.close()
+
 
 if __name__ == '__main__':
     unittest.main()

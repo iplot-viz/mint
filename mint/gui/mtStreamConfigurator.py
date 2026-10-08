@@ -46,15 +46,15 @@ class MTStreamConfigurator(QDialog):
         for key, (label, _) in self.stwOptions.items():
             self.ui.windowComboBox.addItem(label, key)
 
-        self._prev_unit_key = "hours"
-        self.ui.windowComboBox.setCurrentIndex(list(self.stwOptions).index(self._prev_unit_key))
+        self.ui.windowComboBox.setCurrentIndex(list(self.stwOptions).index("hours"))
 
         self.ui.windowSpinBox.setMinimum(1)
         self._update_spinbox_range()
         self.ui.windowSpinBox.setValue(self.streamTimeWindow // self._unit_multiplier())
 
-        # Connect after initial setup so the signal does not fire during construction.
-        self.ui.windowComboBox.currentIndexChanged.connect(self._on_unit_changed)
+        # Connected after the initial setup so it does not fire during construction.
+        # The number stays as typed when the unit changes; only its range follows.
+        self.ui.windowComboBox.currentIndexChanged.connect(self._update_spinbox_range)
 
         self.ui.startButton.clicked.connect(self.start)
         self.ui.cancelButton.clicked.connect(self.hide)
@@ -64,19 +64,6 @@ class MTStreamConfigurator(QDialog):
 
     def _update_spinbox_range(self):
         self.ui.windowSpinBox.setMaximum(self.MAX_WINDOW_SECONDS // self._unit_multiplier())
-
-    def _on_unit_changed(self):
-        new_key = self.ui.windowComboBox.currentData()
-        if new_key == self._prev_unit_key:
-            return
-        # Preserve the duration when the unit changes, clamping to the new range.
-        old_multiplier = self.stwOptions[self._prev_unit_key][1]
-        new_multiplier = self.stwOptions[new_key][1]
-        seconds = self.ui.windowSpinBox.value() * old_multiplier
-        self._prev_unit_key = new_key
-        self._update_spinbox_range()
-        new_value = max(1, min(seconds // new_multiplier, self.ui.windowSpinBox.maximum()))
-        self.ui.windowSpinBox.setValue(new_value)
 
     def time_window(self) -> int:
         return int(self.ui.windowSpinBox.value()) * self._unit_multiplier()

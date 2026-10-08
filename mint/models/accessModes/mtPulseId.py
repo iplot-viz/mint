@@ -135,6 +135,9 @@ class MTPulseId(MTGenericAccessMode):
         self.selectPulseDialog.show()
         self.selectPulseDialog.activateWindow()
 
+    def pulses_in_use(self) -> list:
+        return [p.strip() for p in self.pulseNumber.text().split(',') if p.strip()]
+
     def append_pulse(self, pulses):
         # Only process if opened from PulseId
         if self.selectPulseDialog.flag != "pulse_id":

@@ -73,6 +73,8 @@ To start the tool:
 $ mint
 ```
 
+Plots use matplotlib by default; `mint --impl pyqt` switches to PyQtGraph, and the `MINT_IMPL` environment variable does the same when the tool is started without a command line.
+
 <div class="note">If MINT exits with <em>"no data sources found, exiting"</em>, it could not find a valid UDA or IMAS server. See <a href="#errors-no-data-sources">Error reference - No data sources</a> and <a href="#data-sources">section 2.10</a>.</div>
 
 ### 2.2 Logging {#logging}
@@ -102,7 +104,7 @@ Data can be queried by:
 <p style="text-align:center;margin:14px 0;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
 
-Multiple pulse IDs can be overlaid by separating them with commas. Use the *Search* button next to the Pulse ID field to browse pulses.
+Multiple pulse IDs can be overlaid by separating them with commas. Use the *Search* button next to the Pulse ID field to browse pulses; the *Selected* column marks the pulses the canvas uses (this field, the pulse a time range was taken from, and any *PulseId* typed in the signals table), it follows those while the search stays open, and sorting by it brings them to the top. The page numbers next to the `<` `>` arrows jump straight to a page.
 
 ### 2.4 Table {#table}
 
@@ -110,7 +112,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
 
-In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
+In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
 
 <p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
@@ -140,7 +142,7 @@ Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*.
 
 ### 2.5 Draw, Stream {#draw-stream}
 
-Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the value is converted automatically when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution.
+Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
 
 <p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
@@ -207,10 +209,10 @@ So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000
 
 Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
 
-- **Rows**: one row per ruler and per plot it is drawn on — with shared time on, a ruler placed on one plot appears on all of them and gets a row for each, so the *Plot* column tells them apart. Every row carries the ruler's X value and one column per crossed signal with its value at the ruler (blank where the ruler sits off a signal, or where the signal belongs to another plot). The Y value only appears on the plot you placed the ruler on, the one whose scale it was read against. The row also holds the controls *Visible* (show or hide the ruler), *Labels* (show the name tag, the signal-value tags, both or neither — this one applies only to that row's plot), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default). Long signal names wrap over several header lines, and hovering a header shows the full name.
+- **Rows**: one row per ruler and per plot it is drawn on — with shared time on, a ruler placed on one plot appears on all of them and gets a row for each, so the *Plot* column tells them apart. Every row carries the ruler's X value and one column per crossed signal with its value at the ruler (blank where the ruler sits off a signal, or where the signal belongs to another plot). The Y value only appears on the plot you placed the ruler on, the one whose scale it was read against. The row also holds the controls *Visible* (show or hide the ruler), *Labels* (show the ruler's own tags — name, X and Y values — the signal-value tags, both or neither; this one applies only to that row's plot), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default). Rows are listed by plot; click a header to sort by another column. Select several rows (Ctrl or Shift click, Ctrl+A for all of them) and change a control on any of them to apply it to the whole selection. Long signal names wrap over several header lines, and hovering a header shows the full name.
 - **Columns**: a read-only view with one section per plot — rulers ordered by X value as columns, one row per signal below the X row (plus a Y row on the plot the ruler was placed on), and a Δ column showing the gap between neighbours for each of them.
 
-*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
+*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed, and *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once; both menus start with a *Select all* / *Deselect all* entry. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; ΔX is the time distance, while ΔY and the signal deltas are signed (later ruler minus earlier one), and on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
 
 #### Canvas-level preferences
 
@@ -220,11 +222,7 @@ Plot-level preferences mirror the canvas-level ones. Signal-level preferences ar
 
 Most preference changes survive subsequent *Draw* calls; axis-limit changes do not. Click *Apply* to commit and close the panel.
 
-To persist preferences, save them and add to your profile:
-
-```
-IPLOT_CANVAS_CONFIG=~/.local/1DPreferences/default_properties.json
-```
+To persist preferences, save them: they are written to `~/.local/1DPreferences/default_properties.json` and read back on the next start. To share one file across users, point `IPLOT_CANVAS_CONFIG` at it; it takes precedence over the saved preferences.
 
 ### 2.9 Expressions {#expressions}
 
@@ -290,7 +288,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 }
 ```
 
-Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used.
+Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first `-` or `.` of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on `-`, `.` and `_` until none holds more. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
@@ -331,7 +329,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 
 ## 5. FAQ {#faq}
 
-1. **Font is too small.** Two options. From the GUI: open the canvas preferences (gear icon in the canvas toolbar) and raise *Font size*. Globally for the whole application: set `QT_SCALE_FACTOR=2` (or another value) before starting MINT.
+1. **Font is too small.** *View > Appearance > UI scale* enlarges the whole interface (125% to 200%); *Auto*, the default, only adapts the plot text to the screen. For the plots alone, open the canvas preferences (gear icon in the canvas toolbar) and raise *Font size*.
 2. **The tool crashed - did I lose my table?** Every *Draw* dumps the table; copies live in `~/.local/1Dtool/dumps`.
 3. **Can I run two instances?** Yes.
 4. **PON data:** set *Extremities* to 1 to retrieve the first point of the interval.

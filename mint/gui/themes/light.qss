@@ -1,6 +1,11 @@
 /* MINT light theme
  * A flat, self-contained light look, independent of the desktop theme and of
  * which Qt style plugins are installed on the host.
+ *
+ * Horizontal lengths are in em so the UI follows the application font.
+ * Vertical lengths and borders stay in px: Qt's em is the width of 'M', which
+ * says nothing about the line height (with a monospace font the two differ
+ * enough to clip button text).
  */
 
 QWidget {
@@ -21,7 +26,7 @@ QDateEdit, QTimeEdit, QDateTimeEdit, QComboBox {
     background-color: #ffffff;
     border: 1px solid #b6b9bf;
     border-radius: 3px;
-    padding: 2px 4px;
+    padding: 2px 0.333em;
 }
 
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
@@ -32,7 +37,7 @@ QComboBox:focus {
 
 QComboBox::drop-down {
     border: none;
-    width: 18px;
+    width: 1.5em;
 }
 
 QComboBox QAbstractItemView {
@@ -46,7 +51,7 @@ QPushButton, QToolButton {
     background-color: #e2e4e8;
     border: 1px solid #b6b9bf;
     border-radius: 3px;
-    padding: 3px 10px;
+    padding: 3px 0.833em;
 }
 
 QToolButton {
@@ -93,13 +98,13 @@ QMenu::item:selected {
 QMenu::separator {
     height: 1px;
     background: #d6d9de;
-    margin: 3px 6px;
+    margin: 3px 0.5em;
 }
 
 QToolBar {
     background-color: #f2f3f5;
     border: none;
-    spacing: 2px;
+    spacing: 0.167em;
 }
 
 /* --- item views --------------------------------------------------------- */
@@ -116,7 +121,7 @@ QHeaderView::section {
     border: none;
     border-right: 1px solid #b6b9bf;
     border-bottom: 1px solid #b6b9bf;
-    padding: 3px 6px;
+    padding: 3px 0.5em;
 }
 
 QTableCornerButton::section {
@@ -132,7 +137,7 @@ QTabWidget::pane {
 QTabBar::tab {
     background: #e9eaee;
     border: 1px solid #b6b9bf;
-    padding: 4px 10px;
+    padding: 4px 0.833em;
 }
 
 QTabBar::tab:selected {
@@ -143,7 +148,7 @@ QTabBar::tab:selected {
 
 QScrollBar:vertical {
     background: #e9eaee;
-    width: 12px;
+    width: 1em;
     margin: 0;
 }
 
@@ -162,7 +167,7 @@ QScrollBar::handle:vertical {
 
 QScrollBar::handle:horizontal {
     background: #c2c6cc;
-    min-width: 24px;
+    min-width: 2em;
     border-radius: 5px;
     margin: 2px;
 }
@@ -183,7 +188,7 @@ QScrollBar::add-page, QScrollBar::sub-page {
 /* --- checkable indicators ------------------------------------------------ */
 
 QCheckBox::indicator, QRadioButton::indicator {
-    width: 14px;
+    width: 1.167em;
     height: 14px;
     border: 1px solid #b6b9bf;
     background-color: #ffffff;
@@ -214,7 +219,7 @@ QGroupBox {
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 8px;
-    padding: 0 3px;
+    padding: 0 0.25em;
 }
 
 QSplitter::handle {

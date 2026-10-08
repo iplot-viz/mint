@@ -83,6 +83,27 @@ class StreamConfiguratorStateTest(unittest.TestCase):
         finally:
             cfg.close()
 
+    def test_unit_change_keeps_the_number(self):
+        cfg = self._configurator()
+        try:
+            cfg.ui.windowComboBox.setCurrentIndex(list(cfg.stwOptions).index("hours"))
+            cfg.ui.windowSpinBox.setValue(1)
+            cfg.ui.windowComboBox.setCurrentIndex(list(cfg.stwOptions).index("minutes"))
+            self.assertEqual(cfg.ui.windowSpinBox.value(), 1)
+            self.assertEqual(cfg.time_window(), 60)
+        finally:
+            cfg.close()
+
+    def test_unit_change_clamps_to_the_seven_day_limit(self):
+        cfg = self._configurator()
+        try:
+            cfg.ui.windowComboBox.setCurrentIndex(list(cfg.stwOptions).index("hours"))
+            cfg.ui.windowSpinBox.setValue(100)
+            cfg.ui.windowComboBox.setCurrentIndex(list(cfg.stwOptions).index("days"))
+            self.assertEqual(cfg.ui.windowSpinBox.value(), 7)
+        finally:
+            cfg.close()
+
     def test_max_points_defaults_when_env_absent(self):
         cfg = self._configurator()
         os.environ.pop('MINT_MAX_STREAMING_POINTS', None)

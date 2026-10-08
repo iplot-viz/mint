@@ -24,9 +24,9 @@ classifiers = [
 ]
 dependencies = [
     "iplotLogging >= 1.2.2",
-    "iplotlib >= 1.5.1",
-    "iplotDataAccess >= 1.5.1",
-    "iplotWidgets >= 1.5.0",
+    "iplotlib >= 1.5.2.post1",
+    "iplotDataAccess >= 1.5.2.post1",
+    "iplotWidgets >= 1.5.2.post1",
     "iplotProcessing >= 1.2.1",
     "pandas >= 2.2.0",
     "psutil >= 5.8.0",
@@ -47,7 +47,7 @@ where = ["."]
 include = ["mint*"]
 
 [tool.setuptools.package-data]
-"mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "canvas_properties/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*"]
+"mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*"]
 "mint.gui" = ["icons/*.png", "res/*.ui", "themes/*.qss"]
 "mint" = ["mydatasources.cfg"]
 

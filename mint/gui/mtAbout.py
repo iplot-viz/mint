@@ -13,6 +13,7 @@ from PySide6.QtGui import QShowEvent, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, \
     QWidget, QMainWindow
 
+from iplotWidgets.sizing import clamp_to_screen
 from mint.tools.icon_loader import create_pxmap
 
 # TODO Change packages to not be hardcoded
@@ -58,7 +59,7 @@ class MTAbout(QDialog):
 
         self.setLayout(self._layout)
         self.setWindowTitle("About MINT")
-        self.resize(1100, 420)
+        clamp_to_screen(self, 1100, 420)
 
     def _prepare_buttons(self):
         self._copyBtn = QPushButton("Copy to clipboard", self)
@@ -78,7 +79,7 @@ class MTAbout(QDialog):
         self._descriptionWidget = QWidget(self)
         self._descriptionWidget.setLayout(QVBoxLayout())
         heading = QLabel("About MINT")
-        heading.setStyleSheet("font-weight: bold; color: black")
+        heading.setStyleSheet("font-weight: bold;")
         description = QLabel()
         description.setText("A Python Qt application for ITER Data Visualtization using the iplotlib framework.")
         jira = QLabel()
