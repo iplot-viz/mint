@@ -175,11 +175,11 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **CROSSHAIR**: shows X/Y coordinates and the closest signal value. SELECT disables it.
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
-- **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode).
+- **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y, or X (in pulse mode), or with *Duplicate signal* adds a shifted copy of it next to the original.
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
-- Undo / Redo: roll back or replay the last pan/zoom action.
+- Undo / Redo: roll back or replay the last pan, zoom or shift. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
@@ -193,6 +193,10 @@ Right-click a plot for per-plot actions:
 
 - **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
 - **Set as time window** — copies the plot's visible range into the query time range (switching to the *Time Range* tab, or keeping relative seconds in pulse mode), so the next *Draw* fetches exactly what you zoomed into.
+
+#### Legend
+
+Click a signal's line or name to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and what you did to the legend are kept by *Draw* and saved with the workspace.
 
 #### Reading tick labels with very large values
 
@@ -212,7 +216,7 @@ Opens behind the canvas when you activate the RULER tool; click the RULER button
 - **Rows**: one row per ruler and per plot it is drawn on — with shared time on, a ruler placed on one plot appears on all of them and gets a row for each, so the *Plot* column tells them apart. Every row carries the ruler's X value and one column per crossed signal with its value at the ruler (blank where the ruler sits off a signal, or where the signal belongs to another plot). The Y value only appears on the plot you placed the ruler on, the one whose scale it was read against. The row also holds the controls *Visible* (show or hide the ruler), *Labels* (show the ruler's own tags — name, X and Y values — the signal-value tags, both or neither; this one applies only to that row's plot), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default). Rows are listed by plot; click a header to sort by another column. Select several rows (Ctrl or Shift click, Ctrl+A for all of them) and change a control on any of them to apply it to the whole selection. Long signal names wrap over several header lines, and hovering a header shows the full name.
 - **Columns**: a read-only view with one section per plot — rulers ordered by X value as columns, one row per signal below the X row (plus a Y row on the plot the ruler was placed on), and a Δ column showing the gap between neighbours for each of them.
 
-*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed, and *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once; both menus start with a *Select all* / *Deselect all* entry. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; ΔX is the time distance, while ΔY and the signal deltas are signed (later ruler minus earlier one), and on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
+*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed, and *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once, new rulers included; both menus start with a *Select all* / *Deselect all* entry. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; ΔX is the time distance, while ΔY and the signal deltas are signed (later ruler minus earlier one), and on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
 
 #### Canvas-level preferences
 
