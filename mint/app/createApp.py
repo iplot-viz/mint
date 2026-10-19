@@ -12,11 +12,26 @@ from mint._version import get_versions
 
 CANVAS_IMPLS = ('matplotlib', 'pyqt')
 
+DEFAULT_DATA_ACCESS_WORKERS = 2
+MAX_DATA_ACCESS_WORKERS = 8
+
 
 def default_canvas_impl() -> str:
     """Canvas implementation used without --impl: MINT_IMPL when it names one, matplotlib otherwise."""
     value = os.environ.get('MINT_IMPL', '').strip().lower()
     return value if value in CANVAS_IMPLS else 'matplotlib'
+
+
+def data_access_workers() -> int:
+    """Processes reading data in the background: MINT_DATA_ACCESS_WORKERS when it is a number, 2 otherwise.
+
+    0 reads the data in the GUI thread, without worker processes.
+    """
+    try:
+        value = int(os.environ.get('MINT_DATA_ACCESS_WORKERS', DEFAULT_DATA_ACCESS_WORKERS))
+    except ValueError:
+        value = DEFAULT_DATA_ACCESS_WORKERS
+    return min(max(value, 0), MAX_DATA_ACCESS_WORKERS)
 
 
 def create_app(argv=None) -> (QApplication, Namespace):

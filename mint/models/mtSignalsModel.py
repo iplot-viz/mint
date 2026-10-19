@@ -423,6 +423,16 @@ class MTSignalsModel(QAbstractItemModel):
                         if var != 'self':
                             self._alias_list.add(var)
 
+    def fetches_row(self, row_idx: int) -> bool:
+        """Whether update_signal_data(..., fetch_data=True) reads the data of the row."""
+        if not self._alias_checked:
+            self.check_alias_fetch()
+
+        alias = self._table.at[row_idx, mtBP.get_column_name(self._blueprint, 'Alias')]
+        stack_val = self._table.at[row_idx, mtBP.get_column_name(self._blueprint, 'Stack')]
+        # Rows with no stack are read only when another row's processing uses their alias
+        return bool(stack_val) or alias in self._alias_list
+
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
@@ -430,18 +440,8 @@ class MTSignalsModel(QAbstractItemModel):
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
             if fetch_data:
-                if not self._alias_checked:
-                    self.check_alias_fetch()
-
-                # Read alias and stack from the table row
-                alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
-                stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
-                alias = self._table.at[row_idx, alias_col]
-                stack_val = self._table.at[row_idx, stack_col]
-
-                # Skip rows with no stack unless their alias is used in another row's processing
-                if not stack_val and alias not in self._alias_list:
-                    logger.debug(f"Row {row_idx} skipped (no stack and alias {alias} is not referenced)")
+                if not self.fetches_row(row_idx):
+                    logger.debug(f"Row {row_idx} skipped (no stack and its alias is not referenced)")
                     return
 
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)

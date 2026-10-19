@@ -20,10 +20,12 @@ def run_app(q_app: QApplication, args=None):
 
     from iplotlib.core import Canvas
     from iplotlib.core.display import DisplayScale, screen_pixel_width
+    import iplotlib.data_access as iplot_data_access
     from iplotlib.interface.iplotSignalAdapter import AccessHelper
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
 
+    from mint.app.createApp import data_access_workers
     from mint.models import MTGenericAccessMode
     from mint.models.utils import mtBlueprintParser
     from mint.gui.mtMainWindow import MTMainWindow
@@ -106,6 +108,16 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples = max_width
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
+
+    # Workers copy the sample settings above, so they start after them. Older iplotlib
+    # releases have no AccessPool: the data are then read in the GUI thread.
+    access_pool = getattr(iplot_data_access, 'AccessPool', None)
+    workers = data_access_workers() if access_pool is not None else 0
+    if workers:
+        AccessHelper.pool = access_pool(workers)
+        AccessHelper.pool.start()
+        q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
+    logger.info(f"Data access worker processes: {workers}")
 
     data_sources = AccessHelper.da.get_connected_data_source_names()
 
