@@ -144,6 +144,8 @@ Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*.
 
 Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
 
+Draw and workspace import read all the rows at once in the background: the window keeps responding and the status bar shows how many reads are done (*Retrieving data (3/8)*). UDA reads run two at a time; set the `MINT_DATA_ACCESS_WORKERS` environment variable to change that (up to 8; 0 turns the background reading off).
+
 <p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
 
@@ -188,6 +190,8 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
 - **DETACH** / **REATTACH**: float the canvas in its own window.
+
+After a zoom, pan, undo or redo the plots move at once with the data they already have, and fill in the detail as the data of the new range arrive.
 
 Right-click a plot for per-plot actions:
 

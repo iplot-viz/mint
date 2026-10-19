@@ -112,11 +112,20 @@ def run_app(q_app: QApplication, args=None):
     # Workers copy the sample settings above, so they start after them. Older iplotlib
     # releases have no AccessPool: the data are then read in the GUI thread.
     access_pool = getattr(iplot_data_access, 'AccessPool', None)
+    if access_pool is None:
+        logger.info(f"iplotlib {iplotlib_version} reads the data in the GUI thread")
     workers = data_access_workers() if access_pool is not None else 0
     if workers:
-        AccessHelper.pool = access_pool(workers)
-        AccessHelper.pool.start()
-        q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
+        try:
+            AccessHelper.pool = access_pool(workers)
+            AccessHelper.pool.start()
+        except Exception:
+            logger.exception("Cannot start the data access worker processes, the data are read in the GUI thread")
+            if AccessHelper.pool is not None:
+                AccessHelper.pool.shutdown()
+            AccessHelper.pool, workers = None, 0
+        else:
+            q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
     logger.info(f"Data access worker processes: {workers}")
 
     data_sources = AccessHelper.da.get_connected_data_source_names()
@@ -148,6 +157,9 @@ def run_app(q_app: QApplication, args=None):
             export_to_file(canvas_impl, main_win.canvas, args.image_file, dpi=args.export_dpi,
                            width=args.export_width, height=args.export_height,
                            autoscale=args.export_autoscale)
+            # Without aboutToQuit, nothing else stops the workers before the exit waits for them.
+            if getattr(AccessHelper, 'pool', None) is not None:
+                AccessHelper.pool.shutdown()
             exit(0)
 
     main_win.show()

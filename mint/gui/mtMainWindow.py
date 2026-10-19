@@ -65,13 +65,6 @@ def _accepts_kwarg(func, name: str) -> bool:
         return False
 
 
-def _prefetched(results: dict):
-    # AccessHelper.prefetched(results), guarded against iplotlib releases that predate it:
-    # those read every request in the GUI thread.
-    prefetched = getattr(AccessHelper, 'prefetched', None)
-    return contextlib.nullcontext() if prefetched is None else prefetched(results)
-
-
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def __init__(self,
@@ -739,8 +732,68 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.show()
         try:
             return pool.fetch(requests, progress=self._report_read_progress)
+        except Exception:
+            logger.exception("Reading in the worker processes failed, data are read in the GUI thread from now on")
+            AccessHelper.pool = None
+            pool.shutdown()
+            return {}
         finally:
             self._reading_ahead = False
+            self._progressBar.setRange(0, 100)
+
+    @staticmethod
+    def _prefetched(results: dict):
+        # AccessHelper.prefetched(results), guarded against iplotlib releases that predate it:
+        # those read every request in the GUI thread.
+        prefetched = getattr(AccessHelper, 'prefetched', None)
+        return contextlib.nullcontext() if prefetched is None else prefetched(results)
+
+    def _read_in_batches(self, waypoints: typing.Iterable, stream: bool):
+        """Create the signal of each waypoint and yield both, with the data of the signal read ahead.
+
+        The data are read in batches. A batch ends at a signal whose alias rows use in x, y or z: parsing those
+        rows, when `waypoints` reaches them, looks for errors in its row, so its data are read first. While a pair
+        is handled, its reads are served from what was read ahead. Yields (None, None) if the application quit
+        while reading.
+        """
+        used_in_xyz = self.sigCfgWidget.model.aliases_used_in_xyz()
+        read_ahead, batch = {}, []
+        for waypt in waypoints:
+            if not waypt.func and not waypt.args:
+                continue
+            signal = waypt.func(*waypt.args, **waypt.kwargs)
+            batch.append((waypt, signal))
+            if signal.alias in used_in_xyz:
+                if not (yield from self._read_batch(batch, stream, read_ahead)):
+                    return
+                batch = []
+        yield from self._read_batch(batch, stream, read_ahead)
+
+    def _read_batch(self, batch: list, stream: bool, read_ahead: dict):
+        if not stream:
+            results = self._read_ahead([signal for waypt, signal in batch if self._reads_row(waypt, signal)])
+            if results is None:
+                yield None, None
+                return False
+            read_ahead.update(results)
+        with self._prefetched(read_ahead):
+            yield from batch
+        return True
+
+    def _old_signals(self, path: list) -> list:
+        """The signals of the imported canvas at the places of the waypoints (see import_dict)."""
+        old_signals = []
+        for waypt in path:
+            if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
+                continue
+            try:
+                plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]
+            except IndexError:
+                continue
+            stack_signals = plot.signals.get(waypt.stack_num, []) if plot else []
+            if waypt.signal_stack_id < len(stack_signals):
+                old_signals.append(stack_signals[waypt.signal_stack_id])
+        return old_signals
 
     def _report_read_progress(self, done: int, total: int):
         self._progressBar.setRange(0, total)
@@ -856,13 +909,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.model._alias_checked = False
 
         signals = [waypt.func(*waypt.args, **waypt.kwargs) for waypt in path]
+        # The loop below reads each workspace signal again, with the range it was saved with.
         read_ahead = self._read_ahead(
-            [signal for waypt, signal in zip(path, signals) if self.sigCfgWidget.model.fetches_row(waypt.idx)])
+            [signal for waypt, signal in zip(path, signals) if self.sigCfgWidget.model.fetches_row(waypt.idx)]
+            + self._old_signals(path))
         if read_ahead is None:
             return
 
         def update_signal_data(row_idx, signal):
-            with _prefetched(read_ahead):
+            with self._prefetched(read_ahead):
                 self.sigCfgWidget.model.update_signal_data(row_idx, signal, True)
 
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
@@ -923,6 +978,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
             if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
+        read_ahead.clear()
 
         if not valid_signal:
             # This means that there are not valid signals to create
@@ -1321,6 +1377,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def build(self, stream=False) -> bool:
         """Build the canvas from the variables table; False if the application quit while reading data."""
+        # Data still read in the background for views of the current canvas would be processed in the
+        # parser environment of the new one. Older iplotlib releases read the views in the GUI thread.
+        if hasattr(self, 'drop_view_reads'):
+            self.drop_view_reads()
         # Clear shared parser environment to ensure a clean rebuild. The parser itself
         # is cleared by set_canvas right before drawing: doing it here would blank the
         # plots for as long as the data fetch below takes (visible on every refresh tick).
@@ -1370,17 +1430,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
-        created, read_ahead = [], {}
         if valid:
-            created = [(waypt, waypt.func(*waypt.args, **waypt.kwargs))
-                       for waypt in self.sigCfgWidget.build(**da_params) if waypt.func or waypt.args]
-            if not stream:
-                read_ahead = self._read_ahead([signal for waypt, signal in created if self._reads_row(waypt, signal)])
-                if read_ahead is None:
+            for waypt, signal in self._read_in_batches(self.sigCfgWidget.build(**da_params), stream):
+                if waypt is None:
                     return False
 
-        with _prefetched(read_ahead):
-            for waypt, signal in created:
                 if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
                     if not stream:
                         self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)

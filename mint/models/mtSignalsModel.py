@@ -433,6 +433,11 @@ class MTSignalsModel(QAbstractItemModel):
         # Rows with no stack are read only when another row's processing uses their alias
         return bool(stack_val) or alias in self._alias_list
 
+    def aliases_used_in_xyz(self) -> set:
+        """Aliases used in the x, y or z column of a row: parsing that row looks for errors in the alias's row."""
+        return {alias for _, row in self._table.iterrows()
+                for alias in ParserHelper.get_dependencies([row['x'], row['y'], row['z']])}
+
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
