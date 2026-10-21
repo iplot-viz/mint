@@ -118,7 +118,10 @@ def run_app(q_app: QApplication, args=None):
     if workers:
         try:
             AccessHelper.pool = access_pool(workers)
-            AccessHelper.pool.start()
+            # The workers start once the table holds a signal of their data sources (see MTMainWindow);
+            # iplotlib releases that cannot start them per data source start them all now.
+            if not hasattr(AccessHelper.pool, 'prepare'):
+                AccessHelper.pool.start()
         except Exception:
             logger.exception("Cannot start the data access worker processes, the data are read in the GUI thread")
             if AccessHelper.pool is not None:

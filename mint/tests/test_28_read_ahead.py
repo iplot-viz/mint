@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
@@ -403,6 +404,50 @@ class ReadAheadContractTest(_MainWindowTestCase):
                 self.assertLessEqual(set(reads), asked)
                 self.assertEqual(status, expected_status)
                 self.assertEqual(drawn, expected)
+
+
+class _PoolStartingStub(_PoolStub):
+    """Records the data sources it is asked to start the workers of."""
+
+    def __init__(self):
+        super().__init__()
+        self.prepared = []
+
+    def prepare(self, data_source_names):
+        self.prepared.append(set(data_source_names))
+
+
+@unittest.skipUnless(hasattr(AccessHelper, 'pool'), "the installed iplotlib reads in the GUI thread")
+class WorkersStartTest(_MainWindowTestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        write_csv_datasource_config()
+        AppDataAccess.initialize()
+        AccessHelper.da = AppDataAccess.get_data_access()
+
+    def test_the_workers_of_the_data_sources_in_the_table_start_before_the_draw(self):
+        AccessHelper.pool = pool = _PoolStartingStub()
+
+        self._main_window({'DS': ['csv', 'codacuda'], 'Variable': [VAR1, ''],
+                           'Stack': ['1.1', '1.2'], 'Plot type': ['PlotXY', 'PlotXY']})
+        self.app.processEvents()
+
+        self.assertEqual(pool.prepared[-1], {'csv'})
+        self.assertEqual(pool.requests, [])
+
+    def test_a_variable_typed_in_starts_the_workers_of_its_data_source(self):
+        AccessHelper.pool = pool = _PoolStartingStub()
+        win = self._main_window({'DS': ['csv'], 'Variable': [''], 'Stack': ['1.1'], 'Plot type': ['PlotXY']})
+        self.app.processEvents()
+        model = win.sigCfgWidget.model
+        before = set().union(*pool.prepared)
+
+        model.setData(model.index(0, model._table.columns.get_loc('Variable')), VAR1, Qt.ItemDataRole.EditRole)
+        self.app.processEvents()
+
+        self.assertNotIn('csv', before)
+        self.assertEqual(pool.prepared[-1], {'csv'})
 
 
 class DataAccessWorkersTest(unittest.TestCase):

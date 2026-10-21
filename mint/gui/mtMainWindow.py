@@ -165,6 +165,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._init_shift_storage()
         self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
             self._on_rows_about_to_be_removed)
+        # The worker processes that read a data source start once the table holds a signal of it, ahead of
+        # the Draw. The table is looked at once a change is done: set_dataframe() fills rows it reported.
+        self._workers_check = QTimer(self)
+        self._workers_check.setSingleShot(True)
+        self._workers_check.timeout.connect(self._start_data_access_workers)
+        for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged,
+                       self.sigCfgWidget.model.modelReset):
+            change.connect(lambda *_: self._workers_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -708,6 +716,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         pool = getattr(AccessHelper, 'pool', None)
         if pool is not None:
             pool.clear_cache()
+
+    def _start_data_access_workers(self):
+        """Start the worker processes that read the data sources of the table, before a Draw needs them."""
+        # iplotlib releases that cannot start them per data source start them all at launch.
+        prepare = getattr(getattr(AccessHelper, 'pool', None), 'prepare', None)
+        if prepare is None:
+            return
+        try:
+            prepare(self.sigCfgWidget.model.data_sources_in_table())
+        except Exception:
+            logger.exception("Cannot start the data access worker processes ahead of the Draw")
 
     def _reads_row(self, waypt, signal) -> bool:
         """Whether build() reads the data of the waypoint's signal (see update_signal_data)."""

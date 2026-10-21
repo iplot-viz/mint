@@ -286,6 +286,15 @@ class MTSignalsModel(QAbstractItemModel):
                 pulses.extend(str_to_arr(cell) or [])
         return pulses
 
+    def data_sources_in_table(self) -> typing.Set[str]:
+        """The data sources of the rows that name a variable."""
+        col_data_source = mtBP.get_column_name(self.blueprint, 'DataSource')
+        col_variable = mtBP.get_column_name(self.blueprint, 'Variable')
+        if col_data_source not in self._table.columns or col_variable not in self._table.columns:
+            return set()
+        return {data_source for data_source, variable in zip(self._table[col_data_source], self._table[col_variable])
+                if isinstance(data_source, str) and data_source and isinstance(variable, str) and variable.strip()}
+
     def get_dataframe(self):
         filtered_rows = self._table[self._table.iloc[:, 1:-5].any(axis=1)]
         if not filtered_rows.empty:
