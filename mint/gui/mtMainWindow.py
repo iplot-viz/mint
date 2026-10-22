@@ -46,6 +46,7 @@ from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
+from mint.models.mtSignalsModel import exp_stack
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
@@ -1658,6 +1659,33 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 columns=['DS', 'Variable', 'Stack'])
         self.sigCfgWidget.append_dataframe(new_data)
         self.draw_clicked()
+
+    def on_plots_arranged(self, changes: list):
+        """The rows of the table take the places their plots took on the canvas: the rows of a cell move with it,
+        drawn or not (see iplotlib.core.layout.Arrangement.changes)."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        moves = {(before.row + 1, before.col + 1): (before, after) for before, after in changes}
+        edits = []
+        for idx, value in enumerate(df['Stack']):
+            stack = str(value).strip()
+            found = exp_stack.match(stack)
+            place = (int(found.group(1)), int(found.group(2) or 1)) if found else None
+            if place not in moves:
+                continue
+            before, after = moves[place]
+            parts = stack.split('.')
+            # A Stack that gives the row only keeps that form while its plot stays in the first column.
+            if len(parts) == 1 and after.col == 0:
+                edits.append((idx, 'Stack', str(after.row + 1)))
+            else:
+                edits.append((idx, 'Stack', '.'.join([str(after.row + 1), str(after.col + 1)] + parts[2:])))
+            if (after.row_span, after.col_span) != (before.row_span, before.col_span):
+                edits.append((idx, 'Row span', str(after.row_span) if after.row_span > 1 else ''))
+                edits.append((idx, 'Col span', str(after.col_span) if after.col_span > 1 else ''))
+        for idx, column, value in edits:
+            model.setData(model.createIndex(idx, df.columns.get_loc(column)), value, Qt.ItemDataRole.EditRole)
+        super().on_plots_arranged(changes)
 
     def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
         box = QMessageBox()

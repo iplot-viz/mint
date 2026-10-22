@@ -136,7 +136,7 @@ In the variable search window, the *Synoptic variables* check box lists the vari
 | Status | Status of the different stages (data retrieval, processing). |
 | Comment | Free-text description, useful when sharing CSV/workspace files. |
 
-Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
+Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*, or by dragging the plots on the canvas in SELECT mode (see <a href="#plotting-area">Plotting area</a>). The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
 
@@ -173,7 +173,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 
 <p style="text-align:center;margin:14px 0;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
 
-- **SELECT**: left double-click to put a plot in full-screen; right double-click to go back.
+- **SELECT**: left double-click to put a plot in full-screen; right double-click to go back. Drag a plot by its background to move it: in its column the other plots make room for it, and onto a plot of another column the two trade places. Drag its bottom-right corner, where a grip shows under the mouse, to make it span more or fewer rows and columns; in its column the plots below move with it. While the mouse moves, the canvas shows where the plots will go, and a place they do not fit shows grey. The *Stack*, *Row span* and *Col span* of the rows follow their plot, and the data are not read again. Not available while streaming or with a plot in full-screen.
 - **CROSSHAIR**: shows X/Y coordinates and the closest signal value. SELECT disables it.
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
@@ -181,7 +181,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
-- Undo / Redo: roll back or replay the last pan, zoom or shift. *Draw*, and each auto-refresh in relative time, clear this history.
+- Undo / Redo: roll back or replay the last pan, zoom, shift, or move or resize of a plot. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
