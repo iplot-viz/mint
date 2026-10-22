@@ -308,6 +308,10 @@ class ReadAheadTest(_MainWindowTestCase):
 
         AccessHelper.pool = pool = AccessPool(1)
         self.addCleanup(pool.shutdown)
+        # Until its workers have started, the pool reads in the GUI thread.
+        pool.start()
+        for ready in list(pool._ready.values()):
+            ready.result(timeout=120)
         win = self._two_plots()
         with patch.object(AccessHelper, '_request_data', side_effect=AssertionError("read in the GUI thread")):
             win.draw_clicked()
