@@ -98,8 +98,6 @@ class _MainWindowTestCase(unittest.TestCase):
         return path
 
 
-# Reading ahead ships in iplotlib; mint's CI installs iplotlib from develop,
-# so these integration tests run only once that change reaches develop.
 @unittest.skipUnless(hasattr(AccessHelper, 'prefetched'), "the installed iplotlib does not read ahead")
 class ReadAheadTest(_MainWindowTestCase):
     @classmethod
@@ -231,6 +229,19 @@ class ReadAheadTest(_MainWindowTestCase):
         copy = win.canvas.plots[0][0].signals[1][-1]
         self.assertIsNot(copy, original)
         np.testing.assert_allclose(copy.y_data, np.asarray(original.y_data) + 2.5)
+
+    def test_the_copy_of_a_duplicate_ends_the_progress_of_its_reads(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        win.draw_clicked()
+        uid = win.sigCfgWidget.model.get_dataframe().at[0, 'uid']
+        original, _ = win._find_signal_in_canvas(uid)
+
+        win._on_signal_shift_requested(uid, original.name, original.data_source, str(original.pulse_nb),
+                                       0.0, 2.5, True)
+
+        self.assertTrue(win._progressBar.isHidden())
+        self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
 
     def test_the_clear_cache_menu_action_reaches_the_workers(self):
         AccessHelper.pool = pool = _PoolStub()

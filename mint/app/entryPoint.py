@@ -109,19 +109,15 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
-    # Workers copy the sample settings above, so they start after them. Older iplotlib
-    # releases have no AccessPool: the data are then read in the GUI thread.
+    # Workers copy the sample settings above, so they start after them.
     access_pool = getattr(iplot_data_access, 'AccessPool', None)
     if access_pool is None:
         logger.info(f"iplotlib {iplotlib_version} reads the data in the GUI thread")
     workers = data_access_workers() if access_pool is not None else 0
     if workers:
         try:
+            # The workers start once the table holds a signal of their data sources (see MTMainWindow).
             AccessHelper.pool = access_pool(workers)
-            # The workers start once the table holds a signal of their data sources (see MTMainWindow);
-            # iplotlib releases that cannot start them per data source start them all now.
-            if not hasattr(AccessHelper.pool, 'prepare'):
-                AccessHelper.pool.start()
         except Exception:
             logger.exception("Cannot start the data access worker processes, the data are read in the GUI thread")
             if AccessHelper.pool is not None:

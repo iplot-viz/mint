@@ -166,12 +166,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
             self._on_rows_about_to_be_removed)
         # The worker processes that read a data source start once the table holds a signal of it, ahead of
-        # the Draw. The table is looked at once a change is done: set_dataframe() fills rows it reported.
+        # the Draw. The table is checked once a change is complete: set_dataframe() reports its new rows
+        # before it fills their cells.
         self._workers_check = QTimer(self)
         self._workers_check.setSingleShot(True)
         self._workers_check.timeout.connect(self._start_data_access_workers)
-        for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged,
-                       self.sigCfgWidget.model.modelReset):
+        for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
             change.connect(lambda *_: self._workers_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
@@ -719,12 +719,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def _start_data_access_workers(self):
         """Start the worker processes that read the data sources of the table, before a Draw needs them."""
-        # iplotlib releases that cannot start them per data source start them all at launch.
-        prepare = getattr(getattr(AccessHelper, 'pool', None), 'prepare', None)
-        if prepare is None:
+        pool = getattr(AccessHelper, 'pool', None)
+        if pool is None:
             return
         try:
-            prepare(self.sigCfgWidget.model.data_sources_in_table())
+            pool.prepare(self.sigCfgWidget.model.data_sources_in_table())
         except Exception:
             logger.exception("Cannot start the data access worker processes ahead of the Draw")
 
@@ -737,8 +736,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def _read_ahead(self, signals: list) -> typing.Optional[dict]:
         """Read the data of the signals all at once, in the background worker processes.
 
-        Returns the results for AccessHelper.prefetched(): none without worker processes,
-        None if the application quit while waiting.
+        Returns the results for AccessHelper.prefetched(): empty without worker processes, or None
+        if the application quit while waiting.
         """
         # iplotlib releases that predate the pool have none.
         pool = getattr(AccessHelper, 'pool', None)
@@ -770,10 +769,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def _read_in_batches(self, waypoints: typing.Iterable, stream: bool):
         """Create the signal of each waypoint and yield both, with the data of the signal read ahead.
 
-        The data are read in batches. A batch ends at a signal whose alias rows use in x, y or z: parsing those
-        rows, when `waypoints` reaches them, looks for errors in its row, so its data are read first. While a pair
-        is handled, its reads are served from what was read ahead. Yields (None, None) if the application quit
-        while reading.
+        The data are read in batches, and a batch ends at a signal whose alias another row uses in x, y or z:
+        parsing that row checks whether the row of the alias failed to read, so the alias is read before
+        `waypoints` reaches that row. While a pair is handled, its reads are served from what was read ahead.
+        Yields (None, None) if the application quit while reading.
         """
         used_in_xyz = self.sigCfgWidget.model.aliases_used_in_xyz()
         read_ahead, batch = {}, []

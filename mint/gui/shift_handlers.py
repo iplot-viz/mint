@@ -625,6 +625,9 @@ class ShiftHandlerMixin:
                    if waypt.stack_num and waypt.col_num and waypt.row_num]
         created = [(waypt, signal) for waypt, signal in created if signal.label]
         read_ahead = self._read_ahead([signal for waypt, signal in created])
+        # Like a Draw, a copy ends the progress its reads showed.
+        if not self._progressBar.isHidden():
+            self.indicate_ready()
         if read_ahead is None:
             return signals
         for waypt, signal in created:

@@ -26,7 +26,8 @@ def default_canvas_impl() -> str:
 
 
 def data_access_workers() -> int:
-    """Processes reading data in the background: MINT_DATA_ACCESS_WORKERS when it is a number, 2 otherwise.
+    """Processes reading data in the background: MINT_DATA_ACCESS_WORKERS, kept between 0 and 8, or 2 when it is
+    not a number.
 
     0 reads the data in the GUI thread, without worker processes.
     """
