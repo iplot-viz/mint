@@ -1,6 +1,7 @@
 """Moving and resizing plots on the canvas moves their rows in the table: the Stack of each row follows its plot and
 Row span and Col span follow its size. Undo takes the rows back with the plots, a Draw draws the plots where they
-went with the preferences each had, and moving a plot reads no data."""
+went with the preferences each had, and moving a plot reads no data. The place of rows that drew no plot is kept for
+them: it moves as a plot does, and no plot moves or grows over it."""
 
 import unittest
 from unittest.mock import patch
@@ -13,7 +14,7 @@ from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
-from mint.gui.mtMainWindow import MTMainWindow
+from mint.gui.mtMainWindow import MTMainWindow, _stack_place
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.models.utils import mtBlueprintParser
 from mint.tests.fixtures import write_csv_datasource_config
@@ -21,17 +22,31 @@ from mint.tests.qAppSingleton import ensure_qapp
 
 try:
     from iplotlib.core import layout
+    from iplotlib.qt.gui.iplotQtArrangement import HANDLE
 except ImportError:
-    layout = None
+    layout = HANDLE = None
 
 PULSE_ID = 'ITER:MCTB-TEST/111'
 VARS = ['MAG-MCTB-F1:VAR1', 'MAG-MCTB-F1:VAR2', 'MAG-MCTB-F1:VAR3', 'MAG-MCTB-F1:VAR4', 'MAG-MCTB-F1:VAR5']
+# A variable the data source does not have: its row draws no plot.
+UNREAD = 'MAG-MCTB-F1:NONE'
 
 
 def _table(win) -> list:
     df = win.sigCfgWidget.model.get_dataframe()
     return [(variable, stack, row_span, col_span) for variable, stack, row_span, col_span
             in zip(df['Variable'], df['Stack'], df['Row span'], df['Col span']) if variable]
+
+
+def _set_variable(win, row: int, variable: str):
+    df = win.sigCfgWidget.model.get_dataframe()
+    win.sigCfgWidget.model.setData(win.sigCfgWidget.model.createIndex(row, df.columns.get_loc('Variable')), variable,
+                                   Qt.ItemDataRole.EditRole)
+
+
+def _overlapping(canvas) -> list:
+    slots = [slot for _, slot in layout.slots_of(canvas)]
+    return [(a, b) for i, a in enumerate(slots) for b in slots[i + 1:] if a.overlaps(b)]
 
 
 def _plot_with(win, variable):
@@ -56,15 +71,17 @@ class ArrangePlotsTest(unittest.TestCase):
         self.addCleanup(setattr, AccessHelper, 'pool', self._pool)
         AccessHelper.pool = None
 
-    def _window(self, stacks: list, impl: str = 'matplotlib', spans: dict = None) -> MTMainWindow:
-        """A window that drew one row of the table for each Stack given, VAR1 for the first one and so on."""
+    def _window(self, stacks: list, impl: str = 'matplotlib', spans: dict = None, variables: list = None) \
+            -> MTMainWindow:
+        """A window that drew one row of the table for each Stack given, of VAR1 for the first one and so on, or of
+        the variables given."""
         win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {}}, app_version='test',
                            data_sources=AccessHelper.da.get_connected_data_source_names(),
                            blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl=impl)
         self.addCleanup(win.close)
         win.dataRangeSelector.import_dict({'mode': MTGenericAccessMode.PULSE_NUMBER, 'pulse_nb': [PULSE_ID],
                                            'base': 'Second(s)', 't_start': '-5', 't_end': '4'})
-        rows = {'DS': ['csv'] * len(stacks), 'Variable': VARS[:len(stacks)], 'Stack': stacks,
+        rows = {'DS': ['csv'] * len(stacks), 'Variable': variables or VARS[:len(stacks)], 'Stack': stacks,
                 'Plot type': ['PlotXY'] * len(stacks)}
         rows.update(spans or {})
         win.sigCfgWidget.model.set_dataframe(pd.DataFrame(rows))
@@ -144,16 +161,66 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertIs(win.canvas.plots[0][0], _plot_with(win, VARS[2]))
 
     def test_the_rows_of_a_cell_drawn_empty_move_with_it(self):
-        win = self._window(['1', '2', '3'])
-        df = win.sigCfgWidget.model.get_dataframe()
-        win.sigCfgWidget.model.setData(win.sigCfgWidget.model.createIndex(1, df.columns.get_loc('Variable')),
-                                       'MAG-MCTB-F1:NONE', Qt.ItemDataRole.EditRole)
-        win.draw_clicked()
+        win = self._window(['1', '2', '3'], variables=[VARS[0], UNREAD, VARS[2]])
         self.assertIsNone(win.canvas.plots[0][1])
 
-        self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[2]), 1, 0))
+        self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[2]), 1, 0, reserved=win.reserved_slots()))
 
         self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '3', '2'])
+
+    def test_a_plot_dropped_on_the_place_of_rows_that_drew_nothing_trades_places_with_them(self):
+        win = self._window(['1.1', '2.1', '1.2', '2.2'], variables=VARS[:3] + [UNREAD])
+
+        self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[0]), 1, 1, reserved=win.reserved_slots()))
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['2.2', '2.1', '1.2', '1.1'])
+        _set_variable(win, 3, VARS[3])
+        win.draw_clicked()
+        self.assertEqual(_overlapping(win.canvas), [])
+        self.assertIs(win.canvas.plots[0][0], _plot_with(win, VARS[3]))
+
+    def test_a_plot_does_not_grow_over_the_place_of_rows_that_drew_nothing(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1.1', '2.1', '1.2', '2.2'], impl=impl, variables=VARS[:3] + [UNREAD])
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                qt_canvas.set_mouse_mode(Canvas.MOUSE_MODE_SELECT)
+                self.app.processEvents()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+
+                def at(x, y):
+                    return widget.mapFrom(qt_canvas, QPoint(round(x), round(y)))
+                # From the resize handle of the plot of VAR2 to the empty cell on its right.
+                start = at(cols[1] - HANDLE.px() / 2, rows[2] - HANDLE.px() / 2)
+                end = at(cols[1] + (cols[2] - cols[1]) * 0.6, rows[1] + (rows[2] - rows[1]) * 0.6)
+                QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+                for step in range(1, 9):
+                    QTest.mouseMove(widget, start + (end - start) * (step / 8))
+                    self.app.processEvents()
+                QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+                self.app.processEvents()
+
+                self.assertEqual(_table(win), [(VARS[0], '1.1', '', ''), (VARS[1], '2.1', '', ''),
+                                               (VARS[2], '1.2', '', ''), (UNREAD, '2.2', '', '')])
+                _set_variable(win, 3, VARS[3])
+                win.draw_clicked()
+                self.assertEqual(_overlapping(win.canvas), [])
+
+    def test_rows_not_drawn_yet_keep_their_place(self):
+        win = self._window(['1', '2'])
+        win.sigCfgWidget.model.append_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': [VARS[2]], 'Stack': ['3'],
+                                                              'Plot type': ['PlotXY']}))
+
+        self._arrange(win, layout.resized(win.canvas, _plot_with(win, VARS[1]), 2, 1, reserved=win.reserved_slots()),
+                      'Resize plot')
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '4'])
+        win.draw_clicked()
+        self.assertEqual(_overlapping(win.canvas), [])
 
     def test_moving_a_plot_reads_no_data(self):
         win = self._window(['1', '2', '3'])
@@ -165,6 +232,15 @@ class ArrangePlotsTest(unittest.TestCase):
 
         for signal in win.canvasStack.currentWidget().get_signals(win.canvas):
             np.testing.assert_array_equal(np.asarray(signal.y_data), drawn[signal.name])
+
+
+class StackPlaceTest(unittest.TestCase):
+
+    def test_the_place_of_a_stack_is_that_of_the_plot_a_draw_puts_it_in(self):
+        self.assertEqual([_stack_place(stack) for stack in ('2', '2.3', ' 2.3.4 ', 2)], [(2, 1), (2, 3), (2, 3), (2, 1)])
+
+    def test_a_stack_a_draw_leaves_out_has_no_place(self):
+        self.assertEqual([_stack_place(stack) for stack in ('', 'x', '0', '1.0', '1.1.0', '1.2.3.4')], [None] * 6)
 
 
 if __name__ == '__main__':

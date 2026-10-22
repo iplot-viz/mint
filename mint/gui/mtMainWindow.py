@@ -66,6 +66,24 @@ def _accepts_kwarg(func, name: str) -> bool:
         return False
 
 
+def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
+    """The row and the column, from 1, of the plot a Stack value puts its signal in; None if it gives no valid one,
+    which a Draw leaves out."""
+    found = exp_stack.match(str(stack).strip())
+    if found is None:
+        return None
+    row, col, stack_id = (int(group or 1) for group in found.groups())
+    return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
+
+
+def _span(value) -> int:
+    """The rows or the columns a Row span or Col span value gives a plot: 1 if it gives no valid number."""
+    try:
+        return max(1, int(str(value).strip() or 1))
+    except ValueError:
+        return 1
+
+
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def __init__(self,
@@ -1660,21 +1678,34 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.append_dataframe(new_data)
         self.draw_clicked()
 
+    def reserved_slots(self) -> list:
+        """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
+        The canvas keeps those where it draws no plot, such as those of rows whose data could not be read or that were
+        not drawn yet, for the plots of those rows (see on_plots_arranged)."""
+        # Only an iplotlib that moves plots asks for them, and it has this module.
+        from iplotlib.core.layout import Slot
+        df = self.sigCfgWidget.model.get_dataframe()
+        spans = {}
+        for stack, row_span, col_span in zip(df['Stack'], df['Row span'], df['Col span']):
+            place = _stack_place(stack)
+            if place is not None:
+                rows, cols = spans.get(place, (1, 1))
+                spans[place] = (max(rows, _span(row_span)), max(cols, _span(col_span)))
+        return [Slot(row - 1, col - 1, rows, cols) for (row, col), (rows, cols) in sorted(spans.items())]
+
     def on_plots_arranged(self, changes: list):
-        """The rows of the table take the places their plots took on the canvas: the rows of a cell move with it,
-        drawn or not (see iplotlib.core.layout.Arrangement.changes)."""
+        """The rows of the table take the places their plots took on the canvas: the rows of a reserved slot move with
+        it as those of a plot do (see reserved_slots and iplotlib.core.layout.Arrangement.changes)."""
         model = self.sigCfgWidget.model
         df = model.get_dataframe()
         moves = {(before.row + 1, before.col + 1): (before, after) for before, after in changes}
         edits = []
         for idx, value in enumerate(df['Stack']):
-            stack = str(value).strip()
-            found = exp_stack.match(stack)
-            place = (int(found.group(1)), int(found.group(2) or 1)) if found else None
+            place = _stack_place(value)
             if place not in moves:
                 continue
             before, after = moves[place]
-            parts = stack.split('.')
+            parts = str(value).strip().split('.')
             # A Stack that gives the row only keeps that form while its plot stays in the first column.
             if len(parts) == 1 and after.col == 0:
                 edits.append((idx, 'Stack', str(after.row + 1)))
