@@ -52,6 +52,9 @@ class Waypoint:
 
 exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
 
+# The most rows or columns a plot spans: the largest Row span or Col span the table accepts.
+MAX_SPAN = 10
+
 
 class MTSignalsModel(QAbstractItemModel):
     SignalRole = Qt.ItemDataRole.UserRole + 10
@@ -828,11 +831,11 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 1
                                     logger.warning(f"Invalid value for '{column_name}': the value must be numeric in "
                                                    f"the table row [{table_row}]")
-                            elif value > 10:
+                            elif value > MAX_SPAN:
                                 fls[column_name] = 1
                                 value = 1
                                 logger.warning(f"Invalid value for '{column_name}': the value exceeds the maximum limit"
-                                               f" of 10 in the table row [{table_row}]")
+                                               f" of {MAX_SPAN} in the table row [{table_row}]")
                             else:
                                 # Keep value
                                 fls[column_name] = 0

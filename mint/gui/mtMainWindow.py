@@ -46,6 +46,7 @@ from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
+from mint.models.mtSignalsModel import MAX_SPAN, exp_stack
 from mint.models.utils import mtBlueprintParser
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
@@ -63,6 +64,49 @@ def _accepts_kwarg(func, name: str) -> bool:
         return name in inspect.signature(func).parameters
     except (TypeError, ValueError):
         return False
+
+
+def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
+    """The row and the column, from 1, of the plot a Stack value puts its signal in; None if it gives no valid one,
+    which a Draw leaves out."""
+    found = exp_stack.match(str(stack).strip())
+    if found is None:
+        return None
+    row, col, stack_id = (int(group or 1) for group in found.groups())
+    return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
+
+
+def _accepted_span(value) -> typing.Optional[int]:
+    """The rows or the columns a Row span or Col span value gives a plot, if the table accepts the value: an empty
+    one gives 1. None for a value that a Draw refuses."""
+    text = str(value).strip()
+    if not text:
+        return 1
+    return int(text) if text.isdigit() and 1 <= int(text) <= MAX_SPAN else None
+
+
+def _places(df) -> typing.Dict[typing.Tuple[int, int], typing.Tuple[int, int]]:
+    """The place, as the row and the column from 1, of each plot the rows of the table give, with the most rows and
+    columns its rows give it."""
+    places = {}
+    for stack, row_span, col_span in zip(df['Stack'], df['Row span'], df['Col span']):
+        place = _stack_place(stack)
+        if place is not None:
+            rows, cols = places.get(place, (1, 1))
+            places[place] = (max(rows, _accepted_span(row_span) or 1), max(cols, _accepted_span(col_span) or 1))
+    return places
+
+
+def _canvas_of(places: dict) -> typing.Tuple[Canvas, dict]:
+    """A canvas with a plot in each of these places, and the plot of each place: the plots of the table where a Draw
+    puts them, to arrange the rows as the canvas arranges its plots (see iplotlib.core.layout)."""
+    canvas = Canvas(rows=max(row + rows - 1 for (row, col), (rows, cols) in places.items()),
+                    cols=max(col + cols - 1 for (row, col), (rows, cols) in places.items()))
+    canvas.plots = [[None] * canvas.rows for _ in range(canvas.cols)]
+    plots = {}
+    for (row, col), (rows, cols) in places.items():
+        plots[(row, col)] = canvas.plots[col - 1][row - 1] = PlotXY(row_span=rows, col_span=cols)
+    return canvas, plots
 
 
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
@@ -173,6 +217,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._workers_check.timeout.connect(self._start_data_access_workers)
         for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
             change.connect(lambda *_: self._workers_check.start(0))
+        # A Row span or Col span changed by hand moves the plots below as the mouse does, from the places the table
+        # gave the plots before the change (see _on_span_changed).
+        self._table_places = {}
+        self._moving_rows = False
+        self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
+                                                    self._on_span_changed(top_left, bottom_right))
+        for reset in (self.sigCfgWidget.model.layoutChanged, self.sigCfgWidget.model.modelReset):
+            reset.connect(lambda *_: self._remember_places())
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -1658,6 +1710,88 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 columns=['DS', 'Variable', 'Stack'])
         self.sigCfgWidget.append_dataframe(new_data)
         self.draw_clicked()
+
+    def reserved_slots(self) -> list:
+        """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
+        The canvas keeps those where it draws no plot, such as those of rows whose data could not be read or that were
+        not drawn yet, for the plots of those rows (see on_plots_arranged)."""
+        # Only an iplotlib that moves plots asks for them, and it has this module.
+        from iplotlib.core.layout import Slot
+        places = _places(self.sigCfgWidget.model.get_dataframe())
+        return [Slot(row - 1, col - 1, rows, cols) for (row, col), (rows, cols) in sorted(places.items())]
+
+    def max_span(self) -> int:
+        """The most rows or columns a plot spans: the table accepts no bigger Row span or Col span."""
+        return MAX_SPAN
+
+    def on_plots_arranged(self, changes: list):
+        """The rows of the table take the places their plots took on the canvas (see _move_rows)."""
+        self._move_rows(changes)
+        super().on_plots_arranged(changes)
+
+    def _move_rows(self, changes: list):
+        """The rows of the table take the places their plots take in `changes`: the rows of a reserved slot move with
+        it as those of a plot do (see reserved_slots and iplotlib.core.layout.Arrangement.changes)."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        moves = {(before.row + 1, before.col + 1): (before, after) for before, after in changes}
+        edits = []
+        for idx, value in enumerate(df['Stack']):
+            place = _stack_place(value)
+            if place not in moves:
+                continue
+            before, after = moves[place]
+            parts = str(value).strip().split('.')
+            # A Stack that gives the row only keeps that form while its plot stays in the first column.
+            if len(parts) == 1 and after.col == 0:
+                edits.append((idx, 'Stack', str(after.row + 1)))
+            else:
+                edits.append((idx, 'Stack', '.'.join([str(after.row + 1), str(after.col + 1)] + parts[2:])))
+            if (after.row_span, after.col_span) != (before.row_span, before.col_span):
+                edits.append((idx, 'Row span', str(after.row_span) if after.row_span > 1 else ''))
+                edits.append((idx, 'Col span', str(after.col_span) if after.col_span > 1 else ''))
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for idx, column, value in edits:
+                model.setData(model.createIndex(idx, df.columns.get_loc(column)), value, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+
+    def _remember_places(self):
+        self._table_places = _places(self.sigCfgWidget.model.get_dataframe())
+
+    def _on_span_changed(self, top_left, bottom_right):
+        """A Row span or Col span changed by hand gives its plot that many rows or columns, and the plots below move
+        as when the mouse resizes the plot (see iplotlib.core.layout.resized): taking the span off a plot that the
+        mouse made taller brings the plots below back up. A size the plots cannot take, or a table whose plots
+        already overlap, moves no other row."""
+        df = self.sigCfgWidget.model.get_dataframe()
+        columns = set(df.columns[top_left.column():bottom_right.column() + 1])
+        if not columns & {'Stack', 'Row span', 'Col span'}:
+            return
+        before = self._table_places
+        self._remember_places()
+        if self._moving_rows or top_left != bottom_right or not columns & {'Row span', 'Col span'}:
+            return
+        column = df.columns[top_left.column()]
+        place = _stack_place(df['Stack'].iloc[top_left.row()])
+        span = _accepted_span(df[column].iloc[top_left.row()])
+        if place not in before or span is None:
+            return
+        try:
+            from iplotlib.core import layout
+        except ImportError:
+            # An iplotlib that does not move plots: a span changes the size of its plot only.
+            return
+        canvas, plots = _canvas_of(before)
+        slots = [slot for _, slot in layout.slots_of(canvas)]
+        if any(a.overlaps(b) for i, a in enumerate(slots) for b in slots[i + 1:]):
+            return
+        rows, cols = before[place]
+        arrangement = layout.resized(canvas, plots[place], *((span, cols) if column == 'Row span' else (rows, span)))
+        if arrangement is not None:
+            self._move_rows(arrangement.changes)
 
     def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
         box = QMessageBox()
