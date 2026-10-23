@@ -16,6 +16,7 @@ from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
 from mint.gui.mtMainWindow import MTMainWindow, _stack_place
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+from mint.models.mtSignalsModel import MAX_SPAN
 from mint.models.utils import mtBlueprintParser
 from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
@@ -42,6 +43,12 @@ def _set_variable(win, row: int, variable: str):
     df = win.sigCfgWidget.model.get_dataframe()
     win.sigCfgWidget.model.setData(win.sigCfgWidget.model.createIndex(row, df.columns.get_loc('Variable')), variable,
                                    Qt.ItemDataRole.EditRole)
+
+
+def _set_cell(win, row: int, column: str, value: str):
+    model = win.sigCfgWidget.model
+    model.setData(model.createIndex(row, model.get_dataframe().columns.get_loc(column)), value,
+                  Qt.ItemDataRole.EditRole)
 
 
 def _overlapping(canvas) -> list:
@@ -132,6 +139,63 @@ class ArrangePlotsTest(unittest.TestCase):
 
         self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '2', '2', ''), (VARS[2], '2.1.2', '2', ''),
                                        (VARS[3], '4', '', '')])
+
+    def test_taking_the_row_span_off_a_plot_the_mouse_made_taller_brings_the_plots_below_back_up(self):
+        win = self._window(['1', '2', '3', '4'])
+        self._arrange(win, layout.resized(win.canvas, _plot_with(win, VARS[1]), 3, 1), 'Resize plot')
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '5', '6'])
+
+        _set_cell(win, 1, 'Row span', '')
+        win.draw_clicked()
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '2', '', ''), (VARS[2], '3', '', ''),
+                                       (VARS[3], '4', '', '')])
+        self.assertEqual(layout.grid_size(win.canvas), (4, 1))
+
+    def test_a_lower_row_span_in_the_table_moves_the_plots_below_up_by_the_rows_it_frees(self):
+        win = self._window(['1', '2', '6'], spans={'Row span': ['', '4', ''], 'Col span': ['', '', '']})
+
+        _set_cell(win, 1, 'Row span', '2')
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '2', '2', ''), (VARS[2], '4', '', '')])
+
+    def test_a_higher_row_span_in_the_table_moves_the_plots_below_down_rather_than_under_it(self):
+        win = self._window(['1', '2', '3'])
+
+        _set_cell(win, 0, 'Row span', '2')
+        win.draw_clicked()
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '2', ''), (VARS[1], '3', '', ''), (VARS[2], '4', '', '')])
+        self.assertEqual(_overlapping(win.canvas), [])
+
+    def test_the_span_written_in_one_row_of_a_plot_is_that_of_all_its_rows(self):
+        win = self._window(['1', '1.1.2', '4'], spans={'Row span': ['3', '3', ''], 'Col span': ['', '', '']})
+
+        _set_cell(win, 0, 'Row span', '')
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '1.1.2', '', ''), (VARS[2], '2', '', '')])
+
+    def test_a_wider_col_span_in_the_table_takes_the_empty_cells_beside_its_plot(self):
+        win = self._window(['1.1', '2.1', '1.2'])
+
+        _set_cell(win, 1, 'Col span', '2')
+        win.draw_clicked()
+
+        self.assertEqual(_table(win), [(VARS[0], '1.1', '', ''), (VARS[1], '2.1', '', '2'), (VARS[2], '1.2', '', '')])
+        self.assertEqual(_overlapping(win.canvas), [])
+
+    def test_a_span_the_table_refuses_moves_no_other_row(self):
+        win = self._window(['1', '2', '3'])
+
+        for value in (str(MAX_SPAN + 1), 'two', ''):
+            _set_cell(win, 0, 'Row span', value)
+
+            self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '3'])
+
+    def test_the_canvas_makes_no_plot_bigger_than_the_table_accepts(self):
+        win = self._window(['1', '2'])
+
+        self.assertEqual(win.canvasStack.currentWidget().max_span(), MAX_SPAN)
 
     def test_plots_that_trade_places_trade_their_spans(self):
         win = self._window(['1.1', '1.2', '2.2'], spans={'Row span': ['2', '', ''], 'Col span': ['', '', '']})
