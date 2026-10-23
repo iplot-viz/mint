@@ -621,13 +621,18 @@ class ShiftHandlerMixin:
         signals = []
         with model.init_create_signals():
             waypoints = list(model.create_signals(row_idx, self.sigCfgWidget.invalid_stacks))
-        for waypt in waypoints:
-            if not waypt.stack_num or not waypt.col_num or not waypt.row_num:
-                continue
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-            if not signal.label:
-                continue
-            model.update_signal_data(waypt.idx, signal, True)
+        created = [(waypt, waypt.func(*waypt.args, **waypt.kwargs)) for waypt in waypoints
+                   if waypt.stack_num and waypt.col_num and waypt.row_num]
+        created = [(waypt, signal) for waypt, signal in created if signal.label]
+        read_ahead = self._read_ahead([signal for waypt, signal in created])
+        # Like a Draw, a copy ends the progress its reads showed.
+        if not self._progressBar.isHidden():
+            self.indicate_ready()
+        if read_ahead is None:
+            return signals
+        for waypt, signal in created:
+            with self._prefetched(read_ahead):
+                model.update_signal_data(waypt.idx, signal, True)
             if signal.status_info.result == 'Fail':
                 continue
             signals.append((self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1], waypt.stack_num, signal))
