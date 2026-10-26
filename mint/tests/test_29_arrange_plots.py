@@ -223,6 +223,31 @@ class ArrangePlotsTest(unittest.TestCase):
 
             self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '3'])
 
+    def test_a_row_that_comes_with_a_span_or_an_edit_that_leaves_it_as_it_was_moves_no_plot(self):
+        win = self._window(['1', '1', '3'], spans={'Row span': ['2', '', ''], 'Col span': ['', '', '']})
+        uid = win.sigCfgWidget.model.get_dataframe()['uid'].iloc[1]
+        signal, _ = win._find_signal_in_canvas(uid)
+
+        # The Distance tool duplicates the signal of VAR2 into a new row, which takes the empty span of its row.
+        win._on_signal_shift_requested(uid, signal.name, 'csv', getattr(signal, 'pulse_nb', None), 1.0, 0.5, True)
+        self.app.processEvents()
+        _set_cell(win, 1, 'Row span', '')
+
+        rows = {variable: (stack, row_span) for variable, stack, row_span, _ in _table(win)}
+        self.assertEqual((rows[VARS[0]], rows[VARS[2]]), (('1', '2'), ('3', '')))
+        win.draw_clicked()
+        self.assertEqual(layout.grid_size(win.canvas), (3, 1))
+
+    def test_a_draw_remembers_the_places_of_the_table_once_and_not_for_each_row(self):
+        win = self._window([str(row) for row in range(1, 31)], variables=[VARS[row % 3] for row in range(30)])
+
+        with patch.object(MTMainWindow, '_remember_places', autospec=True,
+                          side_effect=MTMainWindow._remember_places) as remember:
+            win.draw_clicked()
+
+        # A few times, whatever the size of the table: not once for each of its 30 rows.
+        self.assertLess(remember.call_count, 10)
+
     def test_the_canvas_makes_no_plot_bigger_than_the_table_accepts(self):
         win = self._window(['1', '2'])
 

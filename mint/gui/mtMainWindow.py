@@ -233,15 +233,20 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
             change.connect(lambda *_: self._workers_check.start(0))
         # A Row span or Col span changed by hand moves the plots below as the mouse does, from the places the table
-        # gave the plots before the change (see _on_span_changed).
+        # gave the plots, and the spans it gave each row, before the change (see _on_span_changed).
         self._table_places = {}
+        self._table_spans = {}
         self._moving_rows = False
         # The text each row had in the Stack, Row span and Col span it left, by what the text gives (see _text_back).
         self._texts_left = {}
         self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
                                                     self._on_span_changed(top_left, bottom_right))
+        # Also once a change is complete, as the workers above: a Draw reports the status of each row on its own.
+        self._places_check = QTimer(self)
+        self._places_check.setSingleShot(True)
+        self._places_check.timeout.connect(self._remember_places)
         for reset in (self.sigCfgWidget.model.layoutChanged, self.sigCfgWidget.model.modelReset):
-            reset.connect(lambda *_: self._remember_places())
+            reset.connect(lambda *_: self._places_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -1203,6 +1208,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
             if not self.build():
                 return
+            # The table the canvas is drawn from, for a span changed next (see _on_span_changed).
+            self._remember_places()
 
         self.indicate_busy("Drawing...")
         self.stop_auto_refresh()
@@ -1838,25 +1845,33 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         return texts.get(_value_of(column, new), new)
 
     def _remember_places(self):
-        self._table_places = _places(self.sigCfgWidget.model.get_dataframe())
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        self._table_places = _places(df)
+        self._table_spans = {uid: (_accepted_span(row_span), _accepted_span(col_span)) for uid, row_span, col_span
+                             in zip(df[model.ROWUID_COLNAME], df['Row span'], df['Col span'])}
+        # The texts of the rows that left the table go with them (see _text_back).
+        self._texts_left = {key: texts for key, texts in self._texts_left.items() if key[0] in self._table_spans}
 
     def _on_span_changed(self, top_left, bottom_right):
         """A Row span or Col span changed by hand gives its plot that many rows or columns, and the plots below move
         as when the mouse resizes the plot (see iplotlib.core.layout.resized): taking the span off a plot that the
         mouse made taller brings the plots below back up. A size the plots cannot take, or a table whose plots
-        already overlap, moves no other row."""
+        already overlap, moves no other row. Only the span of a row the table had counts, and only if it changes: a
+        new row comes with a span, as the copy of a shifted signal does, and an edit can leave it as it was."""
         df = self.sigCfgWidget.model.get_dataframe()
         columns = set(df.columns[top_left.column():bottom_right.column() + 1])
         if not columns & {'Stack', 'Row span', 'Col span'}:
             return
-        before = self._table_places
+        before, spans = self._table_places, self._table_spans
         self._remember_places()
         if self._moving_rows or top_left != bottom_right or not columns & {'Row span', 'Col span'}:
             return
         column = df.columns[top_left.column()]
         place = _stack_place(df['Stack'].iloc[top_left.row()])
         span = _accepted_span(df[column].iloc[top_left.row()])
-        if place not in before or span is None:
+        had = spans.get(df[self.sigCfgWidget.model.ROWUID_COLNAME].iloc[top_left.row()])
+        if place not in before or span is None or had is None or had[column == 'Col span'] == span:
             return
         try:
             from iplotlib.core import layout
