@@ -76,6 +76,15 @@ def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
     return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
 
 
+def _value_of(column: str, text):
+    """What a Stack, Row span or Col span text gives: the row, the column and the stack, or the span; None if it
+    gives nothing valid."""
+    if column != 'Stack':
+        return _accepted_span(text)
+    found = exp_stack.match(str(text).strip())
+    return tuple(int(group or 1) for group in found.groups()) if found else None
+
+
 def _stack_offset(slot) -> int:
     """The stack offset of a slot of a change of places, which only plots joined into one have (see
     iplotlib.core.layout.Arrangement.changes)."""
@@ -227,6 +236,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # gave the plots before the change (see _on_span_changed).
         self._table_places = {}
         self._moving_rows = False
+        # The text each row had in the Stack, Row span and Col span it left, by what the text gives (see _text_back).
+        self._texts_left = {}
         self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
                                                     self._on_span_changed(top_left, bottom_right))
         for reset in (self.sigCfgWidget.model.layoutChanged, self.sigCfgWidget.model.modelReset):
@@ -1779,7 +1790,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def _move_rows(self, changes: list):
         """The rows of the table take the places their plots take in `changes`: the rows of a reserved slot move with
         it as those of a plot do, and those of plots joined into one take the stacks they have there (see
-        reserved_slots and iplotlib.core.layout.Arrangement.changes)."""
+        reserved_slots and iplotlib.core.layout.Arrangement.changes). A row that goes back to a place or a span it had
+        takes back the text it had there (see _text_back)."""
         model = self.sigCfgWidget.model
         df = model.get_dataframe()
         moves = {}
@@ -1800,20 +1812,30 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             parts = str(value).strip().split('.')
             # A Stack that gives the row only keeps that form while its plot stays in the first column.
             if len(parts) == 1 and after.col == 0 and new_stack == stack:
-                edits.append((idx, 'Stack', str(after.row + 1)))
+                edits.append((idx, 'Stack', value, str(after.row + 1)))
             else:
                 tail = parts[2:] if new_stack == stack else [str(new_stack)] if new_stack > 1 else []
-                edits.append((idx, 'Stack', '.'.join([str(after.row + 1), str(after.col + 1)] + tail)))
+                edits.append((idx, 'Stack', value, '.'.join([str(after.row + 1), str(after.col + 1)] + tail)))
             if (after.row_span, after.col_span) != (before.row_span, before.col_span):
-                edits.append((idx, 'Row span', str(after.row_span) if after.row_span > 1 else ''))
-                edits.append((idx, 'Col span', str(after.col_span) if after.col_span > 1 else ''))
+                edits.append((idx, 'Row span', df['Row span'].iloc[idx],
+                              str(after.row_span) if after.row_span > 1 else ''))
+                edits.append((idx, 'Col span', df['Col span'].iloc[idx],
+                              str(after.col_span) if after.col_span > 1 else ''))
         # Edits that move the rows, not spans changed by hand (see _on_span_changed).
         self._moving_rows = True
         try:
-            for idx, column, value in edits:
-                model.setData(model.createIndex(idx, df.columns.get_loc(column)), value, Qt.ItemDataRole.EditRole)
+            for idx, column, old, new in edits:
+                text = self._text_back(df[model.ROWUID_COLNAME].iloc[idx], column, old, new)
+                model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
         finally:
             self._moving_rows = False
+
+    def _text_back(self, uid, column: str, old, new: str) -> str:
+        """`new`, or the text the row of `uid` had in `column` when it last left what `new` gives, so that a row that
+        goes back to a place or a span, as on undo, takes back the text it had there; `old` is the text it leaves."""
+        texts = self._texts_left.setdefault((uid, column), {})
+        texts[_value_of(column, old)] = str(old)
+        return texts.get(_value_of(column, new), new)
 
     def _remember_places(self):
         self._table_places = _places(self.sigCfgWidget.model.get_dataframe())

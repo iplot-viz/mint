@@ -355,6 +355,24 @@ class ArrangePlotsTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(_table(win), before)
 
+    def test_undo_and_redo_give_each_row_the_very_text_it_had(self):
+        win = self._window(['1', '3', '3.1.2', '4'],
+                           spans={'Row span': ['2', '', '', ''], 'Col span': ['1', '', '', '']})
+        before = _table(win)
+
+        win.canvasStack.currentWidget().lay_out(1, 2)
+        self.app.processEvents()
+        laid_out = _table(win)
+        win.undo()
+        self.app.processEvents()
+
+        self.assertEqual(_table(win), before)
+        self.assertEqual(laid_out, [(VARS[0], '1', '', '1'), (VARS[1], '1.2', '', ''), (VARS[2], '1.2.2', '', ''),
+                                    (VARS[3], '1.2.3', '', '')])
+        win.redo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), laid_out)
+
     def test_a_draw_keeps_the_empty_cells_of_the_grid_picked_and_a_workspace_saves_them(self):
         win = self._window(['1', '2'])
         win.canvasStack.currentWidget().lay_out(2, 2)
