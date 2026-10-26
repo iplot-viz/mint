@@ -112,7 +112,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
 
-In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
+In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. Drag variables from the tree onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>). It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
 
 <p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
@@ -136,7 +136,7 @@ In the variable search window, the *Synoptic variables* check box lists the vari
 | Status | Status of the different stages (data retrieval, processing). |
 | Comment | Free-text description, useful when sharing CSV/workspace files. |
 
-Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*, or by dragging the plots on the canvas in SELECT mode (see <a href="#plotting-area">Plotting area</a>). Changing *Row span* or *Col span* moves the plots below as dragging the corner of the plot does. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
+Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*, by dragging the plots on the canvas in SELECT mode, or with *Layout* in the canvas toolbar (see <a href="#plotting-area">Plotting area</a>). Changing *Row span* or *Col span* moves the plots below as dragging the corner of the plot does. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
 
@@ -181,7 +181,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
-- Undo / Redo: roll back or replay the last pan, zoom, shift, or move or resize of a plot. *Draw*, and each auto-refresh in relative time, clear this history.
+- Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
@@ -189,6 +189,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
+- **LAYOUT**: pick in its menu the rows and columns of the grid, and the plots fill it column after column, in the order they have down the columns. The cells left over stay empty, also after *Draw*, and are saved with the workspace. With more plots than cells, the last cell takes the ones that do not fit, each as stacks of one plot; a grid where they cannot share a plot (another plot type, or absolute and relative time) shows grey. The *Stack*, *Row span* and *Col span* of the rows follow, and *Undo* takes it back. Drag variables from the variable search onto a cell to plot them there: on a plot they go into the stack under the mouse, on an empty cell into a new plot. Not available while streaming or with a plot in full-screen.
 - **DETACH** / **REATTACH**: float the canvas in its own window.
 
 Right-click a plot for per-plot actions:

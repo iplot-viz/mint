@@ -1,17 +1,27 @@
 """Moving and resizing plots on the canvas moves their rows in the table: the Stack of each row follows its plot and
 Row span and Col span follow its size. Undo takes the rows back with the plots, a Draw draws the plots where they
 went with the preferences each had, and moving a plot reads no data. The place of rows that drew no plot is kept for
-them: it moves as a plot does, and no plot moves or grows over it."""
+them: it moves as a plot does, and no plot moves or grows over it.
 
+Laying the plots out on a grid moves the rows the same way, the rows of the plots joined in the last cell taking its
+stacks, and the grid keeps its empty cells through a Draw and in the workspace. Variables dragged from the variable
+search and dropped on the canvas go to the table in the plot, the stack or the empty cell they were dropped on."""
+
+import json
 import unittest
+from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
+from iplotlib.core.drop_info import DropInfo
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
 from mint.gui.mtMainWindow import MTMainWindow, _stack_place
@@ -61,6 +71,27 @@ def _plot_with(win, variable):
         uid for uid, name in zip(win.sigCfgWidget.model.get_dataframe()['uid'],
                                  win.sigCfgWidget.model.get_dataframe()['Variable']) if name == variable))
     return plot
+
+
+@contextmanager
+def _dragging(win, variables: list):
+    """The variable search with these variables of the CSV data source selected, as a drag from it takes them."""
+    browser = win.sigCfgWidget.selectVarDialog
+    items = [SimpleNamespace(has_child=lambda: False, get_table_variable_str=lambda name=name: name)
+             for name in variables]
+    indexes = [SimpleNamespace(internalPointer=lambda item=item: item) for item in items]
+    with patch.object(browser.tree, 'selectedIndexes', return_value=indexes), \
+            patch.object(browser, 'get_current_source', return_value=SimpleNamespace(name='csv')):
+        yield
+
+
+def _drop(widget, point):
+    """A drag from elsewhere that comes over the widget and drops at the point, in its coordinates."""
+    mime = QMimeData()
+    mime.setText('variable')
+    args = (Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    for event in (QDragEnterEvent(point, *args), QDragMoveEvent(point, *args), QDropEvent(QPointF(point), *args)):
+        QApplication.sendEvent(widget, event)
 
 
 @unittest.skipUnless(layout is not None and hasattr(IplotQtCanvas, 'plotsArranged'),
@@ -285,6 +316,107 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '4'])
         win.draw_clicked()
         self.assertEqual(_overlapping(win.canvas), [])
+
+    def test_a_layout_gives_each_row_the_place_its_plot_takes_on_the_grid_picked(self):
+        win = self._window(['1', '2', '3', '4'])
+
+        win.canvasStack.currentWidget().lay_out(2, 2)
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '1.2', '2.2'])
+
+    def test_the_rows_of_the_plots_that_do_not_fit_take_stacks_of_the_last_cell_and_undo_takes_them_back(self):
+        win = self._window(['1.1', '2.1', '2.1.2', '3.1'])
+        before = _table(win)
+
+        win.canvasStack.currentWidget().lay_out(1, 2)
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '1.2', '1.2.2', '1.2.3'])
+        win.undo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), before)
+        win.redo()
+        self.app.processEvents()
+        win.draw_clicked()
+        self.assertEqual(_overlapping(win.canvas), [])
+        self.assertEqual(sorted(_plot_with(win, VARS[3]).signals), [1, 2, 3])
+        self.assertIs(_plot_with(win, VARS[1]), _plot_with(win, VARS[3]))
+
+    def test_rows_that_drew_nothing_keep_their_stack_when_their_plot_is_joined_and_after_undo(self):
+        win = self._window(['1.1', '2.1', '2.1.2', '3.1'], variables=[VARS[0], VARS[1], UNREAD, VARS[2]])
+        before = _table(win)
+
+        win.canvasStack.currentWidget().lay_out(1, 2)
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '1.2', '1.2.2', '1.2.3'])
+        win.undo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), before)
+
+    def test_a_draw_keeps_the_empty_cells_of_the_grid_picked_and_a_workspace_saves_them(self):
+        win = self._window(['1', '2'])
+        win.canvasStack.currentWidget().lay_out(2, 2)
+        self.app.processEvents()
+
+        win.draw_clicked()
+        self.assertEqual((win.canvas.rows, win.canvas.cols), (2, 2))
+
+        win.import_dict(json.loads(json.dumps(win.export_dict())))
+        win.draw_clicked()
+        self.assertEqual((win.canvas.rows, win.canvas.cols, win.canvas.layout_rows, win.canvas.layout_cols),
+                         (2, 2, 2, 2))
+
+    def test_the_canvas_takes_what_is_dragged_from_the_variable_search_only(self):
+        win = self._window(['1'])
+
+        self.assertTrue(win.accepts_drop(win.sigCfgWidget.selectVarDialog.tree, None))
+        self.assertFalse(win.accepts_drop(None, None))
+        self.assertFalse(win.accepts_drop(win.sigCfgWidget, None))
+
+    def test_variables_dropped_from_the_variable_search_are_drawn_where_they_were_dropped(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1'], impl=impl)
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                qt_canvas.lay_out(2, 2)
+                self.app.processEvents()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+                # What a drag from the variable search takes: its source cannot be given to a drag made up here.
+                qt_canvas.accepts_drop = lambda source, mime: True
+
+                with _dragging(win, [VARS[1], VARS[2]]):
+                    _drop(widget, widget.mapFrom(qt_canvas, QPoint(round((cols[1] + cols[2]) / 2),
+                                                                   round((rows[1] + rows[2]) / 2))))
+                    self.app.processEvents()
+
+                self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '2.2', '', ''),
+                                               (VARS[2], '2.2', '', '')])
+                self.assertEqual((_plot_with(win, VARS[1]).row, _plot_with(win, VARS[1]).col), (2, 2))
+                self.assertIs(_plot_with(win, VARS[1]), _plot_with(win, VARS[2]))
+                self.assertEqual((win.canvas.rows, win.canvas.cols), (2, 2))
+
+    def test_a_variable_dropped_on_a_plot_goes_to_the_stack_dropped_on(self):
+        win = self._window(['1', '1.1.2'])
+
+        with _dragging(win, [VARS[2]]):
+            win.on_drop_plot(DropInfo(1, 1, 2, win.sigCfgWidget.selectVarDialog.tree))
+
+        self.assertEqual(_table(win)[-1], (VARS[2], '1.1.2', '', ''))
+        self.assertIs(_plot_with(win, VARS[2]), _plot_with(win, VARS[0]))
+
+    def test_a_drop_from_an_iplotlib_that_does_not_tell_the_stack_goes_to_the_first_one(self):
+        win = self._window(['1'])
+
+        with _dragging(win, [VARS[2]]):
+            win.on_drop_plot(SimpleNamespace(row=1, col=2, dragged_item=None))
+
+        self.assertEqual(_table(win)[-1], (VARS[2], '1.2', '', ''))
 
     def test_moving_a_plot_reads_no_data(self):
         win = self._window(['1', '2', '3'])

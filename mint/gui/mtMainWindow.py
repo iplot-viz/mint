@@ -76,6 +76,12 @@ def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
     return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
 
 
+def _stack_offset(slot) -> int:
+    """The stack offset of a slot of a change of places, which only plots joined into one have (see
+    iplotlib.core.layout.Arrangement.changes)."""
+    return getattr(slot, 'stack_offset', 0)
+
+
 def _accepted_span(value) -> typing.Optional[int]:
     """The rows or the columns a Row span or Col span value gives a plot, if the table accepts the value: an empty
     one gives 1. None for a value that a Draw refuses."""
@@ -1594,8 +1600,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         return True
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=None):
+        # The grid keeps the rows and columns chosen for it with Layout, the empty ones too.
+        layout_rows, layout_cols = getattr(canvas, 'layout_rows', None), getattr(canvas, 'layout_cols', None)
         if not plan.keys():
-            self.canvas.plots = [[]]
+            if layout_rows and layout_cols:
+                canvas.rows, canvas.cols = layout_rows, layout_cols
+                canvas.plots = [[] for _ in range(canvas.cols)]
+            else:
+                self.canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -1604,8 +1616,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 max_col = max(max_col, col + plot["col_span"] - 1)
                 max_row = max(max_row, row + plot["row_span"] - 1)
 
-        canvas.cols = max_col
-        canvas.rows = max_row
+        canvas.cols = max(max_col, layout_cols or 0)
+        canvas.rows = max(max_row, layout_rows or 0)
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         for col, rows in plan.items():
@@ -1702,14 +1714,37 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.indicate_ready()
 
+    def accepts_drop(self, source, mime) -> bool:
+        """The canvas takes the variables dragged from the variable search (see on_drop_plot)."""
+        return source is self.sigCfgWidget.selectVarDialog.tree
+
     def on_drop_plot(self, drop_info):
-        dragged_item = drop_info.dragged_item
-        row = drop_info.row
-        col = drop_info.col
-        new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
-                                columns=['DS', 'Variable', 'Stack'])
-        self.sigCfgWidget.append_dataframe(new_data)
+        """The variables dragged from the variable search and dropped on the canvas go to the table, in the plot they
+        were dropped on, in its stack under the mouse, or in a new plot on the empty cell, and the canvas is drawn."""
+        variables = self._dragged_variables()
+        if variables.empty:
+            return
+        stack = f'{drop_info.row}.{drop_info.col}'
+        # An iplotlib that does not tell the stack takes drops on plots only, for their first stack.
+        stack_id = getattr(drop_info, 'stack', None)
+        if stack_id not in (None, 1):
+            stack += f'.{stack_id}'
+        variables['Stack'] = stack
+        self.sigCfgWidget.append_dataframe(variables)
         self.draw_clicked()
+
+    def _dragged_variables(self) -> pd.DataFrame:
+        """The variables selected in the variable search, which a drag from it takes, with their data source, as its
+        Add to main table gives them."""
+        browser = self.sigCfgWidget.selectVarDialog
+        items, seen = [], set()
+        for index in browser.tree.selectedIndexes():
+            item = index.internalPointer()
+            if not item.has_child() and id(item) not in seen:
+                seen.add(id(item))
+                items.append(item)
+        source = browser.get_current_source().name
+        return pd.DataFrame([[source, item.get_table_variable_str()] for item in items], columns=['DS', 'Variable'])
 
     def reserved_slots(self) -> list:
         """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
@@ -1719,6 +1754,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         from iplotlib.core.layout import Slot
         places = _places(self.sigCfgWidget.model.get_dataframe())
         return [Slot(row - 1, col - 1, rows, cols) for (row, col), (rows, cols) in sorted(places.items())]
+
+    def reserved_stacks(self) -> dict:
+        """The highest stack the rows of the table give each plot, by its row and column from 0: a layout that joins
+        plots numbers the stacks of the next plot past it, so that the rows of a stack drawn or not keep theirs (see
+        on_plots_arranged)."""
+        stacks = {}
+        for value in self.sigCfgWidget.model.get_dataframe()['Stack']:
+            place = _stack_place(value)
+            if place is not None:
+                key = (place[0] - 1, place[1] - 1)
+                stacks[key] = max(stacks.get(key, 0), int(exp_stack.match(str(value).strip()).group(3) or 1))
+        return stacks
 
     def max_span(self) -> int:
         """The most rows or columns a plot spans: the table accepts no bigger Row span or Col span."""
@@ -1731,22 +1778,32 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def _move_rows(self, changes: list):
         """The rows of the table take the places their plots take in `changes`: the rows of a reserved slot move with
-        it as those of a plot do (see reserved_slots and iplotlib.core.layout.Arrangement.changes)."""
+        it as those of a plot do, and those of plots joined into one take the stacks they have there (see
+        reserved_slots and iplotlib.core.layout.Arrangement.changes)."""
         model = self.sigCfgWidget.model
         df = model.get_dataframe()
-        moves = {(before.row + 1, before.col + 1): (before, after) for before, after in changes}
+        moves = {}
+        for before, after in changes:
+            moves.setdefault((before.row + 1, before.col + 1), []).append((before, after))
         edits = []
         for idx, value in enumerate(df['Stack']):
             place = _stack_place(value)
             if place not in moves:
                 continue
-            before, after = moves[place]
+            stack = int(exp_stack.match(str(value).strip()).group(3) or 1)
+            # Of the changes from the place, the one of the highest stack offset below the stack takes it.
+            taken = [change for change in moves[place] if stack > _stack_offset(change[0])]
+            if not taken:
+                continue
+            before, after = max(taken, key=lambda change: _stack_offset(change[0]))
+            new_stack = stack - _stack_offset(before) + _stack_offset(after)
             parts = str(value).strip().split('.')
             # A Stack that gives the row only keeps that form while its plot stays in the first column.
-            if len(parts) == 1 and after.col == 0:
+            if len(parts) == 1 and after.col == 0 and new_stack == stack:
                 edits.append((idx, 'Stack', str(after.row + 1)))
             else:
-                edits.append((idx, 'Stack', '.'.join([str(after.row + 1), str(after.col + 1)] + parts[2:])))
+                tail = parts[2:] if new_stack == stack else [str(new_stack)] if new_stack > 1 else []
+                edits.append((idx, 'Stack', '.'.join([str(after.row + 1), str(after.col + 1)] + tail)))
             if (after.row_span, after.col_span) != (before.row_span, before.col_span):
                 edits.append((idx, 'Row span', str(after.row_span) if after.row_span > 1 else ''))
                 edits.append((idx, 'Col span', str(after.col_span) if after.col_span > 1 else ''))
