@@ -299,6 +299,39 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual(_overlapping(win.canvas), [])
         self.assertIs(win.canvas.plots[0][0], _plot_with(win, VARS[3]))
 
+    def test_a_plot_resized_by_its_left_corner_takes_the_empty_cell_on_its_left_with_its_rows(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1.2', '2.1', '2.2'], impl=impl)
+                before = _table(win)
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                qt_canvas.set_mouse_mode(Canvas.MOUSE_MODE_SELECT)
+                self.app.processEvents()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+
+                def at(x, y):
+                    return widget.mapFrom(qt_canvas, QPoint(round(x), round(y)))
+                # From the bottom left resize handle of the plot of VAR1 to the empty cell on its left.
+                start = at(cols[1] + HANDLE.px() / 2, rows[1] - HANDLE.px() / 2)
+                end = at(cols[0] + (cols[1] - cols[0]) * 0.3, rows[1] - HANDLE.px() / 2)
+                QTest.mouseMove(widget, start)
+                QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+                for step in range(1, 9):
+                    QTest.mouseMove(widget, start + (end - start) * (step / 8))
+                    self.app.processEvents()
+                QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+                self.app.processEvents()
+
+                self.assertEqual(_table(win), [(VARS[0], '1.1', '', '2'), (VARS[1], '2.1', '', ''),
+                                               (VARS[2], '2.2', '', '')])
+                win.undo()
+                self.app.processEvents()
+                self.assertEqual(_table(win), before)
+
     def test_a_plot_does_not_grow_over_the_place_of_rows_that_drew_nothing(self):
         for impl in ('matplotlib', 'pyqt'):
             with self.subTest(impl):
