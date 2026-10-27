@@ -956,7 +956,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
+        canvas_widget = self.canvasStack.currentWidget()
+        # The mini-map and the focus go with the plots, until the workspace is drawn.
+        canvas_widget.unfocus_plot()
+        canvas_widget.reset()
+        self.refresh_minimap_availability()
 
         # Clear shift tracking since workspace import replaces the entire signal table.
         self._init_shift_storage()
