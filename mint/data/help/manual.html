@@ -319,6 +319,7 @@ $ mint
 </tbody>
 </table>
 <p>NumPy is available via the <code>np.</code> prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.</p>
+<p>In the <em>x</em>, <em>y</em> and <em>z</em> columns, <code>${self}</code> is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. <code>${Bus1}.data - ${self}.data</code>.</p>
 <p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 <h3 id="data-sources">2.10 Data Sources</h3>

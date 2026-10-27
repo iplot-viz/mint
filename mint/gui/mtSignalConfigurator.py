@@ -178,6 +178,22 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
         return RowAliasType.Mixed, name, p, depends_on
 
 
+def _own_alias_message(row_number: int, row: pd.Series, alias: str, blueprint: dict) -> str:
+    """Where a row refers to its own alias, and what to write instead."""
+    reference = Parser.marker_in + alias + Parser.marker_out
+    columns = [dim for dim in ['x', 'y', 'z'] if reference in row[mtBp.get_column_name(blueprint, dim)]]
+    reasons = []
+    if columns:
+        where = f"column {columns[0]} uses" if len(columns) == 1 else \
+            f"columns {', '.join(columns[:-1])} and {columns[-1]} use"
+        reasons.append(f"{where} the row's own alias {reference}. Write ${{self}} instead to use this row's own signal.")
+    if reference in row[mtBp.get_column_name(blueprint, 'Variable')]:
+        reasons.append(f"its Variable uses the row's own alias {reference}, so the row would be defined from itself.")
+    if not reasons:
+        reasons.append(f"it uses the row's own alias {reference}.")
+    return f"Conflicted row: {row_number}, " + " Also, ".join(reasons)
+
+
 class MTSignalConfigurator(QWidget):
     progressChanged = Signal(float)
     statusChanged = Signal(str)
@@ -818,7 +834,7 @@ class MTSignalConfigurator(QWidget):
                             if alias_idx == idx:
                                 sinfo = StatusInfo()
                                 sinfo.result = Result.INVALID
-                                sinfo.msg = f"Conflicted row: {idx + 1} , '{aliases[idx]}' short circuit in '{name}'"
+                                sinfo.msg = _own_alias_message(idx + 1, row, aliases[idx], self._model.blueprint)
                                 error_msgs.append(sinfo.msg)
                                 self.model.setData(model_idx, str(sinfo), Qt.ItemDataRole.DisplayRole)
                                 break
