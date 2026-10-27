@@ -48,8 +48,10 @@ class MinimapOnImportTest(unittest.TestCase):
         AccessHelper.da = AppDataAccess.get_data_access()
 
     def setUp(self):
-        self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
-        AccessHelper.pool = None
+        # The data are read in this thread, also with the iplotlib releases that can read them in worker processes.
+        if hasattr(AccessHelper, 'pool'):
+            self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
+            AccessHelper.pool = None
 
     def _window(self, rows: dict, impl: str) -> MTMainWindow:
         """A main window with the plots of `rows` drawn."""
