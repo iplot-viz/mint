@@ -6,12 +6,12 @@
 
 import weakref
 from collections import defaultdict
-from dataclasses import fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 import contextlib
 import getpass
-import inspect
 import json
 import os
 import socket
@@ -28,6 +28,7 @@ from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
+import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
@@ -48,6 +49,7 @@ from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.mtSignalsModel import MAX_SPAN, exp_stack
 from mint.models.utils import mtBlueprintParser
+from mint.tools.data_export import EXPORTED_SOURCE_TYPE, accepts_kwarg, export_data_source, reports_progress
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 from mint.gui.shift_handlers import ShiftHandlerMixin
@@ -57,13 +59,19 @@ from iplotLogging import setupLogger as setupLog
 logger = setupLog.get_logger(__name__)
 
 
-def _accepts_kwarg(func, name: str) -> bool:
-    # Guards the progress-bar wiring against sibling releases (iplotlib, iplotDataAccess)
-    # that predate the progress_callback parameter.
-    try:
-        return name in inspect.signature(func).parameters
-    except (TypeError, ValueError):
-        return False
+@dataclass
+class _Export:
+    """An export in progress, of the data of one or more data sources (see MTMainWindow.on_export_started)."""
+    # The variables to export, as many times as pulses, and those whose export started.
+    total: int
+    started: int = 0
+    # The data sources whose export has not ended, and the calls that export them in the export process.
+    left: int = 0
+    calls: list = field(default_factory=list)
+    # The files that the export tried to write, those it wrote and the reasons why the others failed.
+    attempts: int = 0
+    exported: int = 0
+    errors: list = field(default_factory=list)
 
 
 def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
@@ -187,9 +195,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
+        # An export runs while MINT goes on drawing: it reports its progress apart from the other tasks.
+        self._exportLabel = QLabel(self)
+        self._exportProgress = QProgressBar(self)
+        self._exportLabel.hide()
+        self._exportProgress.hide()
+        self._export = None  # type: typing.Optional[_Export]
+        self._exportPool = None
         self._workspaceLabel = QLabel("No workspace loaded")
         self._import_loaded_data_sources = False
         self._reading_ahead = False
+        self._statusBar.addPermanentWidget(self._exportLabel)
+        self._statusBar.addPermanentWidget(self._exportProgress)
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
@@ -318,6 +335,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.streamBtn.setText("Stream")
         self.exportBtn = QPushButton("Export")
         self.exportBtn.setIcon(plot_icon)
+        # As for the Stream button: the label it shows while it exports.
+        self.exportBtn.setText("Exporting...")
+        self.exportBtn.setMinimumWidth(self.exportBtn.sizeHint().width())
+        self.exportBtn.setText("Export")
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
@@ -787,9 +808,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def clear_cache(self):
         self.da.clear_cache()
-        pool = getattr(AccessHelper, 'pool', None)
-        if pool is not None:
-            pool.clear_cache()
+        for pool in (getattr(AccessHelper, 'pool', None), self._exportPool):
+            if pool is not None:
+                pool.clear_cache()
 
     def _start_data_access_workers(self):
         """Start the worker processes that read the data sources of the table, before a Draw needs them."""
@@ -1139,7 +1160,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
             kwargs = {}
-            if _accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
+            if accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
                 self._begin_export_progress()
                 kwargs['progress_callback'] = self._report_export_progress
             with open(file_path, mode='w') as f:
@@ -1248,6 +1269,29 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         """This function shows the export dialog and then creates a file with the correspondence format that contains
         info of the whole canvas"""
         self.exportCfgWidget.show()
+        # The process that exports starts while the export is set up: it can take a while to.
+        pool = self._export_pool()
+        if pool is not None:
+            try:
+                pool.prepare(name for name, data_source in self.da.ds_list.items()
+                             if getattr(data_source, 'source_type', None) == EXPORTED_SOURCE_TYPE)
+            except Exception:
+                logger.exception("Cannot start the export process ahead of the export")
+
+    def _export_pool(self):
+        """The worker process that exports, apart from those that read the data of the plots, which an export would
+        keep busy for as long as it takes; None without worker processes (see AccessHelper.pool), when the export
+        runs in the GUI thread."""
+        if self._exportPool is None and getattr(AccessHelper, 'pool', None) is not None:
+            pool_class = getattr(iplot_data_access, 'AccessPool', None)
+            if pool_class is not None and hasattr(pool_class, 'call_later'):
+                try:
+                    self._exportPool = pool_class(1)
+                except Exception:
+                    logger.exception("Cannot start the export process, the data are exported in the GUI thread")
+                    return None
+                QCoreApplication.instance().aboutToQuit.connect(self._exportPool.shutdown)
+        return self._exportPool
 
     def stream_callback(self, signal):
         # Coalesce bursts on the parser instead of one redraw per sample.
@@ -1309,6 +1353,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def on_export_started(self, data: dict):
         self.exportCfgWidget.hide()
+        if self._export is not None:
+            # The Export button waits meanwhile: an export runs at a time.
+            return
 
         ts, te = self.dataRangeSelector.get_time_range()
         pulse_number = self.dataRangeSelector.get_pulse_number()
@@ -1321,11 +1368,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 "Please provide a valid output path and select a supported export format (parquet or hdf5)",
                                 QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
-            self.indicate_ready()
             return
 
+        # What is exported is the table as it is now: it can change while the export runs.
         table, errors = self.sigCfgWidget.model.export_information()
-        self.indicate_busy('Exporting canvas information...')
 
         if table.empty:
             error_details = "\n".join(f"- {e}" for e in errors)
@@ -1334,118 +1380,115 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 f"No data could be exported due to:\n{error_details}",
                                 QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
-            self.indicate_ready()
             return
 
-        from iplotDataAccess.dataHandling.exportData.exportData import generateData, connectUDA
-
-        gen_kwargs = {}
-        if _accepts_kwarg(generateData, 'progressCallback'):
-            pulse_factor = len(pulse_number) if pulse_number else 1
-            total_vars = sum(len(group) * pulse_factor for ds_name, group in table.groupby('DS')
-                             if getattr(self.da.ds_list.get(ds_name), 'source_type', None) == "CODAC_UDA")
-            export_index = 0
-
-            def report_progress(name):
-                nonlocal export_index
-                export_index += 1
-                self._report_export_progress(export_index, total_vars, name)
-
-            gen_kwargs['progressCallback'] = report_progress
-            self._begin_export_progress()
-
-        # Relative time only applies to time-range exports; pulse exports
-        # keep absolute timestamps.
-        if data.get('relative_time') and pulse_number is None:
-            if _accepts_kwarg(generateData, 'relativeTime'):
-                gen_kwargs['relativeTime'] = True
-            else:
-                logger.warning("Relative time export requires a newer iplotDataAccess; "
-                               "exporting absolute timestamps instead")
-
-        # Resampling applies to time-range and pulse exports alike.
-        if data.get('resample_freq'):
-            if _accepts_kwarg(generateData, 'resampleFreq'):
-                gen_kwargs['resampleFreq'] = data['resample_freq']
-            else:
-                logger.warning("Resampling on export requires a newer iplotDataAccess; "
-                               "exporting the original samples instead")
-
-        attempt_count = 0
-        success_count = 0
+        exports = []
         for ds_name, group in table.groupby('DS'):
-            filename = f"{ds_name}.csv"
-            export_group = group[['Variable', 'Comment']]
-            export_group.to_csv(filename, index=False, sep=',', header=False)
-            conn = self.da.ds_list[ds_name]
-
-            if conn.source_type != "CODAC_UDA":
+            if getattr(self.da.ds_list.get(ds_name), 'source_type', None) != EXPORTED_SOURCE_TYPE:
                 msg = f"The data source: '{ds_name}' is invalid. Only CODAC UDA data sources can be exported"
                 errors.append(msg)
                 logger.warning(msg)
                 continue
+            exports.append((ds_name, dict(variables=list(group[['Variable', 'Comment']].itertuples(index=False,
+                                                                                                     name=None)),
+                                          export_format=export_format, chunks=chunks, output_path=output_path,
+                                          pulses=pulse_number, ts=ts, te=te,
+                                          relative_time=bool(data.get('relative_time')),
+                                          resample_freq=data.get('resample_freq'))))
 
-            # When configured, export pulls the data from an alternative UDA server (same port).
-            if conn.uda_for_export:
-                export_conn = connectUDA(conn.uda_for_export, conn.port)
-                if export_conn.errc != 0:
-                    reason = (f"Export failed for data source '{ds_name}': "
-                              f"could not connect to export server '{conn.uda_for_export}'")
-                    logger.warning(reason)
-                    errors.append(reason)
+        pulse_factor = len(pulse_number) if pulse_number else 1
+        self._export = export = _Export(total=sum(len(job['variables']) for _, job in exports) * pulse_factor,
+                                        left=len(exports), errors=errors)
+        self.exportBtn.setEnabled(False)
+        self.exportBtn.setText("Exporting...")
+        self._show_export_progress()
+        if not exports:
+            self._finish_export()
+            return
+
+        pool = self._export_pool()
+        for ds_name, job in exports:
+            if pool is not None:
+                try:
+                    export.calls.append(pool.call_later(export_data_source, ds_name, partial(self._exported, ds_name),
+                                                        progress=self._export_progressed, **job))
                     continue
+                except Exception:
+                    logger.exception("Cannot export in the export process, the data are exported in the GUI thread")
+                    pool = None
+            # It runs in this thread: what shows that it runs is painted first, as indicate_busy() did.
+            QCoreApplication.processEvents()
+            try:
+                outcome = export_data_source(self.da, ds_name, progress=self._export_progressed_here, **job)
+            except Exception as e:
+                # As the export process gives it.
+                logger.exception(f"Cannot export the data of {ds_name}")
+                outcome = e
+            self._exported(ds_name, outcome)
+
+    def _export_progressed(self, name: str):
+        """The export of the variable `name` started."""
+        if self._export is not None:
+            self._export.started += 1
+            self._show_export_progress(name)
+
+    def _export_progressed_here(self, name: str):
+        # The export runs in this thread: the bar shows the new value at once, as the other tasks do.
+        self._export_progressed(name)
+        QCoreApplication.processEvents()
+
+    def _show_export_progress(self, name: str = None):
+        export = self._export
+        if name is None:
+            text = "Exporting .."
+        else:
+            text = f"Exporting {name} ({export.started}/{export.total}) .."
+        # Long variable names would push the rest of the status bar away.
+        metrics = self._exportLabel.fontMetrics()
+        self._exportLabel.setText(metrics.elidedText(text, Qt.TextElideMode.ElideMiddle,
+                                                     metrics.averageCharWidth() * 60))
+        self._exportLabel.setToolTip(text)
+        if reports_progress():
+            # The bar tracks completed variables; the extra 1% signals that the
+            # next variable started. 100% is reserved for the fully finished export.
+            self._exportProgress.setRange(0, 100)
+            if export.started and export.total:
+                self._exportProgress.setValue(min(int((export.started - 1) * 100 / export.total) + 1, 99))
             else:
-                export_conn = conn
+                self._exportProgress.setValue(0)
+        else:
+            # Without progress reports, the bar only shows that the export runs.
+            self._exportProgress.setRange(0, 0)
+        self._exportLabel.show()
+        self._exportProgress.show()
 
-            # Pulse mode
-            if pulse_number is not None:
-                for pulse in pulse_number:
-                    result = conn.get_pulse_info(pulse)
-                    ts_str = f"{result.timeFrom}"
-                    te_str = f"{result.timeTo}"
-                    ts_iso = pd.to_datetime(result.timeFrom).isoformat()
-                    ts_iso = ts_iso.replace(':', '-')
+    def _exported(self, ds_name: str, outcome):
+        """The export of the data source ended, with what export_data_source gave or the error that stopped it."""
+        export = self._export
+        if export is None:
+            return
+        if isinstance(outcome, Exception):
+            reason = f"Export failed for data source '{ds_name}': {outcome}"
+            logger.warning(reason)
+            export.attempts += 1
+            export.errors.append(reason)
+        else:
+            export.attempts += outcome['attempts']
+            export.exported += outcome['exported']
+            export.errors.extend(outcome['errors'])
+        export.left -= 1
+        if export.left == 0:
+            self._finish_export()
 
-                    original_path = Path(output_path)
-                    valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
-                    new_path = original_path.with_name(valid_name)
+    def _finish_export(self):
+        export, self._export = self._export, None
+        self._exportLabel.hide()
+        self._exportProgress.hide()
+        self.exportBtn.setEnabled(True)
+        self.exportBtn.setText("Export")
+        self.exportCfgWidget.ui.pathLineEdit.clear()
 
-                    # Use of export data script
-                    attempt_count += 1
-                    valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
-                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
-                                                  **gen_kwargs)
-                    if valid:
-                        success_count += 1
-                        logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
-                    else:
-                        reason = f"Export failed for data source '{ds_name}' (pulse {pulse}): {err_msg}"
-                        logger.warning(reason)
-                        errors.append(reason)
-            else:
-                ts_str = f"{ts}"
-                te_str = f"{te}"
-
-                original_path = Path(output_path)
-                valid_name = f"{ds_name}_{original_path.stem}{original_path.suffix}"
-                new_path = original_path.with_name(valid_name)
-
-                # Use of export data script
-                attempt_count += 1
-                valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
-                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
-                                              **gen_kwargs)
-                if valid:
-                    success_count += 1
-                    logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
-                else:
-                    reason = f"Export failed for data source '{ds_name}': {err_msg}"
-                    logger.warning(reason)
-                    errors.append(reason)
-
-        if gen_kwargs and success_count:
-            self._finish_export_progress()
-
+        attempt_count, success_count, errors = export.attempts, export.exported, export.errors
         if attempt_count > 0 and success_count == 0:
             error_details = "\n".join(f"- {e}" for e in errors)
             logger.error("Export failed:\n%s", error_details)
@@ -1462,14 +1505,34 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         else:
             self.show_popup_msg("Export completed",
                                 "The data export process finished successfully", QMessageBox.Icon.Information)
-        self.exportCfgWidget.ui.pathLineEdit.clear()
-        self.indicate_ready()
+
+    def _stop_export(self) -> bool:
+        """Ask whether to stop the export that runs in the export process, before MINT quits; whether to."""
+        answer = QMessageBox.question(self, "Export in progress",
+                                      "An export is still running. Quit MINT and stop it?\n"
+                                      "The files it is writing are left incomplete.",
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                      QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        # The export can end while the question waits for the answer.
+        if self._export is not None:
+            for call in self._export.calls:
+                call.cancel()
+            self._export = None
+        return True
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # An export in this thread cannot be stopped: it ends before MINT quits, as it always did.
+        if self._export is not None and self._export.calls and not self._stop_export():
+            event.ignore()
+            return
         # Stop streaming workers before teardown: unlike daemon threads,
         # QThreads must not be destroyed while still running.
         if self.streamerCfgWidget.is_activated():
             self.streamerCfgWidget.streamer.stop()
+        if self._exportPool is not None:
+            self._exportPool.shutdown()
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
