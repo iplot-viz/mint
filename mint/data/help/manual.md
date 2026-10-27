@@ -116,6 +116,8 @@ In the variable search window, the *Synoptic variables* check box lists the vari
 
 <p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
+In the variable search window, with *Synoptic variables* checked, several words find the variables that have them all, in the name or the description, in any order: `magnet temperature [K]`.
+
 #### 2.4.2 Columns definition
 
 | Column | Meaning |
