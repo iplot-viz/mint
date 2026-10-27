@@ -254,5 +254,69 @@ class ShiftAppliedUpdatesModelTest(unittest.TestCase):
             win.close()
 
 
+# An hour and 7 ns: as a float added to times near 1e18, the 7 ns would be lost.
+HOUR_AND_7_NS = 3600 * 10 ** 9 + 7
+
+
+class ShiftAlongATimeAxisTest(unittest.TestCase):
+    """A shift along X in absolute time goes to the row in whole nanoseconds, the unit of the times."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        cls.cfg_path = write_csv_datasource_config()
+        AppDataAccess.initialize(cls.cfg_path)
+        AccessHelper.da = AppDataAccess.get_data_access()
+
+    @staticmethod
+    def _draw_on_a_time_axis(win: MTMainWindow, alias: str = 'alpha') -> str:
+        uid = _populate_and_draw(win, alias)
+        win.canvas.plots[0][0].axes[0].is_date = True
+        return uid
+
+    def test_a_shift_along_a_time_axis_goes_to_the_row_in_whole_nanoseconds(self):
+        win = _build_main_window()
+        try:
+            uid = self._draw_on_a_time_axis(win)
+            original_x = win.sigCfgWidget.model.get_dataframe().at[0, 'x']
+
+            win._on_signal_shift_applied(uid, float(HOUR_AND_7_NS), 0.0, 'drag')
+            win._on_signal_shift_applied(uid, float(HOUR_AND_7_NS), 0.0, 'drag')
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[0, 'x'],
+                             f'(${{self}}.time) + {2 * HOUR_AND_7_NS}')
+
+            win._on_signal_shift_undone(uid, float(HOUR_AND_7_NS), 0.0, 'drag')
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[0, 'x'],
+                             f'(${{self}}.time) + {HOUR_AND_7_NS}')
+            win._on_signal_shift_undone(uid, float(HOUR_AND_7_NS), 0.0, 'drag')
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[0, 'x'], original_x)
+        finally:
+            win.close()
+
+    def test_a_copy_shifted_along_a_time_axis_goes_to_its_row_in_whole_nanoseconds(self):
+        win = _build_main_window()
+        try:
+            uid = self._draw_on_a_time_axis(win, alias='')
+            signal, _ = win._find_signal_in_canvas(uid)
+
+            win._on_signal_shift_requested(uid, signal.name, signal.data_source, str(signal.pulse_nb),
+                                           -float(HOUR_AND_7_NS), 0.0, True)
+
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[1, 'x'], f'(${{self}}.time) - {HOUR_AND_7_NS}')
+        finally:
+            win.close()
+
+    def test_a_shift_along_another_axis_keeps_its_offset_as_it_was(self):
+        win = _build_main_window()
+        try:
+            uid = _populate_and_draw(win)
+
+            win._on_signal_shift_applied(uid, 2.0, 0.0, 'drag')
+
+            self.assertEqual(win.sigCfgWidget.model.get_dataframe().at[0, 'x'], '(${self}.time) + 2.0')
+        finally:
+            win.close()
+
+
 if __name__ == '__main__':
     unittest.main()
