@@ -7,16 +7,44 @@ from PySide6.QtWidgets import QApplication
 import os
 from argparse import ArgumentParser, Namespace
 from iplotlib.core.display import apply_hidpi_policy
+from iplotLogging import setupLogger
 from mint._version import get_versions
+
+logger = setupLogger.get_logger(__name__)
 
 
 CANVAS_IMPLS = ('matplotlib', 'pyqt')
+
+DEFAULT_DATA_ACCESS_WORKERS = 2
+MAX_DATA_ACCESS_WORKERS = 8
 
 
 def default_canvas_impl() -> str:
     """Canvas implementation used without --impl: MINT_IMPL when it names one, matplotlib otherwise."""
     value = os.environ.get('MINT_IMPL', '').strip().lower()
     return value if value in CANVAS_IMPLS else 'matplotlib'
+
+
+def data_access_workers() -> int:
+    """Processes reading data in the background: MINT_DATA_ACCESS_WORKERS, kept between 0 and 8, or 2 when it is
+    not a number.
+
+    0 reads the data in the GUI thread, without worker processes.
+    """
+    value = os.environ.get('MINT_DATA_ACCESS_WORKERS')
+    if value is None:
+        return DEFAULT_DATA_ACCESS_WORKERS
+    try:
+        workers = int(value)
+    except ValueError:
+        logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is not a number, "
+                       f"{DEFAULT_DATA_ACCESS_WORKERS} worker processes read the data")
+        return DEFAULT_DATA_ACCESS_WORKERS
+    if not 0 <= workers <= MAX_DATA_ACCESS_WORKERS:
+        workers = min(max(workers, 0), MAX_DATA_ACCESS_WORKERS)
+        logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is out of 0-{MAX_DATA_ACCESS_WORKERS}, "
+                       f"{workers} worker processes read the data")
+    return workers
 
 
 def create_app(argv=None) -> (QApplication, Namespace):

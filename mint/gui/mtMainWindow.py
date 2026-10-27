@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
+import contextlib
 import getpass
 import inspect
 import json
@@ -28,7 +29,7 @@ from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
-from iplotlib.interface.iplotSignalAdapter import ParserHelper
+from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
@@ -129,6 +130,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.hide()
         self._workspaceLabel = QLabel("No workspace loaded")
         self._import_loaded_data_sources = False
+        self._reading_ahead = False
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
@@ -163,6 +165,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._init_shift_storage()
         self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
             self._on_rows_about_to_be_removed)
+        # The worker processes that read a data source start once the table holds a signal of it, ahead of
+        # the Draw. The table is checked once a change is complete: set_dataframe() reports its new rows
+        # before it fills their cells.
+        self._workers_check = QTimer(self)
+        self._workers_check.setSingleShot(True)
+        self._workers_check.timeout.connect(self._start_data_access_workers)
+        for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
+            change.connect(lambda *_: self._workers_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -183,7 +193,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         clear_cache_action = QAction("Clear cache", self.menuBar())
         clear_cache_action.setStatusTip("Clear cache")
-        clear_cache_action.triggered.connect(self.da.clear_cache)
+        clear_cache_action.triggered.connect(self.clear_cache)
 
         user_manual_action = QAction("User Manual", self.menuBar())
         user_manual_action.setStatusTip("Open the embedded MINT user manual")
@@ -701,6 +711,113 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.statusBar().showMessage('Ready.')
         QCoreApplication.processEvents()
 
+    def clear_cache(self):
+        self.da.clear_cache()
+        pool = getattr(AccessHelper, 'pool', None)
+        if pool is not None:
+            pool.clear_cache()
+
+    def _start_data_access_workers(self):
+        """Start the worker processes that read the data sources of the table, before a Draw needs them."""
+        pool = getattr(AccessHelper, 'pool', None)
+        if pool is None:
+            return
+        try:
+            pool.prepare(self.sigCfgWidget.model.data_sources_in_table())
+        except Exception:
+            logger.exception("Cannot start the data access worker processes ahead of the Draw")
+
+    def _reads_row(self, waypt, signal) -> bool:
+        """Whether build() reads the data of the waypoint's signal (see update_signal_data)."""
+        if waypt.stack_num and (waypt.col_num or waypt.row_num) and not signal.label:
+            return False
+        return self.sigCfgWidget.model.fetches_row(waypt.idx)
+
+    def _read_ahead(self, signals: list) -> typing.Optional[dict]:
+        """Read the data of the signals all at once, in the background worker processes.
+
+        Returns the results for AccessHelper.prefetched(): empty without worker processes, or None
+        if the application quit while waiting.
+        """
+        # iplotlib releases that predate the pool have none.
+        pool = getattr(AccessHelper, 'pool', None)
+        if pool is None:
+            return {}
+        requests = [params for signal in signals for params in AccessHelper.data_requests(signal)]
+        if not requests:
+            return {}
+        self._reading_ahead = True
+        self._progressBar.show()
+        try:
+            return pool.fetch(requests, progress=self._report_read_progress)
+        except Exception:
+            logger.exception("Reading in the worker processes failed, data are read in the GUI thread from now on")
+            AccessHelper.pool = None
+            pool.shutdown()
+            return {}
+        finally:
+            self._reading_ahead = False
+            self._progressBar.setRange(0, 100)
+
+    @staticmethod
+    def _prefetched(results: dict):
+        # AccessHelper.prefetched(results), guarded against iplotlib releases that predate it:
+        # those read every request in the GUI thread.
+        prefetched = getattr(AccessHelper, 'prefetched', None)
+        return contextlib.nullcontext() if prefetched is None else prefetched(results)
+
+    def _read_in_batches(self, waypoints: typing.Iterable, stream: bool):
+        """Create the signal of each waypoint and yield both, with the data of the signal read ahead.
+
+        The data are read in batches, and a batch ends at a signal whose alias another row uses in x, y or z:
+        parsing that row checks whether the row of the alias failed to read, so the alias is read before
+        `waypoints` reaches that row. While a pair is handled, its reads are served from what was read ahead.
+        Yields (None, None) if the application quit while reading.
+        """
+        used_in_xyz = self.sigCfgWidget.model.aliases_used_in_xyz()
+        read_ahead, batch = {}, []
+        for waypt in waypoints:
+            if not waypt.func and not waypt.args:
+                continue
+            signal = waypt.func(*waypt.args, **waypt.kwargs)
+            batch.append((waypt, signal))
+            if signal.alias in used_in_xyz:
+                if not (yield from self._read_batch(batch, stream, read_ahead)):
+                    return
+                batch = []
+        yield from self._read_batch(batch, stream, read_ahead)
+
+    def _read_batch(self, batch: list, stream: bool, read_ahead: dict):
+        if not stream:
+            results = self._read_ahead([signal for waypt, signal in batch if self._reads_row(waypt, signal)])
+            if results is None:
+                yield None, None
+                return False
+            read_ahead.update(results)
+        with self._prefetched(read_ahead):
+            yield from batch
+        return True
+
+    def _old_signals(self, path: list) -> list:
+        """The signals of the imported canvas at the places of the waypoints (see import_dict)."""
+        old_signals = []
+        for waypt in path:
+            if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
+                continue
+            try:
+                plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]
+            except IndexError:
+                continue
+            stack_signals = plot.signals.get(waypt.stack_num, []) if plot else []
+            if waypt.signal_stack_id < len(stack_signals):
+                old_signals.append(stack_signals[waypt.signal_stack_id])
+        return old_signals
+
+    def _report_read_progress(self, done: int, total: int):
+        self._progressBar.setRange(0, total)
+        self._progressBar.setValue(done)
+        self.statusBar().showMessage(f"Retrieving data ({done}/{total}) ..")
+
     def _begin_export_progress(self):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
@@ -809,6 +926,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
+        signals = [waypt.func(*waypt.args, **waypt.kwargs) for waypt in path]
+        # The loop below reads each workspace signal again, with the range it was saved with.
+        read_ahead = self._read_ahead(
+            [signal for waypt, signal in zip(path, signals) if self.sigCfgWidget.model.fetches_row(waypt.idx)]
+            + self._old_signals(path))
+        if read_ahead is None:
+            return
+
+        def update_signal_data(row_idx, signal):
+            with self._prefetched(read_ahead):
+                self.sigCfgWidget.model.update_signal_data(row_idx, signal, True)
+
         # Travel the path and update each signal parameters from workspace and trigger a data access request.
         valid_signal = False
         for i, waypt in enumerate(path):
@@ -816,13 +945,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.sigCfgWidget.set_progress(int(i * 100 / path_len))
 
             if (not waypt.stack_num) or (not waypt.col_num and not waypt.row_num):
-                signal = waypt.func(*waypt.args, **waypt.kwargs)
-                self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
+                update_signal_data(waypt.idx, signals[i])
                 continue
 
             # Check if signal name is valid (Correct signal name and signal has data)
-            signal_valid = waypt.func(*waypt.args, **waypt.kwargs)
-            self.sigCfgWidget.model.update_signal_data(waypt.idx, signal_valid, True)
+            signal_valid = signals[i]
+            update_signal_data(waypt.idx, signal_valid)
             if signal_valid.status_info.result == 'Fail':
                 continue
 
@@ -853,7 +981,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
             new_signal.parent = weakref.ref(plot)
 
-            self.sigCfgWidget.model.update_signal_data(waypt.idx, new_signal, True)
+            update_signal_data(waypt.idx, new_signal)
             # Check if new signal is valid
             if new_signal.status_info.result == 'Fail':
                 plot.signals[waypt.stack_num][waypt.signal_stack_id] = None
@@ -868,6 +996,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
             if isinstance(new_signal, SignalXY) and new_signal.markers_list:
                 self.qtcanvas._marker_window.import_table(new_signal)
+        read_ahead.clear()
 
         if not valid_signal:
             # This means that there are not valid signals to create
@@ -1003,7 +1132,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             file_name = f"signals_table_{os.getpid()}_{timestamp}.scsv"
             self.sigCfgWidget.export_scsv(os.path.join(dump_dir, file_name))
 
-            self.build()
+            if not self.build():
+                return
 
         self.indicate_busy("Drawing...")
         self.stop_auto_refresh()
@@ -1263,7 +1393,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
-    def build(self, stream=False):
+    def build(self, stream=False) -> bool:
+        """Build the canvas from the variables table; False if the application quit while reading data."""
+        # Data still read in the background for views of the current canvas would be processed in the
+        # parser environment of the new one. Older iplotlib releases read the views in the GUI thread.
+        if hasattr(self, 'drop_view_reads'):
+            self.drop_view_reads()
         # Clear shared parser environment to ensure a clean rebuild. The parser itself
         # is cleared by set_canvas right before drawing: doing it here would blank the
         # plots for as long as the data fetch below takes (visible on every refresh tick).
@@ -1314,17 +1449,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.model._alias_checked = False
 
         if valid:
-            for waypt in self.sigCfgWidget.build(**da_params):
-                if not waypt.func and not waypt.args:
-                    continue
+            for waypt, signal in self._read_in_batches(self.sigCfgWidget.build(**da_params), stream):
+                if waypt is None:
+                    return False
 
                 if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
-                    signal = waypt.func(*waypt.args, **waypt.kwargs)
                     if not stream:
                         self.sigCfgWidget.model.update_signal_data(waypt.idx, signal, True)
                     continue
 
-                signal = waypt.func(*waypt.args, **waypt.kwargs)
                 if not signal.label:
                     continue
 
@@ -1406,6 +1539,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         logger.info("Built canvas")
         logger.debug(f"{self.canvas}")
         self.indicate_ready()
+        return True
 
     def build_canvas(self, canvas: Canvas, plan: dict, x_axis_date=False, x_axis_follow=False, x_axis_window=None):
         if not plan.keys():
@@ -1499,7 +1633,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 self.canvas.add_plot(plot, col=col - 1)
 
     def on_timeout(self):
-        self.build()
+        # A tick can come while the previous build still waits for its data.
+        if self._reading_ahead or not self.build():
+            return
         self.indicate_busy("Drawing...")
 
         self.canvasStack.currentWidget().unfocus_plot()
