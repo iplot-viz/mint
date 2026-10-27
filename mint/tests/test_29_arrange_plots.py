@@ -332,6 +332,75 @@ class ArrangePlotsTest(unittest.TestCase):
                 self.app.processEvents()
                 self.assertEqual(_table(win), before)
 
+    def test_a_plot_of_a_column_narrowed_by_a_side_takes_half_of_it_and_the_others_both_halves(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1', '2', '3'], impl=impl)
+                before = _table(win)
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                qt_canvas.set_mouse_mode(Canvas.MOUSE_MODE_SELECT)
+                self.app.processEvents()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+
+                def at(x, y):
+                    return widget.mapFrom(qt_canvas, QPoint(round(x), round(y)))
+                # From the bottom left resize handle of the plot of VAR2 to two thirds of the way across.
+                start = at(cols[0] + HANDLE.px() / 2, rows[2] - HANDLE.px() / 2)
+                end = at(cols[0] + (cols[1] - cols[0]) * 2 / 3, rows[2] - HANDLE.px() / 2)
+                QTest.mouseMove(widget, start)
+                QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+                for step in range(1, 9):
+                    QTest.mouseMove(widget, start + (end - start) * (step / 8))
+                    self.app.processEvents()
+                QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+                self.app.processEvents()
+
+                split = [(VARS[0], '1', '', '2'), (VARS[1], '2.2', '', ''), (VARS[2], '3', '', '2')]
+                self.assertEqual(_table(win), split)
+                win.undo()
+                self.app.processEvents()
+                self.assertEqual(_table(win), before)
+                win.redo()
+                self.app.processEvents()
+                win.draw_clicked()
+                self.assertEqual(_table(win), split)
+                self.assertEqual(sorted((slot.row, slot.col, slot.col_span) for _, slot in layout.slots_of(win.canvas)),
+                                 [(0, 0, 2), (1, 1, 1), (2, 0, 2)])
+
+    def test_the_rows_that_drew_nothing_stay_when_the_only_plot_cannot_take_its_left_half(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1', '2'], impl=impl, variables=[UNREAD, VARS[1]])
+                before = _table(win)
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                qt_canvas.set_mouse_mode(Canvas.MOUSE_MODE_SELECT)
+                self.app.processEvents()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+
+                def at(x, y):
+                    return widget.mapFrom(qt_canvas, QPoint(round(x), round(y)))
+                # From the bottom right resize handle of the plot of VAR2 to a third of the way across: no plot would
+                # keep the right half.
+                start = at(cols[1] - HANDLE.px() / 2, rows[2] - HANDLE.px() / 2)
+                end = at(cols[0] + (cols[1] - cols[0]) / 3, rows[2] - HANDLE.px() / 2)
+                QTest.mouseMove(widget, start)
+                QTest.mousePress(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+                for step in range(1, 9):
+                    QTest.mouseMove(widget, start + (end - start) * (step / 8))
+                    self.app.processEvents()
+                QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+                self.app.processEvents()
+
+                self.assertEqual(_table(win), before)
+
     def test_a_plot_does_not_grow_over_the_place_of_rows_that_drew_nothing(self):
         for impl in ('matplotlib', 'pyqt'):
             with self.subTest(impl):
