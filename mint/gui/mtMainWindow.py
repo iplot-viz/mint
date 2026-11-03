@@ -11,6 +11,7 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 import contextlib
+import functools
 import getpass
 import json
 import os
@@ -71,6 +72,25 @@ class _Export:
     attempts: int = 0
     exported: int = 0
     errors: list = field(default_factory=list)
+
+
+def _ready_at_the_end(method):
+    """Let the status bar say Ready only once `method` has done all it does: the steps of a Draw or an import, such as
+    reading the table, say it before the canvas is drawn. It is said at the end if the last of them said it."""
+
+    @functools.wraps(method)
+    def run(self, *args, **kwargs):
+        if self._ready_held:
+            return method(self, *args, **kwargs)
+        self._ready_held, self._ready_due = True, False
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            self._ready_held = False
+            if self._ready_due:
+                self.indicate_ready()
+
+    return run
 
 
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
@@ -146,6 +166,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._workspaceLabel = QLabel("No workspace loaded")
         self._import_loaded_data_sources = False
         self._reading_ahead = False
+        # While a Draw or an import runs, the status bar says Ready only at its end (see _ready_at_the_end).
+        self._ready_held = False
+        self._ready_due = False
+        # The views that wait for data read in the background, and whether the status bar says so.
+        self._view_reads = 0
+        self._view_reads_shown = False
+        self._view_reads_check = QTimer(self)
+        self._view_reads_check.setSingleShot(True)
+        self._view_reads_check.timeout.connect(self._show_view_reads)
         self._statusBar.addPermanentWidget(self._exportLabel)
         self._statusBar.addPermanentWidget(self._exportProgress)
         self._statusBar.addPermanentWidget(self._progressBar)
@@ -178,6 +207,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.qtcanvas = QtPyQtGraphCanvas(canvas=self.canvas, parent=self.canvasStack)
         self.canvasStack.addWidget(self.qtcanvas)
         self.qtcanvas.dropSignal.connect(self.on_drop_plot)
+        # Older iplotlib releases read the views in the GUI thread, and tell nothing.
+        view_reads = getattr(self.qtcanvas, 'viewReadsChanged', None)
+        if view_reads is not None:
+            view_reads.connect(self._on_view_reads_changed)
         self._connect_shift_signals()
         self._init_shift_storage()
         self.sigCfgWidget.model.rowsAboutToBeRemoved.connect(
@@ -719,6 +752,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             w._update_minimap()
 
     def indicate_busy(self, msg='Hang on ..'):
+        self._ready_due = self._view_reads_shown = False
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
         self._progressBar.show()
@@ -729,8 +763,36 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.hide()
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
+        if self._ready_held:
+            # The step leaves the progress bar to the next one, and Ready to the end of the task.
+            self._ready_due = True
+            return
+        if self._view_reads:
+            # Until the data read for the views that changed arrive (see _show_view_reads).
+            self.indicate_busy('Retrieving data...')
+            self._view_reads_shown = True
+            return
+        self._view_reads_shown = False
         self.statusBar().showMessage('Ready.')
         QCoreApplication.processEvents()
+
+    def _on_view_reads_changed(self, count: int):
+        self._view_reads = count
+        # Said from the event loop: the canvas tells it while it draws.
+        self._view_reads_check.start(0)
+
+    def _show_view_reads(self):
+        """The status bar says that data are read for the views that changed until they arrive, when it says nothing else:
+        what MINT does meanwhile shows its own progress, and its indicate_ready() says it if they still have not."""
+        if self._ready_held:
+            return
+        message = self.statusBar().currentMessage()
+        if self._view_reads:
+            if self._progressBar.isHidden() and message in ('', 'Ready.'):
+                self.indicate_busy('Retrieving data...')
+                self._view_reads_shown = True
+        elif self._view_reads_shown and message == 'Retrieving data...':
+            self.indicate_ready()
 
     def clear_cache(self):
         self.da.clear_cache()
@@ -894,6 +956,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     if not plot.signals.keys() or plot.parent is None:
                         col[idx_plot] = None
 
+    @_ready_at_the_end
     def import_dict(self, input_dict: dict):
         # Close preferences window to prevent stale state
         if self.prefWindow.isVisible():
@@ -1135,6 +1198,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self.stop_auto_refresh()
         super().home()
 
+    @_ready_at_the_end
     def draw_clicked(self, no_build: bool = False):
         """This function creates and draws the canvas getting data from variables table and time/pulse widget"""
 
@@ -1217,6 +1281,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Coalesce bursts on the parser instead of one redraw per sample.
         self.canvasStack.currentWidget()._parser.request_signal_redraw(signal)
 
+    @_ready_at_the_end
     def on_stream_started(self):
         self.streamerCfgWidget.hide()
         self.streamBtn.setText("Stop")
@@ -1695,6 +1760,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
                 self.canvas.add_plot(plot, col=col - 1)
 
+    @_ready_at_the_end
     def on_timeout(self):
         # A tick can come while the previous build still waits for its data.
         if self._reading_ahead or not self.build():
