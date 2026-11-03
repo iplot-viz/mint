@@ -161,7 +161,7 @@ Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON 
 
 The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The *Sampling* box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a `.resampling.log` file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. *Native* keeps the original samples.
 
-While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.
+The export runs in the background, in a process of its own, so MINT keeps drawing meanwhile, and a progress bar in the status bar reports the variable currently being written. It exports the table as it was when *Export* was clicked: changing the table meanwhile does not change the export. A message says when it has finished. One export runs at a time: meanwhile the *Export* button shows *Exporting...*, and quitting MINT asks whether to stop it. With `MINT_DATA_ACCESS_WORKERS` set to 0, the export runs in the window, which waits for it.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
