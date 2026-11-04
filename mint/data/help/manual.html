@@ -248,7 +248,7 @@ $ mint
 <li><strong>HOME</strong>: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
-<li><img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> <strong>Create Pulse</strong>: create a UDA pulse from the visible time range — set category, status and description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.</li>
+<li><img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> <strong>Create Pulse</strong>: create a UDA pulse from the visible time range — set category, status and a one-line description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.</li>
 <li><img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> <strong>Update Pulse</strong>: search for an existing pulse and update its time range, status or description.</li>
 <li>Gears: open the preferences panel (canvas, plot, signal, axis levels).</li>
 <li><strong>MINI-MAP</strong>: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at <em>Draw</em> time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (<code>show_minimap</code> flag).</li>
@@ -317,6 +317,7 @@ $ mint
 </tbody>
 </table>
 <p>NumPy is available via the <code>np.</code> prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.</p>
+<p>In the <em>x</em>, <em>y</em> and <em>z</em> columns, <code>${self}</code> is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. <code>${Bus1}.data - ${self}.data</code>.</p>
 <p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 <h3 id="data-sources">2.10 Data Sources</h3>

@@ -183,7 +183,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
-- <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range — set category, status and description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.
+- <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range — set category, status and a one-line description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
@@ -264,6 +264,8 @@ The *x* column rewrites the time vector; *y* rewrites the data vector. Example -
 | Y | `np.max(${ML4_max}.data) * np.ones(${ML4_max}.data.size)` |
 
 NumPy is available via the `np.` prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.
+
+In the *x*, *y* and *z* columns, `${self}` is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. `${Bus1}.data - ${self}.data`.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
