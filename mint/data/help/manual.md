@@ -112,7 +112,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
 
-In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
+In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file). Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).
 
 <p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
@@ -136,13 +136,15 @@ In the variable search window, the *Synoptic variables* check box lists the vari
 | Status | Status of the different stages (data retrieval, processing). |
 | Comment | Free-text description, useful when sharing CSV/workspace files. |
 
-Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
+Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*, by dragging the plots on the canvas in SELECT mode, or with *Layout* in the canvas toolbar (see <a href="#plotting-area">Plotting area</a>). Changing *Row span* or *Col span* moves the plots below as dragging a bottom corner of the plot does. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
 
 ### 2.5 Draw, Stream {#draw-stream}
 
 Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
+
+A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why.
 
 Draw and workspace import read all the rows at once in the background: the window does not freeze, the status bar shows how many reads are done (*Retrieving data (3/8)*), and clicks wait until the reads finish. Zoom, pan, undo, redo and Stream also read in the background, and the plots keep showing the data they have until the new ones arrive, while the status bar says *Retrieving data...*. *Ready.* shows once the plots are drawn. UDA reads run two at a time; set the `MINT_DATA_ACCESS_WORKERS` environment variable to change that (up to 8; 0 turns the background reading off). Background reading starts once the table holds a signal of a data source and takes a few seconds to start, a minute or two on a busy machine; until then, the window reads that data source itself and freezes while it does.
 
@@ -173,7 +175,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 
 <p style="text-align:center;margin:14px 0;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
 
-- **SELECT**: left double-click to put a plot in full-screen; right double-click to go back.
+- **SELECT**: left double-click to put a plot in full-screen; right double-click to go back. Drag a plot by its background to move it: in its column the other plots make room for it, and onto a plot of another column the two trade places. Drag one of its corners, where a grip shows as the mouse nears it, to make it span more or fewer rows and columns, up to 10, into the empty cells on that side; in its column the plots below move with its bottom edge. With the plots in one column, drag a corner sideways to the middle of the plot to make it half as wide: the other plots keep the whole width. While the mouse moves, the canvas shows where the plots will go, and a place they do not fit shows grey. The place of rows that drew no plot, for example rows added since the last *Draw*, stays theirs: it shows dotted while you drag, and the plots move around it as around any other plot. The *Stack*, *Row span* and *Col span* of the rows follow their plot, and the data are not read again. Not available while streaming or with a plot in full-screen.
 - **CROSSHAIR**: shows X/Y coordinates and the closest signal value. SELECT disables it.
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
@@ -181,7 +183,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
-- Undo / Redo: roll back or replay the last pan, zoom or shift. *Draw*, and each auto-refresh in relative time, clear this history.
+- Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
@@ -189,11 +191,13 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
+- **LAYOUT**: pick in its menu the rows and columns of the grid, and the plots fill it column after column, in the order they have down the columns. The cells left over stay empty, also after *Draw*, and are saved with the workspace. The menu shows the grid the plots are on, and the next session starts on the last grid picked. With more plots than cells, the last cell takes the ones that do not fit, each as stacks of one plot; a grid where they cannot share a plot (another plot type, or absolute and relative time) shows grey. The *Stack*, *Row span* and *Col span* of the rows follow, and *Undo* takes it back. Drag variables from the variable search onto a cell to plot them there, or rows selected in the table to move their signals there: on a plot they go into the stack under the mouse, with the size of the plot; on an empty cell into a new plot. Not available while streaming or with a plot in full-screen.
 - **DETACH** / **REATTACH**: float the canvas in its own window.
 
 Right-click a plot for per-plot actions:
 
 - **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
+- **Unstack** — puts each stack of the plot in a plot of its own, one below the other, and the plots below move down to make room. The *Stack* of the rows follows, and *Undo* takes it back. Greyed out for a plot of one stack.
 - **Set as time window** — copies the plot's visible range into the query time range (switching to the *Time Range* tab, or keeping relative seconds in pulse mode), so the next *Draw* fetches exactly what you zoomed into.
 
 #### Legend
@@ -360,7 +364,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
-20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
+20. **Drag-and-drop a signal across plots?** Yes: select its row in the table and drag it onto the plot.
 21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode — and not while streaming.
 
 ## 6. Error reference {#errors}
