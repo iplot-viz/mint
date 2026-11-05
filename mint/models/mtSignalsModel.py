@@ -12,7 +12,7 @@ import typing
 import re
 import uuid
 
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, Qt
 from PySide6.QtGui import QBrush, QColor
 
 from iplotProcessing.common import InvalidExpression
@@ -228,9 +228,20 @@ class MTSignalsModel(QAbstractItemModel):
         if index.isValid():
             if self._table.columns[index.column()] != 'Status' and self._table.columns[
                 index.column()] != 'Output Datatype':
-                return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
+                return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | \
+                    Qt.ItemFlag.ItemIsDragEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
+
+    def mimeTypes(self) -> typing.List[str]:
+        return ['text/plain']
+
+    def mimeData(self, indexes: typing.List[QModelIndex]) -> QMimeData:
+        """The variables of the rows dragged, one per line: the canvas takes the rows the view selects."""
+        mime = QMimeData()
+        rows = sorted({index.row() for index in indexes if index.isValid()})
+        mime.setText('\n'.join(str(self._table['Variable'].iloc[row]) for row in rows))
+        return mime
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
