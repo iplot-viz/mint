@@ -16,8 +16,8 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QMimeData, QPoint, QPointF, QSettings, QStandardPaths, Qt
-from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QSettings, QStandardPaths, Qt
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QMouseEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -510,6 +510,35 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual([[signal.name for signal in signals] for signals in win.canvas.plots[1][0].signals.values()],
                          [[VARS[1]], [UNREAD], [VARS[2]]])
 
+    def test_a_row_whose_data_cannot_be_read_is_not_read_again_by_a_zoom_within_the_range_drawn(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1', '2'], impl=impl, variables=[VARS[0], UNREAD])
+                win.canvas.shared_x_axis = True
+                win.draw_clicked()
+                parser = win.canvasStack.currentWidget()._parser
+                impl_plot = parser._plot_impl_plot_lut[id(_plot_with(win, VARS[0]))][0]
+                reads = []
+
+                with patch.object(AccessHelper, '_request_data', side_effect=lambda **params: reads.append(params)):
+                    for window in ((-2.0, 2.0), (-1.0, 1.5), (-3.0, 3.0)):
+                        parser.set_oaw_axis_limits(impl_plot, 0, window)
+                        self.app.processEvents()
+
+                self.assertEqual(reads, [])
+
+    def test_a_workspace_with_a_row_whose_data_cannot_be_read_opens_with_its_empty_plot(self):
+        win = self._window(['1', '2'], variables=[VARS[0], UNREAD])
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        path = f'{folder.name}/workspace.json'
+
+        win.export_json(path)
+        win.import_json(path)
+
+        self.assertEqual([[signal.name for signals in plot.signals.values() for signal in signals]
+                          for plot, _ in layout.slots_of(win.canvas)], [[VARS[0]], [UNREAD]])
+
     def test_undo_and_redo_give_each_row_the_very_text_it_had(self):
         win = self._window(['1', '3', '3.1.2', '4'],
                            spans={'Row span': ['2', '', '', ''], 'Col span': ['1', '', '', '']})
@@ -557,6 +586,35 @@ class ArrangePlotsTest(unittest.TestCase):
 
         self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2.1', '1.1.2'])
 
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'unstack'), "the installed iplotlib does not unstack plots")
+    def test_each_plot_of_a_wide_plot_unstacked_keeps_its_width_after_a_draw(self):
+        win = self._window(['1', '1.1.2'], spans={'Row span': ['', ''], 'Col span': ['2', '']})
+
+        win.canvasStack.currentWidget().unstack(_plot_with(win, VARS[0]))
+        self.app.processEvents()
+        win.draw_clicked()
+
+        self.assertEqual([(plot.row, plot.col, plot.row_span, plot.col_span)
+                          for plot, _ in layout.slots_of(win.canvas)],
+                         [(1, 1, 1, 2), (2, 1, 1, 2)])
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'unstack'), "the installed iplotlib does not unstack plots")
+    def test_undo_and_redo_of_unstack_give_each_row_the_very_text_it_had(self):
+        for spans in ({'Row span': ['2', ''], 'Col span': ['', '']}, {'Row span': ['', ''], 'Col span': ['', '2']}):
+            with self.subTest(spans):
+                win = self._window(['1', '1.1.2'], spans=spans)
+                before = _table(win)
+                win.canvasStack.currentWidget().unstack(_plot_with(win, VARS[0]))
+                self.app.processEvents()
+                unstacked = _table(win)
+
+                win.undo()
+                self.app.processEvents()
+                self.assertEqual(_table(win), before)
+                win.redo()
+                self.app.processEvents()
+                self.assertEqual(_table(win), unstacked)
+
     def test_a_draw_keeps_the_empty_cells_of_the_grid_picked_and_a_workspace_saves_them(self):
         win = self._window(['1', '2'])
         win.canvasStack.currentWidget().lay_out(2, 2)
@@ -593,6 +651,34 @@ class ArrangePlotsTest(unittest.TestCase):
         # A move would have the view take the rows dropped out of the table.
         self.assertEqual(model.supportedDragActions(), Qt.DropAction.CopyAction)
 
+    def test_a_press_on_a_row_not_selected_selects_by_dragging_and_one_on_a_selected_row_drags_the_rows(self):
+        win = self._window(['1', '2', '3', '4'])
+        win.resize(1400, 900)
+        win.show()
+        self.app.processEvents()
+        view = win.sigCfgWidget.item_widgets[0].view()
+        drags = []
+        view.startDrag = drags.append
+        column = win.sigCfgWidget.model.get_dataframe().columns.get_loc('Variable')
+
+        def press_and_move(first_row, last_row) -> list:
+            first = view.visualRect(view.model().index(first_row, column)).center()
+            last = view.visualRect(view.model().index(last_row, column)).center()
+            QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, first)
+            for step in range(1, 11):
+                point = QPointF(first.x(), first.y() + (last.y() - first.y()) * step / 10)
+                QApplication.sendEvent(view.viewport(), QMouseEvent(
+                    QEvent.Type.MouseMove, point, view.viewport().mapToGlobal(point), Qt.MouseButton.NoButton,
+                    Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+            QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last)
+            return sorted({index.row() for index in view.selectionModel().selectedIndexes()})
+
+        view.clearSelection()
+        self.assertEqual(press_and_move(0, 2), [0, 1, 2])
+        self.assertEqual(drags, [])
+        press_and_move(1, 3)
+        self.assertEqual(len(drags), 1)
+
     def test_rows_dragged_from_the_table_onto_a_plot_go_to_the_stack_dropped_on_with_the_spans_of_the_plot(self):
         win = self._window(['1', '1.1.2', '3', '4'], spans={'Row span': ['2', '', '', ''], 'Col span': [''] * 4})
         view = win.sigCfgWidget.item_widgets[0].view()
@@ -619,8 +705,23 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '3.2', '', '')])
         self.assertEqual((_plot_with(win, VARS[1]).row, _plot_with(win, VARS[1]).col), (3, 2))
 
+    def test_rows_dragged_onto_a_plot_keep_its_size_and_the_plot_they_leave_keeps_its_own(self):
+        win = self._window(['1', '1.1.3', '3', '3.1.2'], spans={'Row span': ['2', '', '2', ''], 'Col span': [''] * 4})
+        view = win.sigCfgWidget.item_widgets[0].view()
+
+        view.selectRow(0)
+        win.on_drop_plot(DropInfo(1, 1, 2, view))
+        view.selectRow(2)
+        win.on_drop_plot(DropInfo(1, 1, 4, view))
+
+        self.assertEqual(_table(win), [(VARS[0], '1.1.2', '2', ''), (VARS[1], '1.1.3', '', ''),
+                                       (VARS[2], '1.1.4', '2', ''), (VARS[3], '3.1.2', '2', '')])
+        self.assertEqual([(plot.row, plot.col, plot.row_span, plot.col_span)
+                          for plot, _ in layout.slots_of(win.canvas)],
+                         [(1, 1, 2, 1), (3, 1, 2, 1)])
+
     def test_rows_dragged_from_the_table_onto_their_own_stack_change_nothing(self):
-        win = self._window(['1', '2'], spans={'Row span': ['2', ''], 'Col span': ['', '']})
+        win = self._window(['1', '3'], spans={'Row span': ['2', ''], 'Col span': ['', '']})
         before = _table(win)
         view = win.sigCfgWidget.item_widgets[1].view()
         view.selectRow(0)
