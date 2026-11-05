@@ -18,8 +18,8 @@ from typing import List
 
 from PySide6.QtCore import QCoreApplication, QEvent, QMargins, QModelIndex, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, \
+    QPushButton, QStyle, QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
@@ -238,6 +238,9 @@ class MTSignalConfigurator(QWidget):
             widget.view().setItemDelegateForColumn(14, self._cal_delegate)
             widget.view().setItemDelegateForColumn(15, self._pt_delegate)
             widget.view().setSortingEnabled(True)
+            # The rows selected can be dropped on the canvas, to move their signals to another plot.
+            widget.view().setDragEnabled(True)
+            widget.view().setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
             widget.view().setMouseTracking(True)
             widget.view().viewport().setMouseTracking(True)
             widget.view().viewport().installEventFilter(self)

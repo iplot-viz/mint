@@ -8,6 +8,7 @@ stacks, and the grid keeps its empty cells through a Draw and in the workspace. 
 search and dropped on the canvas go to the table in the plot, the stack or the empty cell they were dropped on."""
 
 import json
+import tempfile
 import unittest
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -15,16 +16,16 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt
+from PySide6.QtCore import QMimeData, QPoint, QPointF, QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QAbstractItemView, QApplication
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.drop_info import DropInfo
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
-from mint.gui.mtMainWindow import MTMainWindow, _stack_place
+from mint.gui.mtMainWindow import MTMainWindow, _stack_place, apply_remembered_layout
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.models.mtSignalsModel import MAX_SPAN
 from mint.models.utils import mtBlueprintParser
@@ -47,12 +48,6 @@ def _table(win) -> list:
     df = win.sigCfgWidget.model.get_dataframe()
     return [(variable, stack, row_span, col_span) for variable, stack, row_span, col_span
             in zip(df['Variable'], df['Stack'], df['Row span'], df['Col span']) if variable]
-
-
-def _set_variable(win, row: int, variable: str):
-    df = win.sigCfgWidget.model.get_dataframe()
-    win.sigCfgWidget.model.setData(win.sigCfgWidget.model.createIndex(row, df.columns.get_loc('Variable')), variable,
-                                   Qt.ItemDataRole.EditRole)
 
 
 def _set_cell(win, row: int, column: str, value: str):
@@ -85,6 +80,24 @@ def _dragging(win, variables: list):
         yield
 
 
+def _drawn_window(test: unittest.TestCase, stacks: list, impl: str = 'matplotlib', spans: dict = None,
+                  variables: list = None) -> MTMainWindow:
+    """A window that drew one row of the table for each Stack given, of VAR1 for the first one and so on, or of the
+    variables given."""
+    win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {}}, app_version='test',
+                       data_sources=AccessHelper.da.get_connected_data_source_names(),
+                       blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl=impl)
+    test.addCleanup(win.close)
+    win.dataRangeSelector.import_dict({'mode': MTGenericAccessMode.PULSE_NUMBER, 'pulse_nb': [PULSE_ID],
+                                       'base': 'Second(s)', 't_start': '-5', 't_end': '4'})
+    rows = {'DS': ['csv'] * len(stacks), 'Variable': variables or VARS[:len(stacks)], 'Stack': stacks,
+            'Plot type': ['PlotXY'] * len(stacks)}
+    rows.update(spans or {})
+    win.sigCfgWidget.model.set_dataframe(pd.DataFrame(rows))
+    win.draw_clicked()
+    return win
+
+
 def _drop(widget, point):
     """A drag from elsewhere that comes over the widget and drops at the point, in its coordinates."""
     mime = QMimeData()
@@ -111,20 +124,7 @@ class ArrangePlotsTest(unittest.TestCase):
 
     def _window(self, stacks: list, impl: str = 'matplotlib', spans: dict = None, variables: list = None) \
             -> MTMainWindow:
-        """A window that drew one row of the table for each Stack given, of VAR1 for the first one and so on, or of
-        the variables given."""
-        win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {}}, app_version='test',
-                           data_sources=AccessHelper.da.get_connected_data_source_names(),
-                           blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl=impl)
-        self.addCleanup(win.close)
-        win.dataRangeSelector.import_dict({'mode': MTGenericAccessMode.PULSE_NUMBER, 'pulse_nb': [PULSE_ID],
-                                           'base': 'Second(s)', 't_start': '-5', 't_end': '4'})
-        rows = {'DS': ['csv'] * len(stacks), 'Variable': variables or VARS[:len(stacks)], 'Stack': stacks,
-                'Plot type': ['PlotXY'] * len(stacks)}
-        rows.update(spans or {})
-        win.sigCfgWidget.model.set_dataframe(pd.DataFrame(rows))
-        win.draw_clicked()
-        return win
+        return _drawn_window(self, stacks, impl, spans, variables)
 
     def _arrange(self, win, arrangement, name='Move plot'):
         win.canvasStack.currentWidget()._apply_arrangement(name, arrangement)
@@ -280,21 +280,37 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual([plot.plot_title for plot in win.canvas.plots[0]], ['third', None, None])
         self.assertIs(win.canvas.plots[0][0], _plot_with(win, VARS[2]))
 
-    def test_the_rows_of_a_cell_drawn_empty_move_with_it(self):
+    def _append(self, win, variable: str, stack: str):
+        """A row added to the table after the last Draw, which draws nothing until the next one."""
+        win.sigCfgWidget.model.append_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': [variable], 'Stack': [stack],
+                                                              'Plot type': ['PlotXY']}))
+
+    def test_a_row_whose_data_cannot_be_read_draws_an_empty_plot_with_its_name_that_moves_as_the_others_do(self):
         win = self._window(['1', '2', '3'], variables=[VARS[0], UNREAD, VARS[2]])
-        self.assertIsNone(win.canvas.plots[0][1])
+        empty = win.canvas.plots[0][1]
+        self.assertEqual([[(signal.name, len(signal.get_data()[0])) for signal in signals]
+                          for signals in empty.signals.values()], [[(UNREAD, 0)]])
 
         self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[2]), 1, 0, reserved=win.reserved_slots()))
 
         self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '3', '2'])
 
-    def test_a_plot_dropped_on_the_place_of_rows_that_drew_nothing_trades_places_with_them(self):
-        win = self._window(['1.1', '2.1', '1.2', '2.2'], variables=VARS[:3] + [UNREAD])
+    def test_the_rows_of_a_cell_not_drawn_yet_move_with_it(self):
+        win = self._window(['1', '3'])
+        self._append(win, VARS[2], '2')
+        self.assertIsNone(win.canvas.plots[0][1])
+
+        self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[1]), 1, 0, reserved=win.reserved_slots()))
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '3'])
+
+    def test_a_plot_dropped_on_the_place_of_rows_not_drawn_yet_trades_places_with_them(self):
+        win = self._window(['1.1', '2.1', '1.2'])
+        self._append(win, VARS[3], '2.2')
 
         self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[0]), 1, 1, reserved=win.reserved_slots()))
 
         self.assertEqual([stack for _, stack, _, _ in _table(win)], ['2.2', '2.1', '1.2', '1.1'])
-        _set_variable(win, 3, VARS[3])
         win.draw_clicked()
         self.assertEqual(_overlapping(win.canvas), [])
         self.assertIs(win.canvas.plots[0][0], _plot_with(win, VARS[3]))
@@ -371,10 +387,11 @@ class ArrangePlotsTest(unittest.TestCase):
                 self.assertEqual(sorted((slot.row, slot.col, slot.col_span) for _, slot in layout.slots_of(win.canvas)),
                                  [(0, 0, 2), (1, 1, 1), (2, 0, 2)])
 
-    def test_the_rows_that_drew_nothing_stay_when_the_only_plot_cannot_take_its_left_half(self):
+    def test_the_rows_not_drawn_yet_stay_when_the_only_plot_cannot_take_its_left_half(self):
         for impl in ('matplotlib', 'pyqt'):
             with self.subTest(impl):
-                win = self._window(['1', '2'], impl=impl, variables=[UNREAD, VARS[1]])
+                win = self._window(['2'], impl=impl, variables=[VARS[1]])
+                self._append(win, VARS[0], '1')
                 before = _table(win)
                 win.resize(1200, 900)
                 win.show()
@@ -401,10 +418,11 @@ class ArrangePlotsTest(unittest.TestCase):
 
                 self.assertEqual(_table(win), before)
 
-    def test_a_plot_does_not_grow_over_the_place_of_rows_that_drew_nothing(self):
+    def test_a_plot_does_not_grow_over_the_place_of_rows_not_drawn_yet(self):
         for impl in ('matplotlib', 'pyqt'):
             with self.subTest(impl):
-                win = self._window(['1.1', '2.1', '1.2', '2.2'], impl=impl, variables=VARS[:3] + [UNREAD])
+                win = self._window(['1.1', '2.1', '1.2'], impl=impl)
+                self._append(win, VARS[3], '2.2')
                 win.resize(1200, 900)
                 win.show()
                 self.app.processEvents()
@@ -427,8 +445,7 @@ class ArrangePlotsTest(unittest.TestCase):
                 self.app.processEvents()
 
                 self.assertEqual(_table(win), [(VARS[0], '1.1', '', ''), (VARS[1], '2.1', '', ''),
-                                               (VARS[2], '1.2', '', ''), (UNREAD, '2.2', '', '')])
-                _set_variable(win, 3, VARS[3])
+                                               (VARS[2], '1.2', '', ''), (VARS[3], '2.2', '', '')])
                 win.draw_clicked()
                 self.assertEqual(_overlapping(win.canvas), [])
 
@@ -470,17 +487,28 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual(sorted(_plot_with(win, VARS[3]).signals), [1, 2, 3])
         self.assertIs(_plot_with(win, VARS[1]), _plot_with(win, VARS[3]))
 
-    def test_rows_that_drew_nothing_keep_their_stack_when_their_plot_is_joined_and_after_undo(self):
-        win = self._window(['1.1', '2.1', '2.1.2', '3.1'], variables=[VARS[0], VARS[1], UNREAD, VARS[2]])
+    def test_rows_not_drawn_yet_keep_their_stack_when_their_plot_is_joined_and_after_undo(self):
+        win = self._window(['1.1', '2.1', '3.1'])
+        self._append(win, VARS[3], '2.1.2')
         before = _table(win)
 
         win.canvasStack.currentWidget().lay_out(1, 2)
         self.app.processEvents()
 
-        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '1.2', '1.2.2', '1.2.3'])
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '1.2', '1.2.3', '1.2.2'])
         win.undo()
         self.app.processEvents()
         self.assertEqual(_table(win), before)
+
+    def test_a_row_whose_data_cannot_be_read_draws_an_empty_stack_with_its_name_that_is_joined_as_the_others(self):
+        win = self._window(['1.1', '2.1', '2.1.2', '3.1'], variables=[VARS[0], VARS[1], UNREAD, VARS[2]])
+
+        win.canvasStack.currentWidget().lay_out(1, 2)
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '1.2', '1.2.2', '1.2.3'])
+        self.assertEqual([[signal.name for signal in signals] for signals in win.canvas.plots[1][0].signals.values()],
+                         [[VARS[1]], [UNREAD], [VARS[2]]])
 
     def test_undo_and_redo_give_each_row_the_very_text_it_had(self):
         win = self._window(['1', '3', '3.1.2', '4'],
@@ -500,6 +528,35 @@ class ArrangePlotsTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(_table(win), laid_out)
 
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'unstack'), "the installed iplotlib does not unstack plots")
+    def test_the_rows_of_each_stack_unstacked_take_the_place_of_a_plot_and_undo_takes_them_back(self):
+        win = self._window(['1', '2', '2.1.2', '2.1.3', '3'])
+        before = _table(win)
+
+        win.canvasStack.currentWidget().unstack(_plot_with(win, VARS[1]))
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2', '3.1', '4.1', '5'])
+        win.undo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), before)
+        win.redo()
+        self.app.processEvents()
+        win.draw_clicked()
+        self.assertEqual(_overlapping(win.canvas), [])
+        self.assertEqual([(plot.row, sorted(plot.signals)) for plot, _ in layout.slots_of(win.canvas)],
+                         [(1, [1]), (2, [1]), (3, [1]), (4, [1]), (5, [1])])
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'unstack'), "the installed iplotlib does not unstack plots")
+    def test_a_row_of_a_stack_not_drawn_yet_stays_with_the_stack_drawn_before_it(self):
+        win = self._window(['1', '1.1.3'])
+        win.sigCfgWidget.append_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': [VARS[2]], 'Stack': ['1.1.2']}))
+
+        win.canvasStack.currentWidget().unstack(_plot_with(win, VARS[0]))
+        self.app.processEvents()
+
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '2.1', '1.1.2'])
+
     def test_a_draw_keeps_the_empty_cells_of_the_grid_picked_and_a_workspace_saves_them(self):
         win = self._window(['1', '2'])
         win.canvasStack.currentWidget().lay_out(2, 2)
@@ -513,12 +570,78 @@ class ArrangePlotsTest(unittest.TestCase):
         self.assertEqual((win.canvas.rows, win.canvas.cols, win.canvas.layout_rows, win.canvas.layout_cols),
                          (2, 2, 2, 2))
 
-    def test_the_canvas_takes_what_is_dragged_from_the_variable_search_only(self):
+    def test_the_canvas_takes_what_is_dragged_from_the_variable_search_or_the_table_only(self):
         win = self._window(['1'])
+        browser = win.sigCfgWidget.selectVarDialog
 
-        self.assertTrue(win.accepts_drop(win.sigCfgWidget.selectVarDialog.tree, None))
+        for source in [browser.tree, browser.tableView] + [widget.view() for widget in win.sigCfgWidget.item_widgets]:
+            self.assertTrue(win.accepts_drop(source, None))
         self.assertFalse(win.accepts_drop(None, None))
         self.assertFalse(win.accepts_drop(win.sigCfgWidget, None))
+
+    def test_the_rows_selected_in_the_table_are_dragged_as_their_variables_and_never_moved_out_of_it(self):
+        win = self._window(['1', '2'])
+        model = win.sigCfgWidget.model
+        variable = model.get_dataframe().columns.get_loc('Variable')
+
+        for widget in win.sigCfgWidget.item_widgets:
+            self.assertTrue(widget.view().dragEnabled())
+            self.assertEqual(widget.view().dragDropMode(), QAbstractItemView.DragDropMode.DragOnly)
+        self.assertTrue(model.flags(model.createIndex(1, variable)) & Qt.ItemFlag.ItemIsDragEnabled)
+        self.assertEqual(model.mimeData([model.createIndex(1, variable), model.createIndex(1, 0),
+                                         model.createIndex(0, 0)]).text(), f'{VARS[0]}\n{VARS[1]}')
+        # A move would have the view take the rows dropped out of the table.
+        self.assertEqual(model.supportedDragActions(), Qt.DropAction.CopyAction)
+
+    def test_rows_dragged_from_the_table_onto_a_plot_go_to_the_stack_dropped_on_with_the_spans_of_the_plot(self):
+        win = self._window(['1', '1.1.2', '3', '4'], spans={'Row span': ['2', '', '', ''], 'Col span': [''] * 4})
+        view = win.sigCfgWidget.item_widgets[0].view()
+        view.selectRow(2)
+        flags = view.selectionModel().SelectionFlag
+        view.selectionModel().select(view.model().index(3, 1), flags.Select | flags.Rows)
+
+        win.on_drop_plot(DropInfo(1, 1, 2, view))
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '2', ''), (VARS[1], '1.1.2', '', ''),
+                                       (VARS[2], '1.1.2', '2', ''), (VARS[3], '1.1.2', '2', '')])
+        self.assertEqual([len(signals) for signals in _plot_with(win, VARS[0]).signals.values()], [1, 3])
+        self.assertEqual(_overlapping(win.canvas), [])
+
+    def test_rows_dragged_from_the_table_onto_an_empty_cell_make_a_plot_there(self):
+        win = self._window(['1', '2'], spans={'Row span': ['', '2'], 'Col span': ['', '']})
+        win.canvasStack.currentWidget().lay_out(3, 2)
+        self.app.processEvents()
+        view = win.sigCfgWidget.item_widgets[0].view()
+        view.selectRow(1)
+
+        win.on_drop_plot(DropInfo(3, 2, None, view))
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[1], '3.2', '', '')])
+        self.assertEqual((_plot_with(win, VARS[1]).row, _plot_with(win, VARS[1]).col), (3, 2))
+
+    def test_rows_dragged_from_the_table_onto_their_own_stack_change_nothing(self):
+        win = self._window(['1', '2'], spans={'Row span': ['2', ''], 'Col span': ['', '']})
+        before = _table(win)
+        view = win.sigCfgWidget.item_widgets[1].view()
+        view.selectRow(0)
+
+        with patch.object(win, 'draw_clicked') as draw:
+            win.on_drop_plot(DropInfo(1, 1, 1, view))
+
+        draw.assert_not_called()
+        self.assertEqual(_table(win), before)
+
+    def test_variables_dragged_from_the_list_of_the_variable_search_go_to_the_table_where_they_were_dropped(self):
+        win = self._window(['1'])
+        listed = win.sigCfgWidget.selectVarDialog.tableView
+        listed.model.add_row(['csv', VARS[3]])
+        listed.model.add_row(['csv', VARS[4]])
+        listed.selectRow(1)
+
+        win.on_drop_plot(DropInfo(1, 2, None, listed))
+
+        self.assertEqual(_table(win), [(VARS[0], '1', '', ''), (VARS[4], '1.2', '', '')])
+        self.assertEqual((_plot_with(win, VARS[4]).row, _plot_with(win, VARS[4]).col), (1, 2))
 
     def test_variables_dropped_from_the_variable_search_are_drawn_where_they_were_dropped(self):
         for impl in ('matplotlib', 'pyqt'):
@@ -573,6 +696,72 @@ class ArrangePlotsTest(unittest.TestCase):
 
         for signal in win.canvasStack.currentWidget().get_signals(win.canvas):
             np.testing.assert_array_equal(np.asarray(signal.y_data), drawn[signal.name])
+
+
+@unittest.skipUnless(layout is not None and hasattr(IplotQtCanvas, 'plotsArranged'),
+                     "the installed iplotlib does not lay plots out")
+class RememberedLayoutTest(unittest.TestCase):
+    """The grid picked with the Layout tool is the one a new session starts with. QSettings is redirected to a
+    temporary directory so the tests never read or write a real user configuration file."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        write_csv_datasource_config()
+        AppDataAccess.initialize()
+        AccessHelper.da = AppDataAccess.get_data_access()
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls._format = QSettings.defaultFormat()
+        QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls._tmp.name)
+        cls._org, cls._name = cls.app.organizationName(), cls.app.applicationName()
+        cls.app.setOrganizationName("ITER-tests")
+        cls.app.setApplicationName("MINT-tests")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.app.setOrganizationName(cls._org)
+        cls.app.setApplicationName(cls._name)
+        QSettings.setDefaultFormat(cls._format)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
+                          QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation))
+        cls._tmp.cleanup()
+
+    def setUp(self):
+        QSettings().clear()
+        self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
+        AccessHelper.pool = None
+
+    def test_a_new_session_starts_with_the_grid_last_picked_with_the_layout_tool(self):
+        win = _drawn_window(self, ['1', '2'])
+        win.lay_out(2, 3)
+        self.app.processEvents()
+
+        canvas = Canvas()
+        apply_remembered_layout(canvas)
+
+        self.assertEqual((canvas.rows, canvas.cols, canvas.layout_rows, canvas.layout_cols, canvas.plots),
+                         (2, 3, 2, 3, [[], [], []]))
+        session = MTMainWindow(canvas, AccessHelper.da, {"range": {}}, app_version='test',
+                               data_sources=AccessHelper.da.get_connected_data_source_names(),
+                               blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT)
+        self.addCleanup(session.close)
+        self.assertEqual(session.canvasStack.currentWidget().current_layout(), (2, 3))
+
+    def test_a_session_starts_with_no_grid_until_one_is_picked(self):
+        canvas = Canvas()
+
+        apply_remembered_layout(canvas)
+
+        self.assertEqual((canvas.layout_rows, canvas.layout_cols), (None, None))
+
+    def test_a_grid_the_plots_could_not_be_laid_out_on_is_not_remembered(self):
+        win = _drawn_window(self, ['1', '2'])
+        win.canvas.streaming = True
+
+        win.lay_out(2, 3)
+
+        self.assertIsNone(QSettings().value('layout/rows'))
 
 
 class StackPlaceTest(unittest.TestCase):

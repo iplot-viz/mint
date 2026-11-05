@@ -19,7 +19,7 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel
+from PySide6.QtCore import QCoreApplication, QMargins, QModelIndex, QSettings, QTimer, Qt, QItemSelectionModel
 from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
@@ -30,7 +30,7 @@ from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
 from iplotlib.data_access import CanvasStreamer
-from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
+from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
@@ -123,6 +123,23 @@ def _canvas_of(places: dict) -> typing.Tuple[Canvas, dict]:
     for (row, col), (rows, cols) in places.items():
         plots[(row, col)] = canvas.plots[col - 1][row - 1] = PlotXY(row_span=rows, col_span=cols)
     return canvas, plots
+
+
+#: The rows and columns of the grid last picked with the Layout tool, which a new session starts with. Per user
+#: (QSettings): a workspace keeps a grid of its own.
+LAYOUT_ROWS_KEY, LAYOUT_COLS_KEY = 'layout/rows', 'layout/cols'
+
+
+def apply_remembered_layout(canvas: Canvas):
+    """Give the canvas, with no plot yet, the grid last picked with the Layout tool (see MTMainWindow.lay_out)."""
+    settings = QSettings()
+    try:
+        rows, cols = int(settings.value(LAYOUT_ROWS_KEY)), int(settings.value(LAYOUT_COLS_KEY))
+    except (TypeError, ValueError):
+        return
+    if rows > 0 and cols > 0:
+        canvas.layout_rows, canvas.layout_cols = canvas.rows, canvas.cols = rows, cols
+        canvas.plots = [[] for _ in range(cols)]
 
 
 def _ready_at_the_end(method):
@@ -1618,7 +1635,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     if any(conditions):
                         signal.stream_valid = False
 
-                if signal.status_info.result == 'Fail':
+                # A signal whose data could not be read is drawn with none: its plot shows its name where it goes.
+                if signal.status_info.result == Result.FAIL and signal.status_info.stage != Stage.DA:
                     continue
 
                 # Preserve markers
@@ -1799,28 +1817,67 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_ready()
 
     def accepts_drop(self, source, mime) -> bool:
-        """The canvas takes the variables dragged from the variable search (see on_drop_plot)."""
-        return source is self.sigCfgWidget.selectVarDialog.tree
+        """The canvas takes the variables dragged from the tree or the list of the variable search, and the rows
+        dragged from the table (see on_drop_plot)."""
+        browser = self.sigCfgWidget.selectVarDialog
+        return source is browser.tree or source is browser.tableView or source in self._table_views()
+
+    def _table_views(self) -> list:
+        return [widget.view() for widget in self.sigCfgWidget.item_widgets]
 
     def on_drop_plot(self, drop_info):
-        """The variables dragged from the variable search and dropped on the canvas go to the table, in the plot they
-        were dropped on, in its stack under the mouse, or in a new plot on the empty cell, and the canvas is drawn."""
-        variables = self._dragged_variables()
-        if variables.empty:
-            return
+        """What is dropped on the canvas goes to the plot it was dropped on, in its stack under the mouse, or to a new
+        plot on the empty cell, and the canvas is drawn: the variables dragged from the variable search go to the
+        table there, and the rows dragged from the table move there."""
         stack = f'{drop_info.row}.{drop_info.col}'
         # An iplotlib that does not tell the stack takes drops on plots only, for their first stack.
         stack_id = getattr(drop_info, 'stack', None)
         if stack_id not in (None, 1):
             stack += f'.{stack_id}'
+        source = getattr(drop_info, 'source', None)
+        if source in self._table_views():
+            if self._move_rows_to(sorted({index.row() for index in source.selectedIndexes()}), stack):
+                self.draw_clicked()
+            return
+        variables = self._dragged_variables(source)
+        if variables.empty:
+            return
         variables['Stack'] = stack
         self.sigCfgWidget.append_dataframe(variables)
         self.draw_clicked()
 
-    def _dragged_variables(self) -> pd.DataFrame:
+    def _move_rows_to(self, rows: list, stack: str) -> bool:
+        """Give the rows of the table the Stack `stack`, and the spans the other rows give the plot there, or those the
+        rows have if they are its only ones, or none; whether a row changed."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        place = _stack_place(stack)
+        others = df.iloc[[idx for idx in range(len(df)) if idx not in rows]]
+        row_span, col_span = _places(others).get(place) or _places(df.iloc[rows]).get(place) or (1, 1)
+        edits = []
+        for idx in rows:
+            if not str(df['Variable'].iloc[idx]).strip():
+                continue
+            for column, text in (('Stack', stack), ('Row span', str(row_span) if row_span > 1 else ''),
+                                 ('Col span', str(col_span) if col_span > 1 else '')):
+                if _value_of(column, df[column].iloc[idx]) != _value_of(column, text):
+                    edits.append((idx, column, text))
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for idx, column, text in edits:
+                model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+        return bool(edits)
+
+    def _dragged_variables(self, source=None) -> pd.DataFrame:
         """The variables selected in the variable search, which a drag from it takes, with their data source, as its
-        Add to main table gives them."""
+        Add to main table gives them: those of the rows selected in its list, or those selected in its tree."""
         browser = self.sigCfgWidget.selectVarDialog
+        if source is browser.tableView:
+            rows = sorted({index.row() for index in source.selectedIndexes()})
+            return browser.tableView.model.dataframe.iloc[rows][['DS', 'Variable']].reset_index(drop=True)
         items, seen = [], set()
         for index in browser.tree.selectedIndexes():
             item = index.internalPointer()
@@ -1832,8 +1889,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def reserved_slots(self) -> list:
         """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
-        The canvas keeps those where it draws no plot, such as those of rows whose data could not be read or that were
-        not drawn yet, for the plots of those rows (see on_plots_arranged)."""
+        The canvas keeps those where it draws no plot, such as those of rows that were not drawn yet, for the plots of
+        those rows (see on_plots_arranged)."""
         # Only an iplotlib that moves plots asks for them, and it has this module.
         from iplotlib.core.layout import Slot
         places = _places(self.sigCfgWidget.model.get_dataframe())
@@ -1854,6 +1911,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
     def max_span(self) -> int:
         """The most rows or columns a plot spans: the table accepts no bigger Row span or Col span."""
         return MAX_SPAN
+
+    def lay_out(self, rows: int, cols: int):
+        """Lay the plots out on the grid picked with the Layout tool, which a new session starts with (see
+        apply_remembered_layout)."""
+        super().lay_out(rows, cols)
+        if (getattr(self.canvas, 'layout_rows', None), getattr(self.canvas, 'layout_cols', None)) == (rows, cols):
+            settings = QSettings()
+            settings.setValue(LAYOUT_ROWS_KEY, rows)
+            settings.setValue(LAYOUT_COLS_KEY, cols)
 
     def on_plots_arranged(self, changes: list):
         """The rows of the table take the places their plots took on the canvas (see _move_rows)."""
