@@ -13,8 +13,10 @@ import numpy as np
 import pandas as pd
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
+from PySide6.QtTest import QTest
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
+from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
 from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
 from mint.app.createApp import data_access_workers
 from mint.gui.mtMainWindow import MTMainWindow
@@ -195,6 +197,67 @@ class ReadAheadTest(_MainWindowTestCase):
 
         report.assert_called_with(2, 2)
 
+    def test_the_status_bar_says_ready_once_the_draw_is_done(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        said = []
+        win.statusBar().messageChanged.connect(said.append)
+
+        win.draw_clicked()
+
+        self.assertEqual([message for message in said if message == 'Ready.'], ['Ready.'])
+        self.assertEqual(said[-1], 'Ready.')
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'viewReadsChanged'), "the installed iplotlib reads no view ahead")
+    def test_the_status_bar_says_that_data_are_read_until_the_views_have_them(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        win.draw_clicked()
+
+        win.qtcanvas.viewReadsChanged.emit(2)
+        QTest.qWait(10)
+        reading = win.statusBar().currentMessage()
+        # What MINT does meanwhile ends while the views still wait.
+        win.indicate_ready()
+        still_reading = win.statusBar().currentMessage()
+        win.qtcanvas.viewReadsChanged.emit(0)
+        QTest.qWait(10)
+
+        self.assertEqual((reading, still_reading), ('Retrieving data...', 'Retrieving data...'))
+        self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'viewReadsChanged'), "the installed iplotlib reads no view ahead")
+    def test_the_status_bar_says_that_data_are_read_after_each_change_of_the_views(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        win.draw_clicked()
+        said = []
+
+        for _ in range(2):
+            for count in (2, 0):
+                win.qtcanvas.viewReadsChanged.emit(count)
+                QTest.qWait(10)
+                said.append(win.statusBar().currentMessage())
+
+        self.assertEqual(said, ['Retrieving data...', 'Ready.'] * 2)
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'viewReadsChanged'), "the installed iplotlib reads no view ahead")
+    def test_the_data_read_for_the_views_leave_alone_what_else_the_status_bar_says(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        win.draw_clicked()
+        # A read of MINT in progress, which shows its own progress.
+        win._report_read_progress(1, 2)
+        win._progressBar.show()
+
+        for count in (2, 1, 0):
+            win.qtcanvas.viewReadsChanged.emit(count)
+            QTest.qWait(10)
+
+        self.assertEqual(win.statusBar().currentMessage(), 'Retrieving data (1/2) ..')
+        self.assertFalse(win._progressBar.isHidden())
+        self.assertEqual((win._progressBar.maximum(), win._progressBar.value()), (2, 1))
+
     def test_a_pool_that_fails_leaves_the_reads_to_this_process(self):
         AccessHelper.pool = None
         expected = self._two_plots()
@@ -270,6 +333,37 @@ class ReadAheadTest(_MainWindowTestCase):
         self.assertEqual(set(drawn), set(reference))
         for name in reference:
             np.testing.assert_array_equal(drawn[name], reference[name])
+
+    def test_the_status_bar_says_ready_once_the_import_is_done(self):
+        AccessHelper.pool = None
+        source = self._two_plots()
+        source.draw_clicked()
+        path = self._workspace_file(source.export_dict())
+        AccessHelper.pool = _PoolStub()
+        win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
+        said = []
+        win.statusBar().messageChanged.connect(said.append)
+
+        win.import_json(path)
+
+        self.assertEqual([message for message in said if message == 'Ready.'], ['Ready.'])
+        self.assertEqual(said[-1], 'Ready.')
+
+    def test_the_import_shows_how_far_it_updated_the_signals(self):
+        AccessHelper.pool = None
+        source = self._two_plots()
+        source.draw_clicked()
+        path = self._workspace_file(source.export_dict())
+        win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
+        progress = []
+        win.sigCfgWidget.progressChanged.connect(lambda *_: progress.append(
+            (win.statusBar().currentMessage(), win._progressBar.minimum(), win._progressBar.maximum())))
+
+        win.import_json(path)
+
+        updating = [(low, high) for message, low, high in progress if message.startswith('Updat')]
+        self.assertTrue(updating)
+        self.assertEqual(set(updating), {(0, 100)})
 
     def test_workspace_import_reads_ahead_the_ranges_the_signals_were_saved_with(self):
         AccessHelper.pool = None
@@ -364,8 +458,9 @@ class ReadAheadContractTest(_MainWindowTestCase):
                                       'Stack': ['', '1.1']},
     }
 
-    # Tables whose only plot fails on purpose.
-    NOT_DRAWN = {'an expression of a variable that does not exist', 'y on an alias that failed'}
+    # Tables whose only plot is left out on purpose: a row whose y uses an alias that failed draws nothing, while one
+    # whose data cannot be read draws its plot empty.
+    NOT_DRAWN = {'y on an alias that failed'}
 
     @classmethod
     def setUpClass(cls) -> None:
