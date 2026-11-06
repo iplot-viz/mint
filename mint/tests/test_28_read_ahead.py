@@ -45,12 +45,20 @@ def _read_as_workers(requests) -> dict:
 
 
 class _PendingStub:
-    def __init__(self, pool, requests, on_done, on_stopped=None):
+    def __init__(self, pool, requests, on_done, on_stopped=None, progress=None):
         self.pool = pool
         self.requests = requests
         self.on_done = on_done
         self.on_stopped = on_stopped
+        self.progress = progress
         self.cancelled = False
+        # As AccessPool: how many of the requests are read, at once.
+        self.tell(0)
+
+    def tell(self, done):
+        total = len({AccessHelper.request_key(params) for params in self.requests})
+        if self.progress is not None and total and not self.cancelled:
+            self.progress(done, total)
 
     def cancel(self):
         self.cancelled = True
@@ -90,10 +98,10 @@ class _PoolStub:
             progress(len(results), len(results))
         return results
 
-    def fetch_later(self, requests, on_done, on_stopped=None):
+    def fetch_later(self, requests, on_done, on_stopped=None, progress=None):
         requests = list(requests)
         self.requests.append(requests)
-        pending = _PendingStub(self, requests, on_done, on_stopped)
+        pending = _PendingStub(self, requests, on_done, on_stopped, progress)
         if self.held:
             self.pending.append(pending)
         else:
@@ -139,6 +147,12 @@ def _preferences(win) -> list:
               if plot is not None}
     return [[places.get(id(canvas_item.child(c).child(p).data(Qt.ItemDataRole.UserRole)))
              for p in range(canvas_item.child(c).rowCount())] for c in range(canvas_item.rowCount())]
+
+
+def _places_say(win) -> dict:
+    """What the places of the plots that wait for their data say, by place."""
+    parser = win.canvasStack.currentWidget()._parser
+    return {place: text.get_text() for place, text in parser._pending_texts.items()}
 
 
 def _drawn_when_done(win, seconds: float = 30):
@@ -288,6 +302,25 @@ class ReadAheadTest(_MainWindowTestCase):
         self.assertEqual(progress, ['Retrieving data (0/2) ..', 'Retrieving data (1/2) ..'])
         self.assertTrue(win._progressBar.isHidden())
 
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'show_pending_progress'), "the installed iplotlib tells no progress")
+    def test_the_place_of_each_plot_says_how_many_of_its_data_are_read(self):
+        AccessHelper.pool = pool = _PoolStub(held=True)
+        win = self._main_window({'DS': ['csv'] * 3, 'Variable': [VAR1, VAR2, VAR1], 'Stack': ['1.1', '1.1', '1.2'],
+                                 'Plot type': ['PlotXY'] * 3})
+
+        win.draw_clicked()
+        at_once = _places_say(win)
+        # The first read is that of the first plot, of two signals.
+        pool.pending[0].tell(1)
+        meanwhile = _places_say(win)
+        pool.arrive(len(pool.pending))
+        _drawn_when_done(win)
+
+        # By place of the canvas, column and row from 0: the plot of two signals beside the one of one.
+        self.assertEqual(at_once, {(0, 0): 'Retrieving data (0/2) ..', (1, 0): 'Retrieving data (0/1) ..'})
+        self.assertEqual(meanwhile, {(0, 0): 'Retrieving data (1/2) ..', (1, 0): 'Retrieving data (0/1) ..'})
+        self.assertEqual(_places_say(win), {})
+
     def test_the_status_bar_says_ready_once_the_draw_is_done(self):
         AccessHelper.pool = _PoolStub()
         win = self._two_plots()
@@ -389,7 +422,7 @@ class ReadAheadTest(_MainWindowTestCase):
             def fetch(self, requests, progress=None):
                 raise RuntimeError("the workers cannot start")
 
-            def fetch_later(self, requests, on_done, on_stopped=None):
+            def fetch_later(self, requests, on_done, on_stopped=None, progress=None):
                 raise RuntimeError("the workers cannot start")
 
         AccessHelper.pool = pool = _FailingPool()

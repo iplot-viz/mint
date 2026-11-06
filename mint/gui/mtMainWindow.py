@@ -1498,12 +1498,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Gone already if reading the rows that others use in x, y or z failed in them.
         pool = AccessHelper.pool
         if pool is not None:
+            # iplotlib releases that predate it do not say how far the read of a plot is.
+            tells = hasattr(self.canvasStack.currentWidget(), 'show_pending_progress')
             try:
                 for read in drawing.unread:
+                    progress = {} if not tells or read is None else \
+                        {'progress': functools.partial(self._read_progress, drawing, read)}
                     # A shutdown of the worker threads meanwhile leaves the rows of the read to read in this thread.
                     drawing.pending[read] = pool.fetch_later(
                         requests.get(read, []), functools.partial(self._read_arrived, drawing, read),
-                        on_stopped=functools.partial(self._read_arrived, drawing, read, {}))
+                        on_stopped=functools.partial(self._read_arrived, drawing, read, {}), **progress)
                 self._report_drawing(drawing)
             except Exception:
                 logger.exception("Reading in the worker threads failed, data are read in the GUI thread from now on")
@@ -1642,6 +1646,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             refresh()
         logger.info("Built canvas")
         self.indicate_ready()
+
+    def _read_progress(self, drawing: _Drawing, place: tuple, done: int, total: int):
+        """Say at the place of a plot of `drawing` how many of the data of its rows are read."""
+        if drawing is self._drawing:
+            column, row = place
+            self.canvasStack.currentWidget().show_pending_progress(column - 1, row - 1, done, total)
 
     def _report_drawing(self, drawing: _Drawing):
         # The bar counts the rows built, as an import counts them in the table.
