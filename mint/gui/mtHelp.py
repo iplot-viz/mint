@@ -5,7 +5,7 @@ import tempfile
 import typing
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPushButton,
                                QSplitter, QTextBrowser, QToolButton, QTreeWidget, QTreeWidgetItem,
@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPus
 
 from iplotLogging import setupLogger as setupLog
 from iplotWidgets.sizing import clamp_to_screen
+from mint.gui.mtAppearance import is_dark, secondary_text_color
 from mint.gui.mtErrorCatalog import ErrorCatalog
+from mint.tools.build_manual import dark_colors
 
 logger = setupLog.get_logger(__name__)
 
@@ -52,7 +54,7 @@ class MTHelp(QMainWindow):
         self._next_btn.clicked.connect(self._find_next)
 
         self._match_label = QLabel("", self)
-        self._match_label.setStyleSheet("color: palette(mid); padding: 0 0.5em;")
+        self._set_match_label_color()
 
         for w in (self._prev_btn, self._next_btn):
             w.setAutoRaise(True)
@@ -100,6 +102,19 @@ class MTHelp(QMainWindow):
 
         QShortcut(QKeySequence(Qt.Key_Escape), self, activated=self.close)
         QShortcut(QKeySequence.Find, self, activated=self._focus_search)
+
+    def _set_match_label_color(self):
+        self._match_label.setStyleSheet(f"color: {secondary_text_color(self.palette())}; padding: 0 0.5em;")
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        if ev.type() == QEvent.Type.PaletteChange:
+            self._set_match_label_color()
+            if self._browser.document().toPlainText():
+                # The manual again, in the colours of the new palette, where it was read.
+                scroll = self._browser.verticalScrollBar().value()
+                self._load_manual()
+                QTimer.singleShot(0, lambda: self._browser.verticalScrollBar().setValue(scroll))
 
     def _on_toc_clicked(self, item: QTreeWidgetItem, _column: int):
         anchor = item.data(0, Qt.UserRole)
@@ -174,8 +189,11 @@ class MTHelp(QMainWindow):
             return
 
         html = self._inject_error_catalog(html)
+        if is_dark(self.palette()):
+            html = dark_colors(html)
 
-        self._image_dir = self._resolve_image_dir()
+        if self._image_dir is None:
+            self._image_dir = self._resolve_image_dir()
         if self._image_dir is not None:
             self._browser.setSearchPaths([str(self._image_dir)])
 

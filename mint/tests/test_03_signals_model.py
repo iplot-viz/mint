@@ -15,6 +15,8 @@ import unittest
 from unittest import mock
 
 import pandas as pd
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 from iplotDataAccess.appDataAccess import AppDataAccess
 
@@ -144,6 +146,20 @@ class TestStatusErrorInfo(unittest.TestCase):
         info = model.error_info_for_cell(model.createIndex(0, status_col))
         self.assertIsNotNone(info)
         self.assertEqual(info['explanation'], 'Variable not found')
+
+    def test_cells_take_the_colours_of_the_view_unless_they_fail(self):
+        # A brush of its own on every cell painted the table white in a dark palette.
+        model, cols = self._one_row_model()
+        model._table_fails.iat[0, cols.index('Variable')] = 1
+        model._table_fails.iat[0, cols.index('Stack')] = 2
+        for column, background, text in (('DS', None, None), ('Variable', 'red', 'black'),
+                                         ('Stack', 'orange', 'black')):
+            with self.subTest(column=column):
+                index = model.createIndex(0, cols.index(column))
+                brush = model.data(index, Qt.ItemDataRole.BackgroundRole)
+                self.assertEqual(None if brush is None else brush.color(), None if background is None else QColor(background))
+                brush = model.data(index, Qt.ItemDataRole.ForegroundRole)
+                self.assertEqual(None if brush is None else brush.color(), None if text is None else QColor(text))
 
 
 class TestRowLevelRelativePulse(unittest.TestCase):

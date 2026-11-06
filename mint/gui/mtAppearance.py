@@ -1,14 +1,14 @@
-# Description: Runtime selection of the application look (widget style, style-sheet theme,
-#              UI scale), persisted across sessions with QSettings.
+# Description: Runtime selection of the application look (widget style, theme, UI scale),
+#              persisted across sessions with QSettings.
 # Author: Simon Pinches
 
 import os
 import pkgutil
 import typing
 
-from PySide6.QtGui import QAction, QActionGroup
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QMenu, QStyleFactory
+from PySide6.QtGui import QAction, QActionGroup, QColor, QGuiApplication, QPalette
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtWidgets import QApplication, QMenu, QStyleFactory, QWidget
 
 from iplotlib.core.display import (DisplayScale, MODE_AUTO, MODE_FIXED, MODE_OFF,
                                    parse_scale_setting)
@@ -124,6 +124,38 @@ def base_font_pt() -> float:
     return _base_font_pt
 
 
+def _set_style_sheets_again():
+    """Make the widgets with a style sheet of their own take the font and palette in effect: they keep those they
+    were polished with until the sheet is set again."""
+    for widget in QApplication.allWidgets():
+        if widget.styleSheet():
+            widget.setStyleSheet(widget.styleSheet())
+
+
+def _styled(widget: QWidget) -> bool:
+    """Whether a style sheet applies to a widget: its own, that of a parent or that of the application."""
+    while widget is not None:
+        if widget.styleSheet():
+            return True
+        widget = widget.parentWidget()
+    return bool(QApplication.instance().styleSheet())
+
+
+def _inherit_palettes_again():
+    """Make the widgets that inherit their palette take the one in effect. Removing the style sheet of the
+    application sometimes leaves one, as the menu bar, marked as styled by it, which keeps it with the palette
+    from before: setting a style sheet of its own and none clears the mark."""
+    for widget in QApplication.allWidgets():
+        if widget.testAttribute(Qt.WidgetAttribute.WA_SetPalette):
+            continue
+        if widget.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
+            if _styled(widget):
+                continue
+            widget.setStyleSheet(' ')
+            widget.setStyleSheet('')
+        widget.setPalette(QPalette())
+
+
 def apply_ui_scale(value, persist: bool = True):
     """Scale the iplotlib canvas primitives and, for an explicit percentage,
     the widget font with them.
@@ -160,10 +192,7 @@ def apply_ui_scale(value, persist: bool = True):
         QApplication.instance().setFont(font)
         # Qt documents setFont as not meant for style-sheet driven widgets:
         # one with a sheet of its own keeps the font it was polished with.
-        # Re-setting the sheet makes it take the new font.
-        for widget in QApplication.allWidgets():
-            if widget.styleSheet():
-                widget.setStyleSheet(widget.styleSheet())
+        _set_style_sheets_again()
 
     if persist:
         QSettings().setValue(SCALE_KEY, value if isinstance(value, str) else str(value))
@@ -177,9 +206,126 @@ def apply_ui_scale(value, persist: bool = True):
             logger.warning(f"UI scale listener failed: {e}")
     return factor
 
-# style-sheet themes shipped in mint/gui/themes/<name>.qss
+# None is the look of the widget style in light colours, Dark the same look in dark ones and Auto either, as the
+# system has it. Light is a style sheet shipped in mint/gui/themes/light.qss.
 THEME_NONE = 'None'
-THEMES = ('Dark', 'Light')
+THEME_DARK = 'Dark'
+THEME_LIGHT = 'Light'
+THEME_AUTO = 'Auto'
+THEMES = (THEME_DARK, THEME_LIGHT, THEME_AUTO)
+#: The theme in use, whether a change of the colour scheme of the system reaches _follow_system, whether the
+#: application palette is one set here instead of that of the platform, and the style that a dark theme replaced.
+_theme = THEME_NONE
+_following_system = False
+_palette_set = False
+_light_only_style = None
+#: Styles that draw their controls light whatever the palette.
+_LIGHT_ONLY_STYLES = ('windowsvista',)
+
+#: The dark palette that Qt gives the Fusion style on Windows, for the platforms that cannot switch to a dark
+#: colour scheme: Linux desktops that do not tell one, the offscreen platform.
+_DARK_PALETTE = {
+    'Window': '#1e1e1e', 'WindowText': '#ffffff', 'Base': '#2d2d2d', 'AlternateBase': '#343434',
+    'ToolTipBase': '#3c3c3c', 'ToolTipText': '#d4d4d4', 'PlaceholderText': '#80ffffff', 'Text': '#ffffff',
+    'Button': '#3c3c3c', 'ButtonText': '#ffffff', 'BrightText': '#65bcff', 'Light': '#787878',
+    'Midlight': '#5a5a5a', 'Mid': '#282828', 'Dark': '#1e1e1e', 'Shadow': '#000000', 'Highlight': '#0078d4',
+    'HighlightedText': '#ffffff', 'Link': '#65bcff', 'LinkVisited': '#32a6ff', 'Accent': '#32a6ff',
+}
+_DARK_PALETTE_DISABLED = {'WindowText': '#9d9d9d', 'Text': '#9d9d9d', 'ButtonText': '#9d9d9d', 'Base': '#1e1e1e'}
+
+
+def is_dark(palette: typing.Optional[QPalette] = None) -> bool:
+    """Whether a palette, the application's by default, draws light text on a dark window."""
+    palette = QGuiApplication.palette() if palette is None else palette
+    return (palette.color(QPalette.ColorRole.Window).lightness()
+            < palette.color(QPalette.ColorRole.WindowText).lightness())
+
+
+def blend(a, b, t: float) -> QColor:
+    """The colour a fraction `t` of the way from colour `a` to colour `b`."""
+    a, b = QColor(a), QColor(b)
+    return QColor.fromRgbF(*(x + (y - x) * t for x, y in zip(a.getRgbF()[:3], b.getRgbF()[:3])))
+
+
+def secondary_text_color(palette: QPalette) -> str:
+    """The colour of secondary text, as hints are, on the window: with the contrast WCAG AA asks of text."""
+    return blend(palette.color(QPalette.ColorRole.Window), palette.color(QPalette.ColorRole.WindowText), 0.6).name()
+
+
+def _dark_palette() -> QPalette:
+    palette = QPalette()
+    for role, colour in _DARK_PALETTE.items():
+        palette.setColor(getattr(QPalette.ColorRole, role), QColor(colour))
+    for role, colour in _DARK_PALETTE_DISABLED.items():
+        palette.setColor(QPalette.ColorGroup.Disabled, getattr(QPalette.ColorRole, role), QColor(colour))
+    return palette
+
+
+def _set_colour_scheme(theme: str):
+    """Ask the platform for the colour scheme of a theme, as Qt recommends, and set the palette of that scheme where
+    the platform keeps the other one."""
+    global _palette_set, _light_only_style
+    hints = QGuiApplication.styleHints()
+    if theme == THEME_AUTO:
+        hints.unsetColorScheme()
+        dark = hints.colorScheme() == Qt.ColorScheme.Dark
+    else:
+        dark = theme == THEME_DARK
+        hints.setColorScheme(Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light)
+    app = QApplication.instance()
+    if dark and app.style().name().lower() in _LIGHT_ONLY_STYLES:
+        # Its controls are light whatever the palette: dark, the look is that of Fusion, which Qt gives dark palettes.
+        _light_only_style = app.style().name()
+        QApplication.setStyle('Fusion')
+    elif not dark and _light_only_style:
+        QApplication.setStyle(_light_only_style)
+        _light_only_style = None
+    if _palette_set:
+        # The palette of the platform, which follows the scheme: one set for another theme would stay.
+        app.setPalette(QPalette())
+        _palette_set = False
+    palette = app.palette()
+    if dark and not is_dark(palette):
+        palette = _dark_palette()
+    elif dark:
+        # The dark palettes of Qt for Windows give a window that is not active the accent and the selection in the
+        # colour of the window, which hides a checked radio button: they keep those of an active one.
+        palette = QPalette(palette)
+        for role in (QPalette.ColorRole.Accent, QPalette.ColorRole.Highlight):
+            palette.setColor(QPalette.ColorGroup.Inactive, role, palette.color(QPalette.ColorGroup.Active, role))
+    elif is_dark(palette):
+        # The platform stays dark: the light palette of the style.
+        palette = app.style().standardPalette()
+    if palette != app.palette():
+        app.setPalette(palette)
+        _palette_set = True
+
+
+def _follow_system(_scheme=None):
+    if _theme == THEME_AUTO:
+        _set_colour_scheme(THEME_AUTO)
+
+
+def _set_theme(name: str) -> bool:
+    """Apply a theme (see THEMES); False if there is none of that name."""
+    global _theme, _following_system
+    if name == THEME_LIGHT:
+        qss = _load_theme(name)
+        if qss is None:
+            return False
+    elif name in (THEME_NONE, THEME_DARK, THEME_AUTO):
+        qss = ''
+    else:
+        return False
+    if not _following_system:
+        QGuiApplication.styleHints().colorSchemeChanged.connect(_follow_system)
+        _following_system = True
+    _theme = name
+    _set_colour_scheme(name)
+    QApplication.instance().setStyleSheet(qss)
+    _inherit_palettes_again()
+    _set_style_sheets_again()
+    return True
 
 
 def apply_style(name: str):
@@ -188,6 +334,8 @@ def apply_style(name: str):
         logger.warning(f"Unknown widget style: {name}")
         return
     QSettings().setValue(STYLE_KEY, name)
+    # A new style sets back the palette of the platform.
+    _set_colour_scheme(_theme)
 
 
 def _load_theme(name: str) -> typing.Optional[str]:
@@ -199,19 +347,14 @@ def _load_theme(name: str) -> typing.Optional[str]:
 
 
 def apply_theme(name: str):
-    """Switch the application style-sheet theme at runtime and persist the choice."""
-    if name == THEME_NONE:
-        QApplication.instance().setStyleSheet('')
-        QSettings().setValue(THEME_KEY, name)
+    """Switch the theme at runtime and persist the choice."""
+    if not _set_theme(name):
+        logger.warning(f"Unknown theme: {name}")
         return
-    qss = _load_theme(name)
-    if qss is None:
-        logger.warning(f"Unknown style-sheet theme: {name}")
-        return
-    QApplication.instance().setStyleSheet(qss)
     QSettings().setValue(THEME_KEY, name)
-    # A style sheet can carry font settings, so re-assert the scaled font.
-    apply_ui_scale(QSettings().value(SCALE_KEY, DEFAULT_SCALE), persist=False)
+    if name == THEME_LIGHT:
+        # A style sheet can carry font settings, so re-assert the scaled font.
+        apply_ui_scale(QSettings().value(SCALE_KEY, DEFAULT_SCALE), persist=False)
 
 
 def restore_appearance():
@@ -224,15 +367,12 @@ def restore_appearance():
         # self-heal legacy/renamed style names so settings and menu state stay consistent
         logger.warning(f"Persisted widget style is not available, resetting it: {style}")
         settings.remove(STYLE_KEY)
-    theme = settings.value(THEME_KEY)
-    if theme and theme != THEME_NONE:
-        qss = _load_theme(theme)
-        if qss is None:
-            # self-heal legacy/renamed theme names so settings and menu state stay consistent
-            logger.warning(f"Persisted style-sheet theme is not available, resetting it: {theme}")
-            settings.setValue(THEME_KEY, THEME_NONE)
-        else:
-            QApplication.instance().setStyleSheet(qss)
+    theme = settings.value(THEME_KEY) or THEME_NONE
+    if not _set_theme(theme):
+        # self-heal legacy/renamed theme names so settings and menu state stay consistent
+        logger.warning(f"Persisted theme is not available, resetting it: {theme}")
+        settings.setValue(THEME_KEY, THEME_NONE)
+        _set_theme(THEME_NONE)
     apply_ui_scale(settings.value(SCALE_KEY, DEFAULT_SCALE), persist=False)
 
 
