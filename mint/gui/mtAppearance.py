@@ -133,27 +133,26 @@ def _set_style_sheets_again():
 
 
 def _styled(widget: QWidget) -> bool:
-    """Whether a style sheet applies to a widget: its own, that of a parent or that of the application."""
+    """Whether a style sheet applies to a widget: that of the application, its own or that of a parent."""
+    if QApplication.instance().styleSheet():
+        return True
     while widget is not None:
         if widget.styleSheet():
             return True
         widget = widget.parentWidget()
-    return bool(QApplication.instance().styleSheet())
+    return False
 
 
 def _inherit_palettes_again():
-    """Make the widgets that inherit their palette take the one in effect. Removing the style sheet of the
+    """Make the widgets left marked as styled take the palette in effect. Removing the style sheet of the
     application sometimes leaves one, as the menu bar, marked as styled by it, which keeps it with the palette
     from before: setting a style sheet of its own and none clears the mark."""
     for widget in QApplication.allWidgets():
-        if widget.testAttribute(Qt.WidgetAttribute.WA_SetPalette):
-            continue
-        if widget.testAttribute(Qt.WidgetAttribute.WA_StyleSheet):
-            if _styled(widget):
-                continue
+        if (widget.testAttribute(Qt.WidgetAttribute.WA_StyleSheet)
+                and not widget.testAttribute(Qt.WidgetAttribute.WA_SetPalette) and not _styled(widget)):
             widget.setStyleSheet(' ')
             widget.setStyleSheet('')
-        widget.setPalette(QPalette())
+            widget.setPalette(QPalette())
 
 
 def apply_ui_scale(value, persist: bool = True):

@@ -16,7 +16,7 @@ import unittest
 
 from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QWidget
 
 from iplotlib.core.display import DisplayScale
 from mint.gui.mtAppearance import (MTAppearanceMenu, QT_SCALE_KEY, SCALE_KEY, STYLE_KEY, THEME_KEY,
@@ -126,6 +126,27 @@ class AppearanceTest(SettingsSandbox):
         apply_theme('Dark')
         self.assertTrue(is_dark(bar.palette()))
         window.deleteLater()
+
+    def test_a_theme_sets_no_palette_on_the_widgets_that_inherit_it(self):
+        # They take the new one by themselves: setting it on each would be work for every widget of MINT.
+        class Counting(QWidget):
+            calls = 0
+
+            def setPalette(self, palette):
+                Counting.calls += 1
+                super().setPalette(palette)
+
+        widget = Counting()
+        apply_theme('Light')
+        apply_theme('Dark')
+        # Qt posts the new palette to a window that was never shown.
+        QApplication.processEvents()
+        self.assertTrue(is_dark(widget.palette()))
+        apply_theme(THEME_NONE)
+        QApplication.processEvents()
+        self.assertFalse(is_dark(widget.palette()))
+        self.assertEqual(Counting.calls, 0)
+        widget.deleteLater()
 
     def test_a_new_style_keeps_the_dark_palette(self):
         apply_theme('Dark')

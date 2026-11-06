@@ -32,6 +32,8 @@ class MTHelp(QMainWindow):
 
         self._image_dir_ctx = None
         self._image_dir: typing.Optional[Path] = None
+        # Whether the manual shown is in its dark colours.
+        self._manual_dark = False
         self._toc_items_by_anchor: typing.Dict[str, QTreeWidgetItem] = {}
 
         self._browser = QTextBrowser(self)
@@ -104,13 +106,15 @@ class MTHelp(QMainWindow):
         QShortcut(QKeySequence.Find, self, activated=self._focus_search)
 
     def _set_match_label_color(self):
-        self._match_label.setStyleSheet(f"color: {secondary_text_color(self.palette())}; padding: 0 0.5em;")
+        sheet = f"color: {secondary_text_color(self.palette())}; padding: 0 0.5em;"
+        if self._match_label.styleSheet() != sheet:
+            self._match_label.setStyleSheet(sheet)
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
         if ev.type() == QEvent.Type.PaletteChange:
             self._set_match_label_color()
-            if self._browser.document().toPlainText():
+            if self._browser.document().toPlainText() and is_dark(self.palette()) != self._manual_dark:
                 # The manual again, in the colours of the new palette, where it was read.
                 scroll = self._browser.verticalScrollBar().value()
                 self._load_manual()
@@ -189,7 +193,8 @@ class MTHelp(QMainWindow):
             return
 
         html = self._inject_error_catalog(html)
-        if is_dark(self.palette()):
+        self._manual_dark = is_dark(self.palette())
+        if self._manual_dark:
             html = dark_colors(html)
 
         if self._image_dir is None:

@@ -9,7 +9,7 @@ import pkgutil
 import typing
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer
-from PySide6.QtGui import QShowEvent, QStandardItem, QStandardItemModel
+from PySide6.QtGui import QPalette, QShowEvent, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QAbstractItemView, QGridLayout, QLabel, QPushButton, QTableView, QDialog, QVBoxLayout, \
     QWidget, QMainWindow
 
@@ -45,6 +45,8 @@ feature_req_link = ("https://jira.iter.org/secure/CreateIssueDetails!init.jspa?p
 class MTAbout(QDialog):
     def __init__(self, parent: typing.Optional[QMainWindow] = None):
         super().__init__(parent=parent)
+        # The colour the links were drawn in.
+        self._link_color = None
         self._model = QStandardItemModel()
         self._layout = QGridLayout()
 
@@ -96,13 +98,14 @@ class MTAbout(QDialog):
 
     def _set_links(self):
         # Set empty first: the links take the colour of the palette when the text is set, and the same text is not.
+        self._link_color = self._links.palette().color(QPalette.ColorRole.Link)
         self._links.setText('')
         self._links.setText(
             f"Report a <a href=\"{bug_link}\"> bug</a> or request a <a href=\"{feature_req_link}\"> feature</a>")
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
-        if ev.type() == QEvent.Type.PaletteChange:
+        if ev.type() == QEvent.Type.PaletteChange and self.palette().color(QPalette.ColorRole.Link) != self._link_color:
             # Once the label has the new palette too.
             QTimer.singleShot(0, self._set_links)
 

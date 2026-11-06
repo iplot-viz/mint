@@ -241,7 +241,9 @@ class MTCreatePulseDialog(QDialog):
         layout.addWidget(self.buttons)
 
     def _set_range_preview_color(self):
-        self.rangePreview.setStyleSheet(f"color: {secondary_text_color(self.palette())}; font-style: italic;")
+        sheet = f"color: {secondary_text_color(self.palette())}; font-style: italic;"
+        if self.rangePreview.styleSheet() != sheet:
+            self.rangePreview.setStyleSheet(sheet)
 
     def changeEvent(self, ev):
         super().changeEvent(ev)
