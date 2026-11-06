@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QCoreApplication, QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtTest import QTest
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -318,6 +318,33 @@ class ReadAheadTest(_MainWindowTestCase):
 
         self.assertEqual((reading, still_reading), ('Retrieving data...', 'Retrieving data...'))
         self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'viewReadsChanged'), "the installed iplotlib reads no view ahead")
+    def test_the_status_bar_says_ready_when_the_views_get_their_data_as_it_says_they_wait(self):
+        AccessHelper.pool = _PoolStub()
+        win = self._two_plots()
+        win.draw_clicked()
+        _drawn_when_done(win)
+        process_events = QCoreApplication.processEvents
+        arrived = []
+
+        def arriving(*args):
+            # The data are read in less time than the status bar takes to say that they are read.
+            if not arrived:
+                arrived.append(True)
+                win.qtcanvas.viewReadsChanged.emit(0)
+            process_events(*args)
+            process_events(*args)
+
+        with patch('mint.gui.mtMainWindow.QCoreApplication') as application:
+            application.processEvents.side_effect = arriving
+            win.qtcanvas.viewReadsChanged.emit(1)
+            QTest.qWait(10)
+        QTest.qWait(10)
+
+        self.assertTrue(arrived)
+        self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
+        self.assertTrue(win._progressBar.isHidden())
 
     @unittest.skipUnless(hasattr(IplotQtCanvas, 'viewReadsChanged'), "the installed iplotlib reads no view ahead")
     def test_the_status_bar_says_that_data_are_read_after_each_change_of_the_views(self):

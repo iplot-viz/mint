@@ -815,8 +815,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if getattr(self.canvas, 'show_minimap', False) and eligible() and hasattr(w, '_update_minimap'):
             w._update_minimap()
 
-    def indicate_busy(self, msg='Hang on ..'):
-        self._ready_due = self._view_reads_shown = False
+    def indicate_busy(self, msg='Hang on ..', view_reads=False):
+        # Before the events run, as the data read for the views can arrive meanwhile (see _show_view_reads).
+        self._ready_due, self._view_reads_shown = False, view_reads
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(0)
         self._progressBar.show()
@@ -837,8 +838,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             return
         if self._view_reads:
             # Until the data read for the views that changed arrive (see _show_view_reads).
-            self.indicate_busy('Retrieving data...')
-            self._view_reads_shown = True
+            self.indicate_busy('Retrieving data...', view_reads=True)
             return
         self._view_reads_shown = False
         self.statusBar().showMessage('Ready.')
@@ -857,8 +857,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         message = self.statusBar().currentMessage()
         if self._view_reads:
             if self._progressBar.isHidden() and message in ('', 'Ready.'):
-                self.indicate_busy('Retrieving data...')
-                self._view_reads_shown = True
+                self.indicate_busy('Retrieving data...', view_reads=True)
         elif self._view_reads_shown and message == 'Retrieving data...':
             self.indicate_ready()
 
