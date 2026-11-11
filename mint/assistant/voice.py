@@ -125,6 +125,18 @@ class Voice:
     def could_not_start() -> str:
         return "The assistant couldn't start on this computer. Ask whoever looks after MINT here."
 
+    # What the model process is doing while it starts, in the order it does it.
+    LOADING = {"start": "Waking up the assistant…", "checking": "Checking the model file…",
+               "loading": "Loading the model…", "priming": "Learning what MINT can do…"}
+
+    @staticmethod
+    def loading(step: str) -> str:
+        return Voice.LOADING.get(step, Voice.getting_ready())
+
+    @staticmethod
+    def getting_ready() -> str:
+        return "Getting everything ready…"
+
     @staticmethod
     def redraw_failed() -> str:
         return " I couldn't redraw the plots, though: click Draw to see the change."

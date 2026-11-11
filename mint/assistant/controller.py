@@ -226,11 +226,13 @@ class AssistantController(QObject):
             self.engine.deleteLater()
         self._attach(ModelEngine(self.config.model_path, self.config.threads, allowed_sha256=self._allowed_hashes(),
                                  verified_cache=os.path.join(state_dir(), "verified_models.json"), parent=self))
+        self._primed = False
         self.engine.start()
 
     def _attach(self, engine):
         self.engine = engine
         engine.stateChanged.connect(self._on_engine_state)
+        engine.step.connect(self._loading)
         engine.loaded.connect(self._on_loaded)
         engine.primed.connect(self._on_primed)
         engine.completed.connect(self._on_completed)
@@ -258,13 +260,31 @@ class AssistantController(QObject):
             self.engine.shutdown()
 
     def _on_engine_state(self, state: str):
-        busy = state == BUSY
-        # Until the fixed prompt is ready (about a minute the first time on a machine) a request waits behind it.
-        self.panel.set_busy(busy, "Thinking…" if self._primed else "Getting ready, then I'll answer…")
         if state == LOADING:
-            self.panel.set_status("Starting up…")
-        elif state == READY and not busy:
+            self._loading("start")
+        elif state == BUSY:
+            # A request queued while it started waits for the fixed prompt (a minute the first time on a machine).
+            self.panel.set_busy(True, "Thinking…" if self._primed else "Getting ready, then I'll answer…")
+        elif state == READY and self._primed:
+            self.panel.set_busy(False)
             self.panel.set_input_enabled(True)
+
+    def _loading(self, step: str):
+        """While the model starts: the step it is at, and the input closed until it can answer."""
+        self.panel.set_busy(True, self.voice.loading(step), can_stop=False)
+        self.panel.set_input_enabled(False)
+        self.panel.set_placeholder(self.voice.getting_ready())
+        self.panel.input.setToolTip(self.voice.getting_ready())
+        self.panel.set_status("")
+
+    def _ready(self):
+        self.panel.input.setToolTip("")
+        self.panel.set_placeholder(PLACEHOLDER)
+        self.panel.set_status("Ready")
+        if self.engine is None or self.engine.state != BUSY:
+            self.panel.set_busy(False)
+            self.panel.set_input_enabled(True)
+            self.panel.input.setFocus()
 
     def _on_loaded(self, info: dict):
         declared = info.get("declared") or {}
@@ -272,7 +292,7 @@ class AssistantController(QObject):
         self._few_shot = few_shot(info.get("sha256", ""), declared)
         self._model_name = KNOWN_MODELS.get(info.get("sha256", ""), {}).get("name", "custom model")
         self._primed = False
-        self.panel.set_status("Getting ready…")
+        self._loading("priming")
         # The worker handles requests in order: whatever comes next waits for the prefix.
         self.engine.prime(prompt.fixed_prefix(self.format, self._few_shot), prompt_cache_dir())
         self._workspace_dirty = True
@@ -285,7 +305,7 @@ class AssistantController(QObject):
         self._primed = True
         logger.info(f"Assistant ready with {self._model_name} (format {self.format.name}, "
                     f"{'with' if self._few_shot else 'without'} worked examples)")
-        self.panel.set_status("Ready")
+        self._ready()
 
     def _on_failed(self, request_id: int, message: str):
         # The details are for the log; the operator gets what happened and what to do.
@@ -293,6 +313,10 @@ class AssistantController(QObject):
         self.panel.set_busy(False)
         waiting, self._inflight = self._inflight, None
         if self.engine is None or self.engine.state == FAILED:
+            self.panel.input.setToolTip("")
+            self.panel.set_placeholder(PLACEHOLDER)
+            # Once it has run, a message starts it again; if it never started, there is nothing to send to.
+            self.panel.set_input_enabled(self.format is not None)
             self.panel.set_status(self.voice.could_not_start() if self.format is None else
                                   "The assistant stopped. Send a message and it starts again.")
         if waiting is not None or self._queued is not None:

@@ -41,6 +41,7 @@ def wait_until(predicate, timeout=10.0):
 
 class StubEngine(QObject):
     stateChanged = Signal(str)
+    step = Signal(str)
     loaded = Signal(dict)
     primed = Signal(dict)
     completed = Signal(int, str, dict)
@@ -62,6 +63,9 @@ class StubEngine(QObject):
 
     def warm(self, prompt):
         self.warms.append(prompt)
+
+    def prime(self, prompt, cache_dir=None):
+        pass
 
     def cancel(self):
         pass
@@ -106,6 +110,28 @@ class AssistantFlowTest(unittest.TestCase):
 
     def rows(self):
         return list(self.ctl.workspace.table()["Variable"])
+
+    def test_starting_up_tells_each_step_and_keeps_the_input_closed(self):
+        panel = self.ctl.panel
+        self.ctl._primed = False
+        self.engine.state = "loading"
+        self.engine.stateChanged.emit("loading")
+        self.assertEqual(panel._busy_label.text(), "Waking up the assistant…")
+        self.assertFalse(panel.input.isEnabled())
+        self.assertEqual(panel.input.toolTip(), "Getting everything ready…")
+        self.assertEqual(panel.input.placeholderText(), "Getting everything ready…")
+        self.assertTrue(panel.stop_button.isHidden(), "nothing to stop while it starts")
+        for step, text in (("checking", "Checking the model file…"), ("loading", "Loading the model…")):
+            self.engine.step.emit(step)
+            self.assertEqual(panel._busy_label.text(), text)
+        self.engine.state = READY
+        self.engine.loaded.emit({})
+        self.assertEqual(panel._busy_label.text(), "Learning what MINT can do…")
+        self.assertFalse(panel.input.isEnabled(), "still closed until the fixed prompt is ready")
+        self.engine.primed.emit({})
+        self.assertTrue(panel.input.isEnabled())
+        self.assertFalse(panel._busy)
+        self.assertEqual((panel.input.toolTip(), panel.input.placeholderText()), ("", ctl.PLACEHOLDER))
 
     def test_request_card_apply_and_undo(self):
         cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
@@ -446,6 +472,24 @@ class AssistantInstallTest(unittest.TestCase):
             self.assertTrue(panel.isVisible() and not floating.isVisible())
         finally:
             win.close()
+
+
+class NetworkIsolationTest(unittest.TestCase):
+    def test_without_user_namespaces_the_model_process_starts_again_without_them(self):
+        from mint.assistant import engine
+        ensure_qapp()
+        model = ModelEngine("model.gguf", 1)
+        started = []
+        model.start = lambda: started.append(engine.network_isolation())
+        model.isolated, model._state = True, engine.LOADING
+        model._stderr_tail.append("unshare: unshare failed: Operation not permitted")
+        failed = []
+        model.failed.connect(lambda *args: failed.append(args))
+        with mock.patch.object(engine, "_isolation_works", None), mock.patch.object(engine.sys, "platform", "linux"), \
+                mock.patch.object(engine.shutil, "which", return_value="/usr/bin/unshare"):
+            self.assertEqual(engine.network_isolation()[0], "/usr/bin/unshare", "tried first, with no probe")
+            model._on_finished(1, None)
+            self.assertEqual((started, failed), ([[]], []), "started again without it, and nothing failed")
 
 
 class WorkerProcessTest(unittest.TestCase):

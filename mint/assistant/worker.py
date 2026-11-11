@@ -173,6 +173,7 @@ class Worker:
             raise ValueError(f"other users can change the model file: make it writable by its owner only ({path})")
         allowed = {h.lower() for h in msg.get("allowed_sha256") or []}
         checked = file_key(fd, path)
+        send(ev="step", step="checking")
         sha256 = verify_model(fd, path, allowed, msg.get("verified_cache"))
         self.sha256 = sha256
         # On Linux the library opens this very file, the one just hashed, whatever the path leads to by then.
@@ -183,6 +184,7 @@ class Worker:
                 self.llm = None
                 raise ValueError("the model file changed while it was being loaded")
 
+        send(ev="step", step="loading")
         from llama_cpp import Llama
         threads = int(msg.get("threads") or 2)
         # A model trained for MINT declares its context size and the key/value cache is reserved for all of it.

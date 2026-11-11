@@ -2,7 +2,6 @@
 import json
 import os
 import shutil
-import subprocess
 import sys
 from collections import deque
 
@@ -21,26 +20,21 @@ WORKER_ENVIRONMENT = ("PATH", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "LD_LIB
 
 
 ISOLATION = ["--user", "--map-root-user", "--net"]
-_isolation = None
+# False once unshare failed here (user namespaces disabled): later starts go without it.
+_isolation_works = None
 
 
 def network_isolation():
-    """Command prefix that starts the model process without network access, or [] when unavailable.
+    """Command prefix that starts the model process without network access, or [] where it is unavailable.
 
-    On Linux an empty network namespace (unshare) leaves the process nothing to connect to.
+    On Linux an empty network namespace (unshare) leaves the process nothing to connect to. It is not
+    tried beforehand, which would keep the window waiting: where it fails, the process is started again
+    without it.
     """
-    global _isolation
-    if _isolation is None:
-        _isolation = []
-        unshare = shutil.which("unshare") if sys.platform.startswith("linux") else None
-        if unshare:
-            try:
-                probe = subprocess.run([unshare, *ISOLATION, "true"], capture_output=True, timeout=5)
-                if probe.returncode == 0:
-                    _isolation = [unshare, *ISOLATION]
-            except (OSError, subprocess.SubprocessError):
-                pass
-    return _isolation
+    if _isolation_works is False or not sys.platform.startswith("linux"):
+        return []
+    unshare = shutil.which("unshare")
+    return [unshare, *ISOLATION] if unshare else []
 
 
 def worker_environment() -> QProcessEnvironment:
@@ -57,6 +51,7 @@ STOPPED, LOADING, READY, BUSY, FAILED = "stopped", "loading", "ready", "busy", "
 
 class ModelEngine(QObject):
     stateChanged = Signal(str)
+    step = Signal(str)  # where the loading is: "checking" the file, "loading" the model
     loaded = Signal(dict)
     primed = Signal(dict)
     completed = Signal(int, str, dict)
@@ -174,7 +169,9 @@ class ModelEngine(QObject):
 
     def _on_event(self, event: dict):
         kind = event.get("ev")
-        if kind == "loaded":
+        if kind == "step":
+            self.step.emit(str(event.get("step", "")))
+        elif kind == "loaded":
             logger.info(f"Assistant model loaded in {event.get('seconds')} s ({event.get('threads')} threads)")
             self._set_state(READY)
             self.loaded.emit(event)
@@ -214,6 +211,13 @@ class ModelEngine(QObject):
     def _on_finished(self, exit_code, _status):
         pending, self._pending = self._pending, None
         self._process = None
+        if self.isolated and self._state == LOADING and any(line.startswith("unshare:") for line in self._stderr_tail):
+            global _isolation_works
+            _isolation_works = False
+            logger.info(f"Assistant: no network isolation here ({self._stderr_tail[-1]}); starting without it")
+            self._stderr_tail.clear()
+            self.start()
+            return
         tail = " | ".join(list(self._stderr_tail)[-3:])
         message = f"the model process stopped (exit code {exit_code})" + (f": {tail}" if tail else "")
         logger.warning(f"Assistant: {message}")
