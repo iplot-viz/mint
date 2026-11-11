@@ -17,6 +17,8 @@ OPERATORS = {"subtract": "-", "add": "+", "multiply": "*", "divide": "/"}
 OPERATOR_WORDS = {"subtract": "minus", "add": "plus", "multiply": "times", "divide": "over"}
 PROCESSABLE_PLOT_TYPES = ("PlotXY", "")
 COMMENT_PREFIX = "Assistant: "
+# Windows counted in samples: one sample wide, they give the signal back unchanged.
+ONE_SAMPLE_IS_A_COPY = ("moving_average", "median")
 # Nanosecond timestamps in int64 cover 1677-2262; plant data lives well inside this.
 FIRST_YEAR, LAST_YEAR = 1970, 2100
 MAX_SPAN_SECONDS = 100 * 365 * 86400
@@ -249,6 +251,7 @@ class Planner:
                 raise ActionError(f"{self._name(row)} is shown as a min/max band, and I can't process that.")
             if row.plot_type not in PROCESSABLE_PLOT_TYPES:
                 raise ActionError(f"{self._name(row)} isn't plotted against time, so I can't process it.")
+            self._check_it_changes(recipe, values, row)
         title = ""
         for row in sorted(rows, key=lambda r: r.index):
             info = recipes.render(recipe, values, row.y if recipes.load()[recipe]["axis"] == "y" else "")
@@ -272,6 +275,25 @@ class Planner:
                     row, {column: info["expr"], "Alias": alias, "Comment": COMMENT_PREFIX + info["describe"]},
                     f"{self._name(row)} — {info['plain']} → new signal {shown}, {where}"))
         return title
+
+    def _check_it_changes(self, recipe: str, values: dict, row):
+        """Asks again when the samples are too far apart for the change to show: the copy would be the signal."""
+        if recipe not in ONE_SAMPLE_IS_A_COPY and recipe != "lowpass":
+            return
+        period = self.ws.sample_period_seconds(row)
+        if not period:
+            return
+        apart = recipes.human_duration(float(f"{period:.2g}"))
+        if recipe in ONE_SAMPLE_IS_A_COPY and round(values["seconds"] / period) <= 1:
+            window = recipes.human_duration(values["seconds"])
+            example = recipes.human_duration(recipes.nice_window(5 * period))
+            raise MissingValue(f"{self._name(row)} has a sample about every {apart}, so over {window} it would stay as "
+                               f"it is. Over how long should I smooth it? For example {example}.", "seconds")
+        if recipe == "lowpass" and values["hz"] >= 0.45 / period:
+            example = recipes.number(float(f"{0.1 / period:.1g}"))
+            raise MissingValue(f"{self._name(row)} has a sample about every {apart}, so it has nothing as fast as "
+                               f"{recipes.number(values['hz'])} Hz to filter out. Which frequency should I keep up to? "
+                               f"For example {example} Hz.", "hz")
 
     def _window_reference(self, rows) -> Optional[float]:
         if self.snap.range_seconds:

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
+import numpy as np
 from PySide6.QtCore import QModelIndex, Qt
 
 from iplotLogging import setupLogger
@@ -176,6 +177,23 @@ class MintWorkspace:
         if span <= 0:
             return None
         return span / 1e9 if abs(float(begin)) > 1e12 else span
+
+    def sample_period_seconds(self, row) -> Optional[float]:
+        """The median time between the samples of a drawn row, from the data already read; None if not drawn."""
+        uid = self.uid_of(row.index)
+        try:
+            signals = self.window.canvasStack.currentWidget().get_signals(self.window.canvas)
+            x = next((s.x_data for s in signals if getattr(s, "uid", None) == uid), None)
+            if x is None or len(x) < 3:
+                return None
+            x = np.asarray(x, dtype=float)
+            period = float(np.median(np.diff(x)))
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"Assistant: no sample period for row {row.id}: {e}")
+            return None
+        if not np.isfinite(period) or period <= 0:
+            return None
+        return period / 1e9 if abs(x[0]) > 1e12 else period
 
     def is_streaming(self) -> bool:
         return bool(self.window.streamerCfgWidget.is_activated())

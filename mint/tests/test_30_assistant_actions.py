@@ -215,6 +215,34 @@ class AssistantActionsTest(_WindowCase):
                     self.plan(text)
                 self.assertIn(fragment, str(ctx.exception))
 
+    def test_a_change_the_samples_are_too_far_apart_to_show_is_asked_again(self):
+        # Archived on change: a sample every 12 s or so, as the cryo signals of DifiTest.
+        self.ws.sample_period_seconds = lambda row: 11.654
+        for text, param, fragment in (("process r1 moving_average seconds=10", "seconds", "For example 50 s."),
+                                      ("process r1 median seconds=5", "seconds", "over 5 s it would stay as it is"),
+                                      ("process r1 lowpass hz=2", "hz", "For example 0.009 Hz.")):
+            with self.subTest(text=text):
+                with self.assertRaises(MissingValue) as ctx:
+                    self.plan(text)
+                self.assertEqual(ctx.exception.param, param)
+                self.assertIn("a sample about every 12 s", str(ctx.exception))
+                self.assertIn(fragment, str(ctx.exception))
+        for text in ("process r1 moving_average seconds=60", "process r1 lowpass hz=0.005",
+                     "process r1 gaussian seconds=5", "process r1 derivative"):
+            with self.subTest(text=text):
+                self.assertTrue(self.plan(text).changes)
+
+    def test_the_sample_period_comes_from_the_data_already_drawn(self):
+        from types import SimpleNamespace
+        import numpy as np
+        row = SimpleNamespace(index=0, id="r1")
+        drawn = SimpleNamespace(uid=self.ws.uid_of(0), x_data=1.73e18 + np.arange(0, 100e9, 11.654e9))
+        canvas = SimpleNamespace(get_signals=lambda canvas: [SimpleNamespace(uid="other", x_data=[0, 1, 2]), drawn])
+        with mock.patch.object(self.ws.window.canvasStack, "currentWidget", return_value=canvas):
+            self.assertAlmostEqual(self.ws.sample_period_seconds(row), 11.654, places=3)
+            drawn.x_data = None
+            self.assertIsNone(self.ws.sample_period_seconds(row), "not drawn yet: nothing to say")
+
     def test_variable_search_uses_the_data_source(self):
         search = self.ws.search_variables(["MCTB", "VAR2"])
         self.assertEqual(search.source, AppDataAccess.da.get_default_ds_name())
