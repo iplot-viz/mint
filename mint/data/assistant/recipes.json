@@ -118,11 +118,11 @@
     "label": "Log10",
     "params": {},
     "axis": "y",
-    "expr": "np.log10({x})",
+    "expr": "np.log10(np.where({x} > 0, {x}, np.nan))",
     "alias": "log10",
-    "describe": "base-10 logarithm of the values (for a log axis, ask for log scale instead)",
+    "describe": "base-10 logarithm of the values, leaving out zero and below (for a log axis, ask for log scale instead)",
     "title": "Logarithm",
-    "plain": "base-10 logarithm of the values"
+    "plain": "base-10 logarithm of the values; zero and below are left out"
   },
   "scale": {
     "label": "Scale and offset",

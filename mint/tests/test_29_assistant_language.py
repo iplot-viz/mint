@@ -591,6 +591,31 @@ class RecipesTest(unittest.TestCase):
             for other in results[1:]:
                 np.testing.assert_allclose(other, results[0], rtol=1e-6, atol=1e-6, err_msg=name)
 
+    def test_every_recipe_evaluates_on_data_as_mint_reads_it(self):
+        # MINT hands over BufferObjects, whose scalar results come back as one-element arrays.
+        from iplotProcessing.core import BufferObject
+        time = np.int64(1730203418070000000) + np.arange(5000, dtype=np.int64) * np.int64(12_000_000_000)
+        for name, recipe in recipes.load().items():
+            given = {"hz": "0.01"} if "hz" in recipe["params"] else {"factor": "2"} if name == "scale" else {}
+            values = recipes.resolve_params(name, given, range_seconds=60000)
+            info = recipes.render(name, values)
+            with self.subTest(recipe=name):
+                signal = self._signal(time)
+                signal.data_store[0] = BufferObject(signal.data_store[0], unit="ns")
+                signal.data_store[1] = BufferObject(signal.data_store[1], unit="%")
+                out = signal.compute(x=info["expr"] if info["axis"] == "x" else signal.x_expr,
+                                     y=info["expr"] if info["axis"] == "y" else signal.y_expr, z=signal.z_expr)
+                values_out = np.asarray(out[info["axis"]], dtype=float)
+                self.assertEqual(values_out.shape, (5000,))
+                self.assertTrue(np.isfinite(values_out).all())
+
+    def test_log10_leaves_out_zero_and_below(self):
+        info = recipes.render("log10", {})
+        signal = self._signal(self.TIMES["pulse seconds"])
+        signal.data_store[1] = np.array([100.0, 0.0, -5.0, 10.0] * 1250)
+        out = np.asarray(signal.compute(x=signal.x_expr, y=info["expr"], z=signal.z_expr)["y"], dtype=float)
+        np.testing.assert_array_equal(out[:4], [2.0, np.nan, np.nan, 1.0])
+
     def test_moving_average_window_is_in_seconds(self):
         info = recipes.render("moving_average", {"seconds": 10})
         signal = self._signal(self.TIMES["pulse seconds"])

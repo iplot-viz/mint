@@ -15,7 +15,9 @@ RECIPES_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 # times are nanoseconds (above 1e12) and pulse times are seconds: both give seconds.
 TIME_SCALE = "np.where(np.abs(${self}.time[0]) > 1e12, 1e9, 1.0)"
 TIME_S = f"((${{self}}.time - ${{self}}.time[0]) / {TIME_SCALE})"
-DT_S = f"np.median(np.diff({TIME_S}))"
+# A plain number: on MINT's data a median comes back as a one-element array, which a window
+# length (an integer) or a sampling frequency does not accept.
+DT_S = f"np.ravel(np.median(np.diff({TIME_S})))[0]"
 SELF_DATA = "${self}.data"
 
 
