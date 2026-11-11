@@ -545,10 +545,26 @@ class FollowUpTest(unittest.TestCase):
                  ("1 day", "seconds", 86400), ("2 Hz", "hz", 2), ("0.5", "hz", 0.5), ("x 3.6", "factor", 3.6),
                  ("-2", "factor", -2), ("10.", "factor", 10),
                  ("2 kHz", "hz", None), ("10 apples", "seconds", None), ("3 s", "factor", None),
-                 ("the pirani", "seconds", None), ("", "hz", None), ("10 s and log scale", "seconds", None)]
+                 ("the pirani", "seconds", None), ("", "hz", None), ("10 s and log scale", "seconds", None),
+                 # As people write them: the number with words that only agree, ask politely or correct.
+                 ("50s it's okey", "seconds", 50), ("ok 50s", "seconds", 50), ("50 s please", "seconds", 50),
+                 ("50 seconds is fine", "seconds", 50), ("make it 90s", "seconds", 90), ("go with 2 Hz", "hz", 2),
+                 ("vale, 30 s", "seconds", 30), ("no, 1 min", "seconds", 60), ("1 minuto", "seconds", 60),
+                 ("2 días", "seconds", 172800), ("50 s, it’s enough", "seconds", 50),
+                 ("50 s for VOL3600", "seconds", None), ("50s for both", "seconds", None),
+                 ("50 or 60 s", "seconds", None)]
         for text, param, expected in cases:
             with self.subTest(text=text, param=param):
                 self.assertEqual(value_in(text, param), expected)
+
+    def test_a_reply_that_only_agrees(self):
+        from mint.assistant.followup import agrees
+        for text in ("ok", "OK!", "yes please", "yes, that's fine", "sounds good", "vale", "sí, perfecto", "d'accord"):
+            with self.subTest(text=text):
+                self.assertTrue(agrees(text))
+        for text in ("", "no", "thanks", "the pirani", "ok and log scale", "ok 50s", "not that"):
+            with self.subTest(text=text):
+                self.assertFalse(agrees(text))
 
     def test_an_answer_is_short_and_comes_with_its_request(self):
         from mint.assistant.followup import OpenQuestion, is_answer, with_answer

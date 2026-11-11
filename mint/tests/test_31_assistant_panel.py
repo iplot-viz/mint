@@ -116,21 +116,24 @@ class AssistantFlowTest(unittest.TestCase):
         self.ctl._primed = False
         self.engine.state = "loading"
         self.engine.stateChanged.emit("loading")
-        self.assertEqual(panel._busy_label.text(), "Waking up the assistant…")
+        self.assertEqual(panel.title(), "AI Assistant", "as the button that opens it")
+        # Said above the input box, where the suggestions come once it is ready; not in the conversation.
+        self.assertEqual(panel._progress_label.text(), "Waking up the assistant…")
+        self.assertFalse(panel._busy)
         self.assertFalse(panel.input.isEnabled())
         self.assertEqual(panel.input.toolTip(), "Getting everything ready…")
         self.assertEqual(panel.input.placeholderText(), "Getting everything ready…")
         self.assertTrue(panel.stop_button.isHidden(), "nothing to stop while it starts")
         for step, text in (("checking", "Checking the model file…"), ("loading", "Loading the model…")):
             self.engine.step.emit(step)
-            self.assertEqual(panel._busy_label.text(), text)
+            self.assertEqual(panel._progress_label.text(), text)
         self.engine.state = READY
         self.engine.loaded.emit({})
-        self.assertEqual(panel._busy_label.text(), "Learning what MINT can do…")
+        self.assertEqual(panel._progress_label.text(), "Learning what MINT can do…")
         self.assertFalse(panel.input.isEnabled(), "still closed until the fixed prompt is ready")
         self.engine.primed.emit({})
         self.assertTrue(panel.input.isEnabled())
-        self.assertFalse(panel._busy)
+        self.assertFalse(panel._preparing)
         self.assertEqual((panel.input.toolTip(), panel.input.placeholderText()), ("", ctl.PLACEHOLDER))
 
     def test_request_card_apply_and_undo(self):
@@ -379,11 +382,36 @@ class AssistantFlowTest(unittest.TestCase):
         self.ctl.set_visible(True)
         self.assertIn("Smooth pirani over 10 s", [b.text() for b in self.ctl.panel.findChildren(QPushButton)])
 
-    def test_a_number_still_missing_after_an_answer_is_not_asked_again(self):
+    def test_a_number_still_missing_after_an_answer_can_come_alone(self):
         self.ask("low-pass the pirani", "process r1 lowpass")
         self.ask("quite slow", "process r1 lowpass")
-        self.assertIn("I still need a number", self.said[-1])
-        self.assertIsNone(self.ctl._open_question)
+        self.assertEqual(self.said[-1], "I still need the number for that. Just the number is enough.")
+        calls = len(self.engine.prompts)
+        cards = self.ask("2 Hz", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r1 lowpass hz=2"])
+        self.assertEqual(len(self.engine.prompts), calls, "the number fills in the request it belongs to")
+
+    def test_a_window_asked_again_is_answered_as_people_write(self):
+        # As on SDCC: a signal archived on change, a sample about every 12 s.
+        self.ctl.workspace.sample_period_seconds = lambda row: 11.654
+        for reply in ("50s it's okey", "ok", "vale, 50 s"):
+            with self.subTest(reply=reply):
+                self.ask("smooth the pirani over 10 s", "process r1 moving_average seconds=10")
+                self.assertTrue(self.said[-1].endswith("For example 50 s."), self.said[-1])
+                calls = len(self.engine.prompts)
+                cards = self.ask(reply, 'say "no model here"')
+                self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands,
+                                 ["process r1 moving_average window=50s"], "the pirani only, over 50 s")
+                self.assertEqual(len(self.engine.prompts), calls)
+
+    def test_a_window_that_would_not_show_either_is_explained_again(self):
+        self.ctl.workspace.sample_period_seconds = lambda row: 11.654
+        self.ask("smooth the pirani over 10 s", "process r1 moving_average seconds=10")
+        self.assertEqual(self.ask("12 s", 'say "no model here"'), [])
+        self.assertIn("so over 12 s it would stay as it is", self.said[-1])
+        self.assertNotIn("I still need", self.said[-1])
+        cards = self.ask("ok", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r1 moving_average window=50s"])
 
     def test_a_long_reply_is_a_new_request(self):
         self.ask("smooth that", 'ask "Which one?"')

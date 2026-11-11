@@ -84,8 +84,7 @@ class Voice:
 
     @staticmethod
     def still_missing_number() -> str:
-        return ("I still need a number for that. Tell me the whole thing in one go, "
-                "for example \"smooth the pirani over 10 s\".")
+        return "I still need the number for that. Just the number is enough."
 
     @staticmethod
     def too_long() -> str:

@@ -31,11 +31,15 @@ class ActionError(ValueError):
 
 
 class MissingValue(ActionError):
-    """A number the user did not give: the message asks for it, ``param`` says which one."""
+    """A number the user did not give: the message asks for it, ``param`` says which one.
 
-    def __init__(self, question: str, param: str):
+    ``example`` is the value the message suggests, if it suggests one: "ok" in reply takes it.
+    """
+
+    def __init__(self, question: str, param: str, example: Optional[float] = None):
         super().__init__(question)
         self.param = param
+        self.example = example
         self.command = None
 
 
@@ -288,14 +292,15 @@ class Planner:
         apart = recipes.human_duration(float(f"{period:.2g}"))
         if recipe in ONE_SAMPLE_IS_A_COPY and round(values["seconds"] / period) <= 1:
             window = recipes.human_duration(values["seconds"])
-            example = recipes.human_duration(recipes.nice_window(5 * period))
+            example = recipes.nice_window(5 * period)
             raise MissingValue(f"{self._name(row)} has a sample about every {apart}, so over {window} it would stay as "
-                               f"it is. Over how long should I smooth it? For example {example}.", "seconds")
+                               f"it is. Over how long should I smooth it? For example "
+                               f"{recipes.human_duration(example)}.", "seconds", example)
         if recipe == "lowpass" and values["hz"] >= 0.45 / period:
-            example = recipes.number(float(f"{0.1 / period:.1g}"))
+            example = float(f"{0.1 / period:.1g}")
             raise MissingValue(f"{self._name(row)} has a sample about every {apart}, so it has nothing as fast as "
                                f"{recipes.number(values['hz'])} Hz to filter out. Which frequency should I keep up to? "
-                               f"For example {example} Hz.", "hz")
+                               f"For example {recipes.number(example)} Hz.", "hz", example)
 
     def _window_reference(self, rows) -> Optional[float]:
         if self.snap.range_seconds:

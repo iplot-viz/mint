@@ -11,9 +11,26 @@ SECONDS = {"ms": 0.001, "msec": 0.001, "millisecond": 0.001, "milliseconds": 0.0
            "min": 60, "mins": 60, "minute": 60, "minutes": 60,
            "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
            "d": 86400, "day": 86400, "days": 86400}
-VALUE = re.compile(r"^\s*(?:about|around|over|at|by|of|x|×)?\s*(-?\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)?\s*[.!]?\s*$")
+# The same units in the other languages the assistant understands.
+SECONDS.update({unit: seconds for units, seconds in (
+    ("segundo segundos seconde secondes sekunde sekunden secondo secondi", 1),
+    ("minuto minutos minuten minuti", 60),
+    ("hora horas heure heures stunde stunden ora ore", 3600),
+    ("día días dia dias jour jours tag tage giorno giorni", 86400)) for unit in units.split()})
+VALUE = re.compile(r"^\s*(?:about|around|over|at|by|of|x|×)?\s*(-?\d+(?:[.,]\d+)?)\s*([^\W\d_]+)?\s*$")
 # More words than this is a new request rather than an answer.
 MAX_ANSWER_WORDS = 6
+# Words that only agree, in the languages the assistant understands: alone, they take the example asked with.
+AGREE = set("ok okay okey yes yeah yep sure fine good great perfect perfecto vale sí si venga dale claro bien "
+            "oui d'accord parfait ja gut genau passt sì certo bene perfetto sim beleza".split())
+# Words around a number that only acknowledge, ask politely or correct: "50 s it's okay", "vale, 30 s",
+# "go with 2 Hz please", "no, 1 min". Anything else ("and log scale", a signal) goes to the model.
+POLITE = AGREE | set("it it's its is that that's this then please pls thanks thank you just go with let's lets say "
+                     "use make do try set to the one example enough sounds works for me por favor gracias pon ponle "
+                     "usa con es eso ese esa está esta suficiente mejor pues entonces de acuerdo ejemplo merci alors "
+                     "s'il te vous plaît plait avec exemple assez bitte danke dann mit nimm beispiel reicht va per "
+                     "favore grazie allora esempio basta obrigado então pode ser exemplo".split())
+CORRECTING = set("no nope nah non nein não nao actually rather instead".split())
 
 
 @dataclass
@@ -23,11 +40,23 @@ class OpenQuestion:
     commands: List[Command] = field(default_factory=list)
     command: Optional[Command] = None
     param: str = ""
+    example: Optional[float] = None  # the value the question suggested
+
+
+def _words(text: str) -> List[str]:
+    # Punctuation between words, not inside a number ("2,5 s"); curly apostrophes as straight ones.
+    text = (text or "").replace("’", "'")
+    return re.sub(r"[,;:!?]+(?!\d)|\.(?!\d)", " ", text).split()
+
+
+def _saying(text: str, skip: set) -> List[str]:
+    return [word for word in _words(text) if word.lower() not in skip]
 
 
 def value_in(text: str, param: str) -> Optional[float]:
-    """The number a short answer gives for a parameter ("10 s", "2 Hz", "x 3.6"), in its unit, or None."""
-    m = VALUE.match(text or "")
+    """The number a short answer gives for a parameter ("10 s", "2 Hz", "x 3.6", "50 s it's okay"), in its
+    unit, or None."""
+    m = VALUE.match(" ".join(_saying(text, POLITE | CORRECTING)))
     if not m:
         return None
     value = float(m.group(1).replace(",", "."))
@@ -39,6 +68,12 @@ def value_in(text: str, param: str) -> Optional[float]:
     if param == "hz":
         return value if unit in ("", "hz") else None
     return value if not unit else None
+
+
+def agrees(text: str) -> bool:
+    """A reply that only agrees ("ok", "yes, that's fine", "vale"): to a question with an example, that one."""
+    words = [word.lower() for word in _words(text)]
+    return bool(words) and not _saying(text, POLITE) and any(word in AGREE for word in words)
 
 
 def is_answer(text: str) -> bool:

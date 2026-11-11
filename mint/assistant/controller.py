@@ -128,6 +128,7 @@ class AssistantController(QObject):
         self.workspace = MintWorkspace(window)
         self.panel = panel_class()
         self.panel.setObjectName("assistantPanel")
+        self.panel.set_title("AI Assistant")  # as the button that opens it
         self.voice = Voice()
         self.panel.set_placeholder(PLACEHOLDER)
         self.panel.set_suggestions(SUGGESTIONS)
@@ -271,13 +272,14 @@ class AssistantController(QObject):
 
     def _loading(self, step: str):
         """While the model starts: the step it is at, and the input closed until it can answer."""
-        self.panel.set_busy(True, self.voice.loading(step), can_stop=False)
+        self.panel.set_progress(self.voice.loading(step))
         self.panel.set_input_enabled(False)
         self.panel.set_placeholder(self.voice.getting_ready())
         self.panel.input.setToolTip(self.voice.getting_ready())
         self.panel.set_status("")
 
     def _ready(self):
+        self.panel.set_progress("")
         self.panel.input.setToolTip("")
         self.panel.set_placeholder(PLACEHOLDER)
         self.panel.set_status("Ready")
@@ -313,6 +315,7 @@ class AssistantController(QObject):
         self.panel.set_busy(False)
         waiting, self._inflight = self._inflight, None
         if self.engine is None or self.engine.state == FAILED:
+            self.panel.set_progress("")
             self.panel.input.setToolTip("")
             self.panel.set_placeholder(PLACEHOLDER)
             # Once it has run, a message starts it again; if it never started, there is nothing to send to.
@@ -375,6 +378,8 @@ class AssistantController(QObject):
         named = False
         if answering and question.command is not None:
             value = followup.value_in(text, question.param)
+            if value is None and question.example is not None and followup.agrees(text):
+                value = question.example
             if value is not None:
                 self._answer_with_number(question, value, text)
                 return
@@ -397,8 +402,11 @@ class AssistantController(QObject):
         question.command.params[question.param] = recipes.number(value)
         try:
             proposal = Planner(self.workspace, question.snap).plan(question.commands)
-        except MissingValue:
-            self.panel.add_assistant_message(self.voice.still_missing_number())
+        except MissingValue as e:
+            # This number would not show either: why, with the same question open for the next one.
+            self._open_question = followup.OpenQuestion(question.request, question.snap, question.commands,
+                                                        e.command, e.param, e.example)
+            self.panel.add_assistant_message(str(e))
             return
         except ActionError as e:
             self.panel.add_assistant_message(str(e))
@@ -464,12 +472,12 @@ class AssistantController(QObject):
                 logger.info(f"Assistant unsure between {unsure[0]} and {unsure[1]} in {text!r}")
                 proposal = planner.plan([commands.Command("ask", text=f"Sure, which one: {unsure[0]} or {unsure[1]}?")])
         except MissingValue as e:
-            # One question per request: after an answer, say how to go on rather than ask again.
-            # A signal picked in reply to "which one?" still gets its missing number asked for.
+            # The question stays open, so a reply with just the number fills in the request it belongs to.
+            # After an answer it isn't asked in full again; a signal picked in reply to "which one?" still is.
+            self._open_question = followup.OpenQuestion(request, snap, cmds, e.command, e.param, e.example)
             if answering and not named:
                 self.panel.add_assistant_message(self.voice.still_missing_number())
             else:
-                self._open_question = followup.OpenQuestion(request, snap, cmds, e.command, e.param)
                 self.panel.add_assistant_message(str(e))
             return
         except (commands.CommandError, ActionError) as e:
