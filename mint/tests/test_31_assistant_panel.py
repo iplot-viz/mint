@@ -160,11 +160,11 @@ class AssistantFlowTest(unittest.TestCase):
                 cards = self.ask(answer, "draw")
                 self.assertIn(f"a {words} average", self.ctl._cards[cards[0]]["proposal"].lines[0])
 
-    def test_a_signal_named_in_reply_to_which_one_is_selected_for_the_request(self):
+    def test_a_signal_named_in_reply_to_which_one_takes_the_place_of_it(self):
         self.ask("smooth that", 'ask "Which one: the pirani or r2?"')
         self.assertEqual(self.said[-1], "Which one: the pirani or MAG-MCTB-F1:VAR2?")
         cards = self.ask("the pirani", "process r1 moving_average window=10s")
-        self.assertIn("Selected: r1\n\nRequest: smooth that<|im_end|>", self.engine.prompts[-1][0])
+        self.assertIn("Request: smooth the pirani\nNames in the request: r1 = pirani", self.engine.prompts[-1][0])
         self.assertEqual(len(cards), 1)
 
     def test_other_short_answers_go_to_the_model_with_the_request_they_answer(self):
@@ -187,7 +187,7 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertIsNotNone(self.ctl._open_question)
         # The answer goes back with the request, and is not doubted again: one question per request.
         cards = self.ask("the pirani", "process r1 moving_average window=10s")
-        self.assertIn("Selected: r1\n\nRequest: smooth that one<|im_end|>", self.engine.prompts[-1][0])
+        self.assertIn("Request: smooth the pirani\nNames in the request: r1 = pirani", self.engine.prompts[-1][0])
         self.assertEqual(len(cards), 1)
         self.engine.ids = [{"id": "r1", "p": 0.9, "alts": {"r2": 0.05}}]
         self.assertEqual(len(self.ask("smooth the pirani", "process r1 moving_average window=10s")), 1, "sure: a card")

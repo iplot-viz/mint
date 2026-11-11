@@ -295,28 +295,30 @@ class AssistantController(QObject):
             self._open_question = None
             self._undo_last()
             return
-        # A reply to the last question: fills a number, selects the signal named, or goes to the model
+        # A reply to the last question: fills a number, names the signal "it" meant, or goes to the model
         # with the request it answers. Anything longer is a new request.
         question, self._open_question = self._open_question, None
         answering = question is not None and followup.is_answer(text)
-        selected = None
+        named = False
         if answering and question.command is not None:
             value = followup.value_in(text, question.param)
             if value is not None:
                 self._answer_with_number(question, value, text)
                 return
         if answering:
-            selected = check.chosen(self.workspace.snapshot(), question.request, text) or None
-            text = question.request if selected else followup.with_answer(question, text)
+            rewritten = check.chosen(self.workspace.snapshot(), question.request, text) and \
+                check.in_place_of_it(question.request, text)
+            named = bool(rewritten)
+            text = rewritten or followup.with_answer(question, text)
         if self.engine is None or self.engine.state == FAILED:
             self._ensure_engine()
         if self.engine is None or self.engine.state == FAILED:  # the status says why
             return
         if self.engine.state == LOADING:
-            self._queued = (text, answering, selected)
+            self._queued = (text, answering, named)
             self.panel.set_busy(True, "Getting ready, I'll answer in a moment…")
             return
-        self._ask_model(text, answering, selected)
+        self._ask_model(text, answering, named)
 
     def _answer_with_number(self, question, value: float, answer: str):
         question.command.params[question.param] = recipes.number(value)
@@ -335,14 +337,12 @@ class AssistantController(QObject):
         # The request with its answer, as the model would have read it (and as a recorded card keeps it).
         self._present(proposal, followup.with_answer(question, answer), question.snap, answering=True)
 
-    def _ask_model(self, text: str, answering: bool = False, selected=None):
+    def _ask_model(self, text: str, answering: bool = False, named: bool = False):
         if self.engine.state != READY:
             self.panel.add_assistant_message(self.voice.still_busy())
             return
         try:
             snap = self.workspace.snapshot(self._last_action)
-            if selected:
-                snap.selected = list(selected)
             shown = prompt.visible(snap)
             _, full = prompt.build(self.format, shown, text, self._few_shot)
             grammar = commands.build_grammar(*prompt.answer_ids(shown, text), recipes.load())
@@ -351,7 +351,7 @@ class AssistantController(QObject):
             self.panel.add_assistant_message(self.voice.could_not_work_out())
             return
         # Recorded before sending, so an answer arriving at once still finds its request.
-        self._inflight = (snap, text, answering, bool(selected))
+        self._inflight = (snap, text, answering, named)
         try:
             self.engine.complete(full, grammar)
         except RuntimeError as e:
@@ -368,7 +368,7 @@ class AssistantController(QObject):
         inflight, self._inflight = self._inflight, None
         if inflight is None:
             return
-        snap, request, answering, chosen = inflight
+        snap, request, answering, named = inflight
         elapsed = timings.get("total_s")
         if elapsed is not None:
             self.panel.set_status(f"Answered in {elapsed:.1f} s")
@@ -393,7 +393,7 @@ class AssistantController(QObject):
         except MissingValue as e:
             # One question per request: after an answer, say how to go on rather than ask again.
             # A signal picked in reply to "which one?" still gets its missing number asked for.
-            if answering and not chosen:
+            if answering and not named:
                 self.panel.add_assistant_message(self.voice.still_missing_number())
             else:
                 self._open_question = followup.OpenQuestion(request, snap, cmds, e.command, e.param)

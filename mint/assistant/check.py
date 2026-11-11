@@ -1,6 +1,6 @@
 """What MINT reads in a request by itself, to complete or question the model's answer."""
 import re
-from typing import List
+from typing import List, Optional
 
 from mint.assistant import prompt
 from mint.assistant.commands import Command
@@ -26,6 +26,10 @@ WITH = re.compile(r"\b(?:with|next to|beside|junto a|junto con|junto de|con|avec
 # Letters, then a digit ("TF07", "MP0071"), but not a function such as log10.
 CODE = re.compile(r"[A-Za-z]{2,}\D*\d")
 NOT_A_CODE = re.compile(r"log\d+", re.IGNORECASE)
+# "It", "this"... as pronouns, in the languages the assistant understands.
+IT = re.compile(r"\b(?:(?:this|that) one|it|this|that|these|those|esto|eso|ça|cela|ceci|dies|questo|quello|isso|isto)\b",
+                re.IGNORECASE)
+ARTICLE = re.compile(r"^(?:the|el|la|los|las|le|les|der|die|das|den|il|lo|gli|o|os|as)\s+", re.IGNORECASE)
 
 
 def places(snap: Snapshot, request: str) -> List[str]:
@@ -80,14 +84,24 @@ def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
 def chosen(snap: Snapshot, request: str, answer: str) -> List[str]:
     """The rows an answer to "which one?" names, when the request named none.
 
-    Empty when the answer names no row, or a signal together with copies of it.
+    Empty when the answer names no row, or a signal and copies of it without saying which.
     """
     if prompt.named(snap, request):
         return []
+    said = ARTICLE.sub("", answer.strip(" .!?").lower())
+    exact = [row for row in snap.rows + snap.unlisted
+             if said in {name.lower() for name in (row.alias, row.variable, row.variable.split(":")[-1]) if name}]
+    if len(exact) == 1:  # "the pirani" is the pirani, not also its copy pirani_avg_2s
+        return [exact[0].id]
     rows = [row for row, _ in prompt.named(snap, answer, meanings=False)]
     if len(rows) == 1 or (0 < len(rows) <= prompt.MAX_LOOSE and not any(row.derived for row in rows)):
         return [row.id for row in rows]
     return []
+
+
+def in_place_of_it(request: str, answer: str) -> Optional[str]:
+    """The request with the signal named in reply in place of its "it": "smooth it" -> "smooth the pirani"."""
+    return IT.sub(answer.strip(" .!?"), request, count=1) if IT.search(request) else None
 
 
 def unknown_codes(snap: Snapshot, request: str) -> List[str]:

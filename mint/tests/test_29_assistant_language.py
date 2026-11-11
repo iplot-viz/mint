@@ -390,7 +390,15 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(chosen(grid, "smooth it", "level_4 and level_3"), ["r1", "r2"])
         self.assertEqual(chosen(grid, "smooth it", "the first one"), [])
         self.assertEqual(chosen(grid, "smooth the levels", "level_4"), [], "the request named rows: the model reads both")
-        self.assertEqual(chosen(two_by_two(), "smooth it", "pirani"), [], "the pirani or its copy: the model decides")
+        self.assertEqual(chosen(two_by_two(), "smooth it", "the pirani"), ["r3"], "its very name, not also its copy")
+        self.assertEqual(chosen(two_by_two(), "smooth it", "the smoothed pirani"), [], "the copy or not: the model decides")
+
+    def test_the_signal_named_in_reply_takes_the_place_of_it(self):
+        from mint.assistant.check import in_place_of_it
+        self.assertEqual(in_place_of_it("smooth it", "the pirani."), "smooth the pirani")
+        self.assertEqual(in_place_of_it("low-pass that one please", "MP0071"), "low-pass MP0071 please")
+        self.assertEqual(in_place_of_it("suaviza esto", "el caudal"), "suaviza el caudal")
+        self.assertIsNone(in_place_of_it("smooth the signal", "the pirani"), "no it to replace")
 
     def test_codes_that_no_row_has_are_signals_to_look_for(self):
         from mint.assistant.check import unknown_codes
