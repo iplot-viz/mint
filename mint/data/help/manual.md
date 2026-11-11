@@ -303,12 +303,13 @@ See also: [Reference - Supported data source types](#datasource-types) for the l
 
 ### 2.11 Assistant {#assistant}
 
-Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with **Assistant** next to *Search Vars*, or *View > Assistant* (Ctrl+Shift+A).
+Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
 
 - *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
 - *put the second plot in log scale*, *no grid anywhere*.
 - *outlet minus inlet*: a new signal in a new plot.
 - *add the TF07 current*: lists the matching variables to tick and add.
+- *two signals from EC in sdnuda*: lists the variables of that data source that start with EC.
 - *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
 - *the same for MP0071*: repeats the last change on another signal.
 

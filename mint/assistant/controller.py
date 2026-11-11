@@ -1,9 +1,9 @@
 """Glue between the chat panel, the model and the workspace."""
 import os
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QApplication, QPushButton, QToolBar
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
 from mint.assistant import check, commands, doubt, followup, prompt, recipes, record
@@ -70,26 +70,43 @@ def install(window, splitter, signals_toolbar, view_menu):
     panel.hide()
     splitter.addWidget(panel)
     splitter.setCollapsible(splitter.indexOf(panel), True)
-    # Reattaching the canvas appends it to the splitter again, after the panel: put the panel back last.
+
+    def keep_last(*_):
+        # Reattaching the canvas appends it to the splitter again, after the panel: put the panel back last.
+        if not panel.is_detached():
+            splitter.addWidget(panel)
+
     detach = getattr(getattr(window, "toolBar", None), "detachAction", None)
     if detach is not None:
-        detach.triggered.connect(lambda *_: splitter.addWidget(panel))
+        detach.triggered.connect(keep_last)
 
     icon = assistant_icon(window.palette().windowText().color())
-    action = QAction(icon, "&Assistant", window)
+    # A window of its own like the one Detach gives the canvas, with the same title bar buttons.
+    floating = QMainWindow(parent=window, flags=(Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint
+                                                 | Qt.WindowType.WindowMaximizeButtonHint
+                                                 | Qt.WindowType.WindowMinimizeButtonHint))
+    floating.setWindowTitle("MINT Assistant")
+    floating.setWindowIcon(icon)
+    floating.hide()
+    controller.splitter, controller.floating = splitter, floating
+    panel.set_detachable(True)
+    panel.detachRequested.connect(controller.set_detached)
+
+    action = QAction(icon, "&AI Assistant", window)
     action.setCheckable(True)
     action.setShortcut(QKeySequence("Ctrl+Shift+A"))
     action.setStatusTip("Ask the assistant to process signals, change plots or set the time range")
     action.toggled.connect(controller.set_visible)
+    panel.closeRequested.connect(lambda: action.setChecked(False))
     view_menu.addAction(action)
     controller.toggle_action = action
 
     toolbar = signals_toolbar.findChild(QToolBar)
     search = getattr(signals_toolbar, "searchVarsBtn", None)
     if toolbar is not None and search is not None:
-        button = QPushButton(icon, "Assistant")
+        button = QPushButton(icon, "AI Assistant")
         button.setCheckable(True)
-        button.setToolTip("Assistant (Ctrl+Shift+A)")
+        button.setToolTip("AI Assistant (Ctrl+Shift+A)")
         button.toggled.connect(action.setChecked)
         action.toggled.connect(button.setChecked)
         actions = toolbar.actions()
@@ -121,6 +138,8 @@ class AssistantController(QObject):
         self._pending_card = None
         self.toggle_action = None
         self.toolbar_button = None
+        self.splitter = None
+        self.floating = None
         self.engine = None
         self.format = None
         self._queued = None
@@ -145,18 +164,15 @@ class AssistantController(QObject):
 
     def set_visible(self, visible: bool):
         self.panel.setVisible(visible)
+        if self.panel.is_detached():
+            self.floating.setVisible(visible)
         if not visible:
             return
-        if not self._sized:
-            self._sized = True
-            splitter = self.panel.parentWidget()
-            if splitter is not None and hasattr(splitter, "sizes"):
-                sizes = splitter.sizes()
-                width = max(self.panel.minimumSizeHint().width(), 360)
-                if len(sizes) >= 3 and sizes[-2] > 2 * width:
-                    sizes[-2] -= width
-                    sizes[-1] = width
-                    splitter.setSizes(sizes)
+        if self.panel.is_detached():
+            self.floating.raise_()
+            self.floating.activateWindow()
+        else:
+            self._fit_in_splitter()
         if not self.panel.message_count():
             try:
                 self.panel.set_suggestions(suggestions(self.workspace.snapshot()) or SUGGESTIONS)
@@ -164,6 +180,39 @@ class AssistantController(QObject):
                 logger.debug(f"Assistant: no suggestions from the table: {e}")
         self.panel.input.setFocus()
         self._ensure_engine()
+
+    def _fit_in_splitter(self):
+        """The first time the panel shows in the splitter, it takes its width from the canvas."""
+        if self._sized:
+            return
+        self._sized = True
+        splitter = self.panel.parentWidget()
+        if splitter is not None and hasattr(splitter, "sizes"):
+            sizes = splitter.sizes()
+            width = max(self.panel.minimumSizeHint().width(), 360)
+            if len(sizes) >= 3 and sizes[-2] > 2 * width:
+                sizes[-2] -= width
+                sizes[-1] = width
+                splitter.setSizes(sizes)
+
+    def set_detached(self, detached: bool):
+        """Move the panel to its own window, or back to the right of the plots, as Detach does with the canvas."""
+        if detached == self.panel.is_detached():
+            return
+        if detached:
+            size = self.panel.size()
+            self.floating.setCentralWidget(self.panel)
+            self.floating.resize(size)
+            self.floating.show()
+        else:
+            self.splitter.addWidget(self.panel)
+            self.floating.hide()
+        self.panel.show()
+        self.panel.set_detached(detached)
+        if not detached:
+            # Back in the splitter, it takes its width as the first time.
+            self._sized = False
+            self._fit_in_splitter()
 
     def _ensure_engine(self):
         if self.engine is not None and self.engine.state != FAILED:
@@ -289,7 +338,7 @@ class AssistantController(QObject):
         search, self._searches = self._searches.get(text), {}
         if search:
             self._open_question = None
-            self._show_search(search)
+            self._show_search(search, text)
             return
         if followup.is_undo(text):
             self._open_question = None
@@ -432,7 +481,7 @@ class AssistantController(QObject):
             if card is not None:  # None when it only redraws
                 self._cards[card].update(request=request, snap=snap)
         if proposal.search is not None:
-            self._show_search(proposal.search)
+            self._show_search(proposal.search, request)
 
     def _show_proposal(self, proposal, spoken=False):
         if all(not c.lines for c in proposal.changes):
@@ -494,22 +543,27 @@ class AssistantController(QObject):
                     return [f"The same for {name}"]
         return []
 
-    def _show_search(self, words):
+    def _show_search(self, words, request: str = ""):
         try:
-            source, found = self.workspace.search_variables(words)
+            search = self.workspace.search_variables(words, request)
         except ActionError as e:
             self.panel.add_assistant_message(str(e))
             return
-        if not found:
-            self.panel.add_assistant_message(self.voice.nothing_found(words, source))
+        if not search.found:
+            self.panel.add_assistant_message(self.voice.nothing_found(search))
             return
-        options = [(name, f"{name} — {description}" if description else name, False) for name, description in found]
-        self.panel.add_assistant_message(self.voice.found(source))
-        card = self.panel.add_card(f"{len(found)} variable{'' if len(found) == 1 else 's'} in {source}", [],
-                                   [(ADD_EACH, "Add, one plot each"), (ADD_TOGETHER, "Add to one plot"),
-                                    (UNDO, "Undo")], options=options)
+        options = [(name, f"{name} — {description}" if description else name, False)
+                   for name, description in search.found]
+        self.panel.add_assistant_message(self.voice.found(search, check.wanted(request)))
+        shown = len(search.found)
+        count = f"{shown} of {search.total}" if search.total > shown else str(shown)
+        title = f"{count} variable{'' if search.total == 1 else 's'} in {search.source}"
+        if search.group:
+            title += f" starting with {search.group}"
+        card = self.panel.add_card(title, [], [(ADD_EACH, "Add, one plot each"), (ADD_TOGETHER, "Add to one plot"),
+                                               (UNDO, "Undo")], options=options)
         self.panel.set_card_state(card, enabled=[ADD_EACH, ADD_TOGETHER])
-        self._cards[card] = {"kind": "search", "source": source}
+        self._cards[card] = {"kind": "search", "source": search.source}
 
 
     def on_card_action(self, card_id: int, key: str, checked: list):

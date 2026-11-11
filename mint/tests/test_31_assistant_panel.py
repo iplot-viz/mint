@@ -20,6 +20,7 @@ from mint.assistant import worker
 from mint.assistant.config import AssistantConfig
 from mint.assistant.engine import FAILED, READY, ModelEngine
 from mint.assistant.prompt import ChatFormat
+from mint.assistant.workspace import VariableSearch
 from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 from mint.tests.test_30_assistant_actions import build_window
@@ -222,7 +223,8 @@ class AssistantFlowTest(unittest.TestCase):
 
     def test_a_code_that_is_in_no_row_offers_a_search_without_the_model(self):
         searched = []
-        self.ctl.workspace.search_variables = lambda words: (searched.append(words), ("csv", []))[1]
+        self.ctl.workspace.search_variables = lambda words, request="": (
+            searched.append(words), VariableSearch("csv", [], 0, list(words)))[1]
         self.ask("need TF07 coil current", 'say "I can\'t compute statistics yet."')
         self.assertEqual(self.ctl.panel._suggestions, ["Find TF07"])
         calls = len(self.engine.prompts)
@@ -232,6 +234,17 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertTrue(self.said[-1].startswith("I couldn't find anything called TF07"), self.said[-1])
         self.ask("Find TF07", 'say "Okay."')
         self.assertEqual(len(self.engine.prompts), calls + 1, "offered once: typed again, it is a request")
+
+    def test_a_search_says_where_it_looked_and_how_many_to_tick(self):
+        names = [(f"EC-GYA-{i:02d}:PSU-YSTA", "") for i in range(40)]
+        self.ctl.workspace.search_variables = lambda words, request="": VariableSearch("sdnuda", names, 312, [], "EC")
+        cards = self.ask("I need a workspace with 2 signals from EC in sdnuda, whatever you want", "find EC sdnuda")
+        self.assertEqual(self.said[-1], "Here are the variables in sdnuda that start with EC. Tick the 2 you want and "
+                                        "I'll add them. There are 312: these are the first 40, and Search Vars shows "
+                                        "them all.")
+        card = self.ctl.panel._cards[cards[0]]
+        self.assertEqual(len(card.options), 40)
+        self.assertEqual(self.ctl._cards[cards[0]]["source"], "sdnuda", "added from the source it found them in")
 
     def test_what_was_asked_and_kept_is_recorded_to_learn_from(self):
         import argparse
@@ -385,7 +398,7 @@ class AssistantInstallTest(unittest.TestCase):
             win = build_window()
         try:
             self.assertIsNone(win.assistant)
-            self.assertNotIn("&Assistant", self.menu_texts(win))
+            self.assertNotIn("&AI Assistant", self.menu_texts(win))
             self.assertEqual(win._centralWidget.count(), 2)
         finally:
             win.close()
@@ -396,12 +409,12 @@ class AssistantInstallTest(unittest.TestCase):
             win = build_window()
         try:
             self.assertIsNotNone(win.assistant)
-            self.assertIn("&Assistant", self.menu_texts(win))
+            self.assertIn("&AI Assistant", self.menu_texts(win))
             toolbar = win.sigCfgWidget.tool_bar().findChild(QToolBar)
             widgets = [toolbar.widgetForAction(a) for a in toolbar.actions()]
             search = widgets.index(win.sigCfgWidget.tool_bar().searchVarsBtn)
             self.assertIsInstance(widgets[search + 1], QPushButton)
-            self.assertEqual(widgets[search + 1].text(), "Assistant")
+            self.assertEqual(widgets[search + 1].text(), "AI Assistant")
             self.assertEqual(win._centralWidget.count(), 3)
             panel = win.assistant.panel
             self.assertFalse(panel.isVisible())
@@ -416,6 +429,21 @@ class AssistantInstallTest(unittest.TestCase):
             win.toolBar.detachAction.trigger()
             win.toolBar.detachAction.trigger()
             self.assertIs(win._centralWidget.widget(win._centralWidget.count() - 1), panel)
+            # In a window of its own, as Detach does with the canvas, and it stays there when the canvas comes back.
+            floating = win.assistant.floating
+            panel.pop_button.click()
+            self.assertTrue(floating.isVisible() and panel.isVisible() and panel.window() is floating)
+            self.assertEqual(win._centralWidget.count(), 2)
+            win.toolBar.detachAction.trigger()
+            win.toolBar.detachAction.trigger()
+            self.assertIs(panel.window(), floating)
+            panel.close_button.click()
+            self.assertFalse(win.assistant.toggle_action.isChecked() or floating.isVisible(), "closed with its window")
+            win.assistant.toggle_action.setChecked(True)
+            self.assertTrue(floating.isVisible() and panel.isVisible(), "it opens again where it was")
+            panel.pop_button.click()
+            self.assertIs(win._centralWidget.widget(win._centralWidget.count() - 1), panel)
+            self.assertTrue(panel.isVisible() and not floating.isVisible())
         finally:
             win.close()
 

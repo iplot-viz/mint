@@ -2,6 +2,7 @@
 import re
 import unittest
 from datetime import datetime, timezone
+from unittest import mock
 
 import pandas as pd
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -215,10 +216,45 @@ class AssistantActionsTest(_WindowCase):
                 self.assertIn(fragment, str(ctx.exception))
 
     def test_variable_search_uses_the_data_source(self):
-        source, found = self.ws.search_variables(["MCTB", "VAR2"])
-        self.assertEqual(source, AppDataAccess.da.get_default_ds_name())
-        self.assertTrue(found)
-        self.assertTrue(all("var2" in name.lower() and "mctb" in name.lower() for name, _ in found), found)
+        search = self.ws.search_variables(["MCTB", "VAR2"])
+        self.assertEqual(search.source, AppDataAccess.da.get_default_ds_name())
+        self.assertTrue(search.found)
+        self.assertTrue(all("var2" in name.lower() and "mctb" in name.lower() for name, _ in search.found), search)
+
+    def test_variable_search_goes_to_the_data_source_named_and_reads_a_group(self):
+        class Source:
+            patterns = []
+
+            def get_var_list(self, pattern):
+                self.patterns.append(pattern)
+                names = ["EC-GYA-01:PSU-YSTA", "EC-GYB-02:PSU-YSTA", "SPEC-01:EC-V", "CRYO-CP3:MT0012-XI"]
+                return [n for n in names if re.fullmatch(pattern, n)]
+
+        source = Source()
+        opened = []
+        self.ws.data_source_names = lambda: ["codacuda", "sdnuda"]
+        self.ws.data_source = lambda name: (opened.append(name), source)[1]
+        request = "I need a workspace with 2 signals from EC in sdnuda, whatever you want"
+        for words in (["EC", "sdnuda"], ["ec"]):
+            with self.subTest(words=words):
+                search = self.ws.search_variables(words, request)
+                self.assertEqual((search.source, search.group, opened[-1]), ("sdnuda", "EC", "sdnuda"))
+                self.assertEqual(source.patterns[-1], "EC[-.:_].*", "the names that start with the group")
+                self.assertEqual([name for name, _ in search.found], ["EC-GYA-01:PSU-YSTA", "EC-GYB-02:PSU-YSTA"])
+        search = self.ws.search_variables(["MT0012"], "find MT0012 in sdnuda")
+        self.assertEqual(source.patterns[-2:], ["MT0012[-.:_].*", ".*MT0012.*"], "no group of that name: anywhere")
+        self.assertEqual(([name for name, _ in search.found], search.group), (["CRYO-CP3:MT0012-XI"], ""))
+        with self.assertRaises(ActionError) as ctx:
+            self.ws.search_variables(["sdnuda"], "variables in sdnuda")
+        self.assertIn("What should I look for in sdnuda", str(ctx.exception))
+
+    def test_variable_search_in_a_source_that_is_not_connected_says_so(self):
+        self.ws.data_source_names = lambda: ["sdnuda"]
+        with mock.patch.object(AppDataAccess, "da") as da:
+            da.get_data_source.return_value.is_connected.return_value = False
+            with self.assertRaises(ActionError) as ctx:
+                self.ws.search_variables(["EC"], "EC in sdnuda")
+        self.assertIn("sdnuda isn't connected", str(ctx.exception))
 
     def test_variable_search_understands_what_a_signal_measures(self):
         class Source:
@@ -234,11 +270,11 @@ class AssistantActionsTest(_WindowCase):
 
         source = Source()
         self.ws.default_data_source = lambda: ("codacuda", source)
-        _, found = self.ws.search_variables(["CP3", "temperature"])
+        found = self.ws.search_variables(["CP3", "temperature"]).found
         self.assertEqual(sorted(name for name, _ in found), ["CRYO-CP3:MT0012-XI", "CRYO-CP3:TV0001-XI"],
                          "by the code, or by the description")
         self.assertEqual(source.patterns[-1], ".*CP3.*", "the server filters on a word of the names")
-        _, found = self.ws.search_variables(["température"])
+        found = self.ws.search_variables(["température"]).found
         self.assertEqual(source.patterns[-1], ".*MT[0-9].*")
         self.assertIn("CRYO-CP4:MT0014-XI", [name for name, _ in found])
 

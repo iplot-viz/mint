@@ -408,6 +408,15 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(unknown_codes(grid, "smooth over 10s at 2Hz"), [])
         self.assertEqual(unknown_codes(Snapshot(), "busca CWS-SCSU-HR00 y cws-scsu-hr00"), ["CWS-SCSU-HR00"])
 
+    def test_how_many_signals_the_request_asks_for(self):
+        from mint.assistant.check import wanted
+        for request, count in (("I need a workspace with 2 signals from EC in sdnuda", 2),
+                               ("add three pressure signals", 3), ("dame dos señales de CRYO", 2),
+                               ("one variable from VAC", 1), ("find the EC signals", None),
+                               ("smooth it over 2 s", None), ("0 signals", None)):
+            with self.subTest(request=request):
+                self.assertEqual(wanted(request), count)
+
 
 class DoubtTest(unittest.TestCase):
     def test_ids_the_model_hesitated_on(self):

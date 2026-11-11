@@ -30,6 +30,13 @@ NOT_A_CODE = re.compile(r"log\d+", re.IGNORECASE)
 IT = re.compile(r"\b(?:(?:this|that) one|it|this|that|these|those|esto|eso|ça|cela|ceci|dies|questo|quello|isso|isto)\b",
                 re.IGNORECASE)
 ARTICLE = re.compile(r"^(?:the|el|la|los|las|le|les|der|die|das|den|il|lo|gli|o|os|as)\s+", re.IGNORECASE)
+NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+           "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "due": 2,
+           "tre": 3, "quattro": 4, "cinque": 5, "dois": 2, "duas": 2, "três": 3, "quatro": 4}
+# "2 signals", "two pressure signals", "dos señales".
+COUNT = re.compile(r"\b(\d{1,2}|" + "|".join(NUMBERS) + r")\s+(?:\w+\s+)?(?:signals?|variables?|señal(?:es)?|"
+                   r"signaux|signale?|segnali|segnale|variablen|variabili|sinais|sinal|variáveis|variável)\b",
+                   re.IGNORECASE)
 
 
 def places(snap: Snapshot, request: str) -> List[str]:
@@ -112,3 +119,12 @@ def unknown_codes(snap: Snapshot, request: str) -> List[str]:
         if CODE.match(token) and not NOT_A_CODE.fullmatch(token) and not any(token.lower() in n for n in names):
             found.setdefault(token.lower(), token)
     return list(found.values())
+
+
+def wanted(request: str) -> Optional[int]:
+    """How many signals the request asks for ("a workspace with 2 signals"), when it says."""
+    match = COUNT.search(request or "")
+    if match is None:
+        return None
+    number = match.group(1).lower()
+    return (int(number) if number.isdigit() else NUMBERS[number]) or None

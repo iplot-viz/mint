@@ -346,12 +346,13 @@ $ mint
 <p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used. <em>variable_group_limit</em> is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first <code>-</code> or <code>.</code> of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on <code>-</code>, <code>.</code> and <code>_</code> until none holds more. <em>cache_size</em> is optional (default 300): the number of data queries a UDA source keeps in memory.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h3 id="assistant">2.11 Assistant</h3>
-<p>Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with <strong>Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; Assistant</em> (Ctrl+Shift+A).</p>
+<p>Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
 <ul>
 <li><em>smooth the pirani over 30 s</em>: adds a smoothed copy of the signal to the same plot.</li>
 <li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>.</li>
 <li><em>outlet minus inlet</em>: a new signal in a new plot.</li>
 <li><em>add the TF07 current</em>: lists the matching variables to tick and add.</li>
+<li><em>two signals from EC in sdnuda</em>: lists the variables of that data source that start with EC.</li>
 <li><em>last 6 hours</em>, <em>yesterday</em>, <em>pulse ITER:MCTB_PSS-TF07_FD/12</em>.</li>
 <li><em>the same for MP0071</em>: repeats the last change on another signal.</li>
 </ul>

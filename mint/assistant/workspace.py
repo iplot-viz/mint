@@ -1,7 +1,9 @@
 """The assistant's only door into MINT's main window."""
 import re
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import List, Optional, Tuple
 
 from PySide6.QtCore import QModelIndex, Qt
 
@@ -15,6 +17,19 @@ logger = setupLogger.get_logger(__name__)
 READ_ONLY = ("Status", "Output Datatype")
 NOT_COPIED = READ_ONLY + ("uid",)
 MAX_SEARCH_RESULTS = 40
+# Written like a code: "EC", "CRYO", "D1", "System1". The variable tree groups names by what comes
+# before their first separator.
+GROUP = re.compile(r"[A-Z][A-Z0-9]{1,7}|[A-Z][a-z]+[0-9]+")
+SEPARATOR = "[-.:_]"
+
+
+@dataclass
+class VariableSearch:
+    source: str
+    found: List[Tuple[str, str]]  # (name, HMI description), the best MAX_SEARCH_RESULTS
+    total: int  # how many there were before the cut
+    words: List[str] = field(default_factory=list)  # what was looked for, besides the group
+    group: str = ""  # what the names start with, when the request gave it
 
 
 def _leaves(document: dict):
@@ -24,6 +39,38 @@ def _leaves(document: dict):
             yield from _leaves(value)
         else:
             yield key
+
+
+def _as_typed(word: str, request: str) -> str:
+    # The model may change the case; the request has it as the user wrote it.
+    match = re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", request, re.IGNORECASE) if request else None
+    return match.group(0) if match else word
+
+
+def _named_source(words, request: str, sources) -> Optional[str]:
+    """The data source the words or the request name, as MINT spells it."""
+    known = {source.lower(): source for source in sources}
+    for token in list(words) + re.findall(r"[\w.-]+", request):
+        if token.lower() in known:
+            return known[token.lower()]
+    return None
+
+
+def _group(words, request: str) -> str:
+    """The first word written like a code, as written: it may be a group of the variable tree."""
+    for word in words:
+        typed = _as_typed(word, request)
+        if GROUP.fullmatch(typed):
+            return typed
+    return ""
+
+
+def _server_pattern(words) -> str:
+    """The server filters on the most specific word that is in names; the others are checked here."""
+    meant = {w.lower(): prompt.SAID.get(w.lower()) for w in words}
+    key = max([w for w in words if not meant[w.lower()]] or words, key=lambda w: (any(c.isdigit() for c in w), len(w)))
+    meaning = meant[key.lower()]
+    return f".*{prompt.MEASURES[meaning][0]}[0-9].*" if meaning else f".*{re.escape(key)}.*"
 
 
 class MintWorkspace:
@@ -249,17 +296,56 @@ class MintWorkspace:
         self.window.update_canvas_preferences()
 
 
+    def data_source_names(self) -> List[str]:
+        from iplotDataAccess.appDataAccess import AppDataAccess
+        return list(getattr(AppDataAccess.da, "ds_list", None) or {})
+
     def default_data_source(self):
         from iplotDataAccess.appDataAccess import AppDataAccess
         name = AppDataAccess.da.get_default_ds_name()
         return name, AppDataAccess.da.get_data_source(name)
 
-    def search_variables(self, words):
-        """Variables of the default data source whose name (or HMI description) holds all the words."""
-        name, source = self.default_data_source()
-        if source is None:
-            raise ActionError("MINT isn't connected to any data source yet, so I can't search for variables.")
+    def data_source(self, name: str):
+        from iplotDataAccess.appDataAccess import AppDataAccess
+        source = AppDataAccess.da.get_data_source(name)
+        connected = getattr(source, "is_connected", None)
+        if source is None or (connected is not None and not connected()):
+            raise ActionError(f"{name} isn't connected right now, so I can't search it. "
+                              "Check it in Search Vars, or try another data source.")
+        return source
+
+    def search_variables(self, words, request: str = "") -> VariableSearch:
+        """Variables whose name (or HMI description) holds all the words.
+
+        They come from the data source the request names, else the default one. A word typed like a
+        code ("EC", "CRYO", "System1") is first read as the group the names start with, the folders
+        Search Vars shows; when no name starts with it, it is looked for anywhere in the names.
+        """
         words = [w for w in words if w]
+        name = _named_source(words, request, self.data_source_names())
+        if name:
+            words = [w for w in words if w.lower() != name.lower()]
+            source = self.data_source(name)
+        else:
+            name, source = self.default_data_source()
+            if source is None:
+                raise ActionError("MINT isn't connected to any data source yet, so I can't search for variables.")
+        if not words:
+            raise ActionError(f"What should I look for in {name}? A system such as CRYO, or part of a name.")
+        group = _group(words, request)
+        if group:
+            rest = [w for w in words if w.lower() != group.lower()]
+            found = self._matching(name, source, f"{re.escape(group)}{SEPARATOR}.*", rest, group)
+            if found:
+                return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), rest, group)
+        found = self._matching(name, source, _server_pattern(words), words)
+        return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), words)
+
+    def _matching(self, name, source, pattern, words, group=""):
+        """The source's variables for the server pattern, ranked by how many of the words they hold.
+
+        Only those holding them all when there are any; the HMI descriptions count as part of the name.
+        """
         lowered = [w.lower() for w in words]
         # "temperature" also finds the temperature sensors by their code (MT..., -TT-), as in the hints.
         meant = {w: prompt.SAID.get(w) for w in lowered}
@@ -272,12 +358,7 @@ class MintWorkspace:
             return bool(meaning) and (meaning in text
                                       or prompt.measures(RowInfo(id="", index=0, variable=var)) == meaning)
 
-        # The server filters on the most specific word that is in names; the others are checked here.
-        key = max([w for w in words if not meant[w.lower()]] or words,
-                  key=lambda w: (any(c.isdigit() for c in w), len(w)))
         found = {}
-        meaning = meant[key.lower()]
-        pattern = f".*{prompt.MEASURES[meaning][0]}[0-9].*" if meaning else f".*{re.escape(key)}.*"
         try:
             # Positional: the UDA source calls it 'pattern' and the CSV source 'patt'.
             names = source.get_var_list(pattern) if hasattr(source, "get_var_list") else \
@@ -289,8 +370,11 @@ class MintWorkspace:
             raise ActionError(f"I couldn't search {name} just now. Try again in a moment, or use Search Vars.")
         getter = getattr(source, "get_hmi_var_dict", None)
         if getter is not None:
+            starts = re.compile(f"{re.escape(group)}{SEPARATOR}") if group else None
             try:
                 for var, meta in (getter() or {}).items():
+                    if starts is not None and not starts.match(var):
+                        continue
                     if all(holds(var, meta.get("description", ""), w) for w in lowered):
                         found[var] = meta.get("description", "")
             except Exception as e:
@@ -301,4 +385,4 @@ class MintWorkspace:
 
         ranked = sorted(found.items(), key=score)
         matching = [item for item in ranked if all(holds(item[0], item[1], w) for w in lowered)]
-        return name, (matching or ranked)[:MAX_SEARCH_RESULTS]
+        return matching or ranked

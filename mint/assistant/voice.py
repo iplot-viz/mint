@@ -80,12 +80,24 @@ class Voice:
         return "I've redrawn the plots."
 
     @staticmethod
-    def found(source: str) -> str:
-        return f"Here's what I found in {source}. Tick the ones you want and I'll add them."
+    def found(search, wanted=None) -> str:
+        where = (f"Here are the variables in {search.source} that start with {search.group}." if search.group
+                 else f"Here's what I found in {search.source}.")
+        if wanted == 1:
+            pick = "Tick the one you want and I'll add it."
+        elif wanted:
+            pick = f"Tick the {wanted} you want and I'll add them."
+        else:
+            pick = "Tick the ones you want and I'll add them."
+        shown = len(search.found)
+        more = (f" There are {search.total}: these are the first {shown}, and Search Vars shows them all."
+                if search.total > shown else "")
+        return f"{where} {pick}{more}"
 
     @staticmethod
-    def nothing_found(words, source: str) -> str:
-        return (f"I couldn't find anything called {' '.join(words)} in {source}. "
+    def nothing_found(search) -> str:
+        what = " ".join(search.words) or search.group
+        return (f"I couldn't find anything called {what} in {search.source}. "
                 "Could you try other words? The Search Vars button can help too.")
 
     @staticmethod
