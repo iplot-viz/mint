@@ -12,7 +12,7 @@ from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_ava
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
 from mint.assistant.models import KNOWN_MODELS, chat_format, few_shot
 from mint.assistant.voice import Voice
-from mint.assistant.workspace import MintWorkspace
+from mint.assistant.workspace import EMPTY, NOT_COMPUTED, MintWorkspace
 
 logger = setupLogger.get_logger(__name__)
 
@@ -658,7 +658,10 @@ class AssistantController(QObject):
         entry["applied"] = True
         # As commands, so "the same for X" can repeat it exactly.
         self._last_action = "; ".join(proposal.commands)
-        note = self.voice.done() + self._run_redraw(proposal.changes)
+        redraw_problem = self._run_redraw(proposal.changes)
+        note = "" if redraw_problem else self._nothing_to_draw(proposal.changes)
+        if not note:
+            note = self.voice.done() + redraw_problem
         self.panel.set_card_state(card_id, enabled=[UNDO], note=note)
 
     def _undo(self, card_id, entry):
@@ -680,6 +683,26 @@ class AssistantController(QObject):
             logger.exception("Assistant: redraw failed")
             return self.voice.redraw_failed()
         return ""
+
+    def _nothing_to_draw(self, changes) -> str:
+        """What to say when a signal the changes compute came out with nothing to draw; "" otherwise.
+
+        A signal still being read, or not drawn, says nothing: only what came out is told.
+        """
+        empty, failed = [], []
+        try:
+            for change in changes:
+                uid = change.computes() if change.computes else None
+                outcome = self.workspace.drawn_outcome(uid) if uid else None
+                if outcome == EMPTY:
+                    empty.append(self.workspace.name_of(uid))
+                elif outcome == NOT_COMPUTED:
+                    failed.append(self.workspace.name_of(uid))
+        except Exception:
+            # Applied already: a check that fails must not say it wasn't.
+            logger.exception("Assistant: could not check what the change drew")
+            return ""
+        return self.voice.nothing_to_draw(empty, failed) if empty or failed else ""
 
     def _redraw_only(self, changes):
         # Draw does nothing while MINT streams, so say so rather than claim a redraw.

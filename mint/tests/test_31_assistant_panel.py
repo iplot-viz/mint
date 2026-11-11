@@ -157,6 +157,26 @@ class AssistantFlowTest(unittest.TestCase):
         self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.DISMISS, [])
         self.assertTrue(self.note(cards[0]).startswith("No problem"))
 
+    def test_a_processed_signal_with_nothing_to_draw_is_told_after_apply(self):
+        import pandas as pd
+        from mint.assistant.voice import DONE
+        from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+        # Drawn for real, from the CSV pulse: one signal all below zero, one above.
+        del self.ctl.workspace.draw
+        self.win.sigCfgWidget.model.set_dataframe(pd.DataFrame({
+            "DS": ["csv", "csv"], "Variable": ["MAG-MCTB-F1:VAR1", "MAG-MCTB-F1:VAR2"], "Stack": ["1.1", "2.1"],
+            "Alias": ["below", "above"], "y": ["${self}.data - 1000", ""], "Plot type": ["PlotXY", "PlotXY"]}))
+        self.win.dataRangeSelector.import_dict({"mode": MTGenericAccessMode.PULSE_NUMBER,
+                                                "pulse_nb": ["ITER:MCTB-TEST/111"], "base": "Second(s)",
+                                                "t_start": "-5", "t_end": "4"})
+        cards = self.ask("log10 of below", "process r1 log10")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(self.note(cards[0]), "Done, but below_log10 came out empty, so there's nothing to draw.")
+        cards = self.ask("log10 of above", "process r3 log10")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(list(self.ctl.workspace.table()["Alias"]), ["below", "below_log10", "above", "above_log10"])
+        self.assertIn(self.note(cards[0]), DONE, "drawn: nothing more to say")
+
     def test_messages_and_refusals_create_no_card(self):
         for answer in ('say "Hello!"', 'ask "Which one?"', "not a command", "process r9 abs"):
             with self.subTest(answer=answer):

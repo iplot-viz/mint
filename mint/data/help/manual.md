@@ -313,7 +313,7 @@ Ask in plain words for processing, plot settings, signals or a time range. Other
 - *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
 - *the same for MP0071*: repeats the last change on another signal.
 
-Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed), and **Undo** (or typing *undo*) puts it back. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
+Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed), and **Undo** (or typing *undo*) puts it back. If a signal it makes comes out with nothing to draw, the card says so. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
 
 It runs on this computer, without network, and is off unless these are set (also in the file named by `MINT_XK_CONFIG`):
 

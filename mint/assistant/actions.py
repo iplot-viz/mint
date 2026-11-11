@@ -91,6 +91,8 @@ class Change:
     undo: Callable[[], None]
     needs_draw: bool = False
     needs_refresh: bool = False
+    # Once done, the uid of the row whose values it computes, to check them once drawn.
+    computes: Optional[Callable[[], Optional[str]]] = None
 
 
 @dataclass
@@ -267,13 +269,13 @@ class Planner:
                 line = f"{self._name(row)} — {info['plain']}, replacing the original"
             if replace or column == "x":
                 proposal.changes.append(self._set_cells_change(
-                    row, {column: info["expr"]}, line))
+                    row, {column: info["expr"]}, line, computes=True))
             else:
                 shown, alias = self._alias(f"{row.alias or row.variable}_{info['alias']}")
                 where = f"in {self.snap.place(row.plot)}" if row.plot else "in the table, not plotted yet"
                 proposal.changes.append(self._copy_row_change(
                     row, {column: info["expr"], "Alias": alias, "Comment": COMMENT_PREFIX + info["describe"]},
-                    f"{self._name(row)} — {info['plain']} → new signal {shown}, {where}"))
+                    f"{self._name(row)} — {info['plain']} → new signal {shown}, {where}", computes=True))
         return title
 
     def _check_it_changes(self, recipe: str, values: dict, row):
@@ -338,7 +340,8 @@ class Planner:
         # In words: a "-" between two ITER codes, which have dashes of their own, is easy to misread.
         proposal.changes.append(self._new_row_change(
             values, after_uid=(b if b.index > a.index else a).uid,
-            line=f"New signal {shown} = {self._name(a)} {OPERATOR_WORDS[op]} {self._name(b)}, in a new plot"))
+            line=f"New signal {shown} = {self._name(a)} {OPERATOR_WORDS[op]} {self._name(b)}, in a new plot",
+            computes=True))
         return "New signal"
 
 
@@ -519,7 +522,7 @@ class Planner:
             raise ActionError(f"There is no plot {plot_id}.")
         return plot
 
-    def _set_cells_change(self, row, values: dict, line: str) -> Change:
+    def _set_cells_change(self, row, values: dict, line: str, computes: bool = False) -> Change:
         ws, ctx, uid = self.ws, self.context, row.uid
         old = {}
 
@@ -531,14 +534,14 @@ class Planner:
             if old:
                 ws.set_cells(uid, old)
 
-        return Change([line], do, undo, needs_draw=True)
+        return Change([line], do, undo, needs_draw=True, computes=(lambda: uid) if computes else None)
 
-    def _copy_row_change(self, row, overrides: dict, line: str) -> Change:
+    def _copy_row_change(self, row, overrides: dict, line: str, computes: bool = False) -> Change:
         values = self.ws.copyable_values(row.uid)
         values.update(overrides)
-        return self._new_row_change(values, after_uid=row.uid, line=line)
+        return self._new_row_change(values, after_uid=row.uid, line=line, computes=computes)
 
-    def _new_row_change(self, values: dict, after_uid: str, line: str) -> Change:
+    def _new_row_change(self, values: dict, after_uid: str, line: str, computes: bool = False) -> Change:
         ws, ctx = self.ws, self.context
         created = {}
 
@@ -553,7 +556,8 @@ class Planner:
             if created.get("uid"):
                 ws.remove_row(created.pop("uid"))
 
-        return Change([line], do, undo, needs_draw=True)
+        return Change([line], do, undo, needs_draw=True,
+                      computes=(lambda: created.get("uid")) if computes else None)
 
     def _remove_row_change(self, row) -> Change:
         ws, uid = self.ws, row.uid

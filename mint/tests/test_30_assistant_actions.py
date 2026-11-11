@@ -243,6 +243,44 @@ class AssistantActionsTest(_WindowCase):
             drawn.x_data = None
             self.assertIsNone(self.ws.sample_period_seconds(row), "not drawn yet: nothing to say")
 
+    def test_how_a_drawn_signal_came_out(self):
+        from types import SimpleNamespace
+        import numpy as np
+        from iplotlib.interface.iplotSignalAdapter import Result
+        from mint.assistant.workspace import DRAWN, EMPTY, NOT_COMPUTED
+        uid = self.ws.uid_of(0)
+        drawn = SimpleNamespace(uid=uid, status_info=SimpleNamespace(result=Result.SUCCESS))
+        canvas = SimpleNamespace(get_signals=lambda canvas: [SimpleNamespace(uid="other"), drawn])
+        time, nan = np.arange(5.0), np.full(5, np.nan)
+        with mock.patch.object(self.ws.window.canvasStack, "currentWidget", return_value=canvas):
+            for result, x, y, outcome, why in (
+                    (Result.SUCCESS, time, time, DRAWN, "values to draw"),
+                    (Result.SUCCESS, time, np.array([np.nan, 1, np.nan, np.inf, np.nan]), DRAWN, "one is enough"),
+                    (Result.SUCCESS, [], [], EMPTY, "no samples"),
+                    (Result.SUCCESS, time, nan, EMPTY, "no value, as the log10 of a signal below zero"),
+                    (Result.SUCCESS, nan, time, EMPTY, "no time to place the values at"),
+                    (Result.FAIL, None, None, NOT_COMPUTED, "MINT could not work it out"),
+                    (Result.BUSY, None, None, None, "still being read: nothing to tell yet"),
+                    (Result.READY, None, None, None, "not read yet")):
+                with self.subTest(why=why):
+                    drawn.status_info.result, drawn.x_data, drawn.y_data = result, x, y
+                    self.assertEqual(self.ws.drawn_outcome(uid), outcome)
+            self.assertIsNone(self.ws.drawn_outcome("not drawn"), "a row that isn't drawn: nothing to tell")
+
+    def test_a_processing_or_a_combination_says_which_row_it_computes(self):
+        for text, computed in (("process r1 moving_average seconds=30", "pirani_avg_30s"),
+                               ("process r2 abs replace", "MAG-MCTB-F1:VAR2"),
+                               ("combine divide r2 r1", "VAR2_over_pirani"), ("move r1 to new", None)):
+            with self.subTest(text=text):
+                proposal = self.plan(text)
+                proposal.apply()
+                uids = [c.computes() for c in proposal.changes if c.computes]
+                if computed is None:
+                    self.assertEqual(uids, [], "a move computes nothing")
+                else:
+                    self.assertEqual([self.ws.name_of(uid) for uid in uids], [computed])
+                self.assertEqual(proposal.undo(), [])
+
     def test_variable_search_uses_the_data_source(self):
         search = self.ws.search_variables(["MCTB", "VAR2"])
         self.assertEqual(search.source, AppDataAccess.da.get_default_ds_name())

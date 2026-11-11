@@ -6,6 +6,11 @@ FIRST_OPENER = "Here's what I'd change. Nothing happens until you click Apply, a
 DONE = ("Done.", "There you go.", "All set.")
 
 
+def _listed(names) -> str:
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
 class Voice:
     def __init__(self):
         self._said = {}
@@ -27,6 +32,17 @@ class Voice:
 
     def done(self) -> str:
         return self._next("done", DONE)
+
+    @staticmethod
+    def nothing_to_draw(empty, failed) -> str:
+        """Applied, but a signal it computes came out with nothing to draw (``empty``) or not at all (``failed``)."""
+        said = []
+        if empty:
+            said.append(f"{_listed(empty)} came out empty, so there's nothing to draw")
+        if failed:
+            whose = "its" if len(failed) == 1 else "their"
+            said.append(f"MINT couldn't work out {_listed(failed)}: {whose} Status in the table says why")
+        return "Done, but " + ", and ".join(said) + "."
 
     @staticmethod
     def undone(problems) -> str:

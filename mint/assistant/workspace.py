@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 from PySide6.QtCore import QModelIndex, Qt
 
+from iplotlib.interface.iplotSignalAdapter import Result
 from iplotLogging import setupLogger
 from mint.assistant import prompt, snapshot
 from mint.assistant.actions import ActionError
@@ -17,6 +18,8 @@ logger = setupLogger.get_logger(__name__)
 
 READ_ONLY = ("Status", "Output Datatype")
 NOT_COPIED = READ_ONLY + ("uid",)
+# How the drawn signal of a row came out (see MintWorkspace.drawn_outcome).
+DRAWN, EMPTY, NOT_COMPUTED = "drawn", "empty", "not computed"
 MAX_SEARCH_RESULTS = 40
 # Written like a code: "EC", "CRYO", "D1", "System1". The variable tree groups names by what comes
 # before their first separator.
@@ -178,12 +181,15 @@ class MintWorkspace:
             return None
         return span / 1e9 if abs(float(begin)) > 1e12 else span
 
+    def _drawn_signal(self, uid: str):
+        signals = self.window.canvasStack.currentWidget().get_signals(self.window.canvas)
+        return next((s for s in signals if getattr(s, "uid", None) == uid), None)
+
     def sample_period_seconds(self, row) -> Optional[float]:
         """The median time between the samples of a drawn row, from the data already read; None if not drawn."""
         uid = self.uid_of(row.index)
         try:
-            signals = self.window.canvasStack.currentWidget().get_signals(self.window.canvas)
-            x = next((s.x_data for s in signals if getattr(s, "uid", None) == uid), None)
+            x = getattr(self._drawn_signal(uid), "x_data", None)
             if x is None or len(x) < 3:
                 return None
             x = np.asarray(x, dtype=float)
@@ -194,6 +200,35 @@ class MintWorkspace:
         if not np.isfinite(period) or period <= 0:
             return None
         return period / 1e9 if abs(x[0]) > 1e12 else period
+
+    def drawn_outcome(self, uid: str) -> Optional[str]:
+        """How the drawn signal of a row came out: NOT_COMPUTED (MINT could not work it out), EMPTY (no sample
+        with a value to draw) or DRAWN. None while it is not drawn or its data are still being read."""
+        try:
+            signal = self._drawn_signal(uid)
+            if signal is None:
+                return None
+            result = signal.status_info.result
+            if result == Result.FAIL:
+                return NOT_COMPUTED
+            if result != Result.SUCCESS:
+                return None
+            y = signal.y_data
+            if y is None or len(y) == 0:
+                return EMPTY
+            drawable = np.isfinite(np.asarray(y, dtype=float))
+            x = signal.x_data
+            if x is not None and len(x) == len(drawable):
+                drawable &= np.isfinite(np.asarray(x, dtype=float))
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"Assistant: can't tell how {uid} came out: {e}")
+            return None
+        return DRAWN if drawable.any() else EMPTY
+
+    def name_of(self, uid: str) -> str:
+        """A row as the table shows it: by its alias, else its variable."""
+        values = self.row_values(self._position(uid))
+        return str(values.get("Alias") or "").strip() or str(values.get("Variable") or "")
 
     def is_streaming(self) -> bool:
         return bool(self.window.streamerCfgWidget.is_activated())
