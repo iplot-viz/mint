@@ -29,9 +29,8 @@ def run_app(q_app: QApplication, args=None):
     from mint.gui.mtMainWindow import MTMainWindow
     from mint.tools.icon_loader import create_pxmap
     from mint.app.dirs import DEFAULT_DATA_DIR
-    from importlib import metadata
-
-    iplotlib_version = metadata.version('iplotlib')
+    # The code that runs, not the metadata of an install: a checkout may carry an old egg-info.
+    from iplotlib import __version__ as iplotlib_version
 
     logger = SetupLog.get_logger(__name__)
 
