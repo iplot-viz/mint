@@ -12,6 +12,7 @@ import hashlib  # noqa: E402
 import json  # noqa: E402
 import queue  # noqa: E402
 import shutil  # noqa: E402
+import stat  # noqa: E402
 import threading  # noqa: E402
 import time  # noqa: E402
 
@@ -36,29 +37,51 @@ def lower_priority():
         pass
 
 
-def sha256_of(path, chunk=8 << 20):
+def sha256_of(fd, chunk=8 << 20):
     digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(chunk), b""):
-            digest.update(block)
+    os.lseek(fd, 0, os.SEEK_SET)
+    for block in iter(lambda: os.read(fd, chunk), b""):
+        digest.update(block)
     return digest.hexdigest()
 
 
-def file_key(path):
+def file_key(fd, path):
     """Identity of the file's content as the file system sees it.
 
     The change time is included: no user call can set it back after the file is rewritten.
     """
-    info = os.stat(path)
-    return f"{os.path.realpath(path)}|{info.st_size}|{info.st_mtime_ns}|{info.st_ctime_ns}|{info.st_ino}"
+    info = os.fstat(fd)
+    return f"{path}|{info.st_size}|{info.st_mtime_ns}|{info.st_ctime_ns}|{info.st_ino}"
 
 
-def verify_model(path, allowed, cache_path):
+def writable_by_others(info) -> bool:
+    """Whether users other than the owner can write the file: the world, or a group holding more than its owner."""
+    if not hasattr(os, "getuid"):  # Windows reports no such permission bits
+        return False
+    if info.st_mode & stat.S_IWOTH:
+        return True
+    if not info.st_mode & stat.S_IWGRP:
+        return False
+    import grp
+    import pwd
+    try:
+        group = grp.getgrgid(info.st_gid)
+        return group.gr_name != pwd.getpwuid(info.st_uid).pw_name or bool(group.gr_mem)
+    except KeyError:
+        return True
+
+
+def unchanged(fd, path, key):
+    """The open file still has the identity it was checked with, and the path still leads to it."""
+    return file_key(fd, path) == key and os.path.samestat(os.fstat(fd), os.stat(path))
+
+
+def verify_model(fd, path, allowed, cache_path):
     """SHA-256 of the weights, refused unless allowed; runs before the model library opens the file.
 
     Remembered per (path, size, mtime): hashing a few GB takes seconds.
     """
-    key = file_key(path)
+    key = file_key(fd, path)
     cache = {}
     if cache_path:
         try:
@@ -69,7 +92,7 @@ def verify_model(path, allowed, cache_path):
     if not isinstance(cache, dict):
         cache = {}
     cached = cache.get(key)
-    actual = cached if isinstance(cached, str) else sha256_of(path)
+    actual = cached if isinstance(cached, str) else sha256_of(fd)
     if actual not in allowed:
         raise ValueError(f"the model file is not one MINT knows (SHA-256 {actual}); "
                          f"set MINT_ASSISTANT_SHA256 to this value to allow it")
@@ -139,28 +162,45 @@ class Worker:
         if not os.path.isfile(msg["model"]):
             raise FileNotFoundError(f"model file not found: {msg['model']}")
         path = os.path.realpath(msg["model"])
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        try:
+            self._load(fd, path, msg, t0)
+        finally:
+            os.close(fd)
+
+    def _load(self, fd, path, msg, t0):
+        if writable_by_others(os.fstat(fd)):
+            raise ValueError(f"other users can change the model file: make it writable by its owner only ({path})")
         allowed = {h.lower() for h in msg.get("allowed_sha256") or []}
-        checked = file_key(path)
-        sha256 = verify_model(path, allowed, msg.get("verified_cache"))
+        checked = file_key(fd, path)
+        sha256 = verify_model(fd, path, allowed, msg.get("verified_cache"))
         self.sha256 = sha256
+        # On Linux the library opens this very file, the one just hashed, whatever the path leads to by then.
+        source = f"/proc/self/fd/{fd}" if os.path.exists(f"/proc/self/fd/{fd}") else path
+
+        def check():
+            if not unchanged(fd, path, checked):
+                self.llm = None
+                raise ValueError("the model file changed while it was being loaded")
+
         from llama_cpp import Llama
         threads = int(msg.get("threads") or 2)
         # A model trained for MINT declares its context size and the key/value cache is reserved for all of it.
         # Reading the header alone (vocab_only) takes a fraction of a second.
-        probe = Llama(model_path=path, vocab_only=True, verbose=False)
+        check()
+        probe = Llama(model_path=source, vocab_only=True, verbose=False)
         declared = {k: str(v)[:64] for k, v in (probe.metadata or {}).items() if k.startswith("mint.assistant.")}
         del probe
         try:
             ctx = int(declared.get("mint.assistant.context") or 4096)
         except ValueError:
             ctx = 4096
-        self.llm = Llama(model_path=path, n_ctx=max(512, min(ctx, 32768)), n_threads=threads,
+        check()
+        self.llm = Llama(model_path=source, n_ctx=max(512, min(ctx, 32768)), n_threads=threads,
                          n_threads_batch=threads, n_batch=512, verbose=False, seed=0)
-        if file_key(path) != checked:
-            # Swapped between the check and the load: drop what was loaded.
-            self.llm = None
-            raise ValueError("the model file changed while it was being loaded")
-        send(ev="loaded", seconds=round(time.perf_counter() - t0, 2), sha256=sha256, ctx=self.llm.n_ctx(), threads=threads, declared=declared)
+        check()
+        send(ev="loaded", seconds=round(time.perf_counter() - t0, 2), sha256=sha256, ctx=self.llm.n_ctx(),
+             threads=threads, declared=declared)
 
     def _tokens(self, prompt):
         # Same tokenization as create_completion, so a warmed prefix matches.

@@ -447,13 +447,37 @@ class WorkerProcessTest(unittest.TestCase):
             with open(path, "wb") as f:
                 f.write(b"GGUF not really")
             cache = os.path.join(tmp, "verified.json")
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+            try:
+                with self.assertRaises(ValueError) as ctx:
+                    worker.verify_model(fd, path, set(), cache)
+                sha = worker.sha256_of(fd)
+                self.assertIn(sha, str(ctx.exception))
+                self.assertEqual(worker.verify_model(fd, path, {sha}, cache), sha)
+                with mock.patch.object(worker, "sha256_of", side_effect=AssertionError("hashed again")):
+                    self.assertEqual(worker.verify_model(fd, path, {sha}, cache), sha)
+                key = worker.file_key(fd, path)
+                self.assertTrue(worker.unchanged(fd, path, key))
+                try:
+                    os.replace(path, path + ".old")
+                except PermissionError:  # Windows: a file open here cannot be renamed, so neither swapped
+                    return
+                with open(path, "wb") as f:
+                    f.write(b"GGUF swapped")
+                self.assertFalse(worker.unchanged(fd, path, key), "the path now leads to another file")
+            finally:
+                os.close(fd)
+
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX permissions")
+    def test_a_model_file_other_users_can_change_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.gguf")
+            with open(path, "wb") as f:
+                f.write(b"GGUF not really")
+            os.chmod(path, 0o666)
             with self.assertRaises(ValueError) as ctx:
-                worker.verify_model(path, set(), cache)
-            sha = worker.sha256_of(path)
-            self.assertIn(sha, str(ctx.exception))
-            self.assertEqual(worker.verify_model(path, {sha}, cache), sha)
-            with mock.patch.object(worker, "sha256_of", side_effect=AssertionError("hashed again")):
-                self.assertEqual(worker.verify_model(path, {sha}, cache), sha)
+                worker.Worker().load({"model": path, "allowed_sha256": []})
+            self.assertIn("other users", str(ctx.exception))
 
     def test_engine_reports_a_missing_model(self):
         ensure_qapp()
