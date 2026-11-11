@@ -16,6 +16,7 @@
     - [2.8 Plotting area](#plotting-area)
     - [2.9 Expressions](#expressions)
     - [2.10 Data Sources](#data-sources)
+    - [2.11 Assistant](#assistant)
 - [3. ITER environment](#iter-environment)
 - [4. Reference](#reference)
     - [4.1 Keyboard shortcuts](#keyboard-shortcuts)
@@ -299,6 +300,31 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first `-` or `.` of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on `-`, `.` and `_` until none holds more. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
+
+### 2.11 Assistant {#assistant}
+
+Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with **Assistant** next to *Search Vars*, or *View > Assistant* (Ctrl+Shift+A).
+
+- *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
+- *put the second plot in log scale*, *no grid anywhere*.
+- *outlet minus inlet*: a new signal in a new plot.
+- *add the TF07 current*: lists the matching variables to tick and add.
+- *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
+- *the same for MP0071*: repeats the last change on another signal.
+
+Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed), and **Undo** (or typing *undo*) puts it back. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
+
+It runs on this computer, without network, and is off unless these are set (also in the file named by `MINT_XK_CONFIG`):
+
+| Variable | Value |
+|----------|-------|
+| `MINT_ASSISTANT` | `1` |
+| `MINT_ASSISTANT_MODEL` | path to the model file (`.gguf`) |
+| `MINT_ASSISTANT_THREADS` | CPU threads, optional (up to 4 by default) |
+| `MINT_ASSISTANT_SHA256` | SHA-256 of a model file MINT does not know yet, optional |
+| `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask and whether you apply each answer, to retrain the assistant with, optional |
+
+The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
 
 ## 3. ITER environment {#iter-environment}
 

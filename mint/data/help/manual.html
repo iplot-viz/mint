@@ -43,6 +43,7 @@
 <li><a href="#plotting-area">2.8 Plotting area</a></li>
 <li><a href="#expressions">2.9 Expressions</a></li>
 <li><a href="#data-sources">2.10 Data Sources</a></li>
+<li><a href="#assistant">2.11 Assistant</a></li>
 </ul>
 </li>
 <li><a href="#iter-environment">3. ITER environment</a></li>
@@ -344,6 +345,49 @@ $ mint
 </code></pre>
 <p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used. <em>variable_group_limit</em> is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first <code>-</code> or <code>.</code> of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on <code>-</code>, <code>.</code> and <code>_</code> until none holds more. <em>cache_size</em> is optional (default 300): the number of data queries a UDA source keeps in memory.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
+<h3 id="assistant">2.11 Assistant</h3>
+<p>Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with <strong>Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; Assistant</em> (Ctrl+Shift+A).</p>
+<ul>
+<li><em>smooth the pirani over 30 s</em>: adds a smoothed copy of the signal to the same plot.</li>
+<li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>.</li>
+<li><em>outlet minus inlet</em>: a new signal in a new plot.</li>
+<li><em>add the TF07 current</em>: lists the matching variables to tick and add.</li>
+<li><em>last 6 hours</em>, <em>yesterday</em>, <em>pulse ITER:MCTB_PSS-TF07_FD/12</em>.</li>
+<li><em>the same for MP0071</em>: repeats the last change on another signal.</li>
+</ul>
+<p>Each answer comes as a card: nothing changes until <strong>Apply</strong> (or Enter with nothing typed), and <strong>Undo</strong> (or typing <em>undo</em>) puts it back. <em>Formula</em> on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the <em>x</em> or <em>y</em> column like any other expression, so the workspace opens the same without the assistant.</p>
+<p>It runs on this computer, without network, and is off unless these are set (also in the file named by <code>MINT_XK_CONFIG</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MINT_ASSISTANT</code></td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>MINT_ASSISTANT_MODEL</code></td>
+<td>path to the model file (<code>.gguf</code>)</td>
+</tr>
+<tr>
+<td><code>MINT_ASSISTANT_THREADS</code></td>
+<td>CPU threads, optional (up to 4 by default)</td>
+</tr>
+<tr>
+<td><code>MINT_ASSISTANT_SHA256</code></td>
+<td>SHA-256 of a model file MINT does not know yet, optional</td>
+</tr>
+<tr>
+<td><code>MINT_ASSISTANT_RECORD</code></td>
+<td><code>1</code> to keep on this computer what you ask and whether you apply each answer, to retrain the assistant with, optional</td>
+</tr>
+</tbody>
+</table>
+<p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>
 <p>MINT is installed on all CODAC XPOZ terminals. The CCI team grants access to the relevant machines. The tool connects to the central UDA servers; IMAS data is not yet accessible from CODAC terminals.</p>
@@ -365,6 +409,7 @@ $ mint
   <tr><td><code>Ctrl+F</code></td><td>Open the search box in the user manual</td></tr>
   <tr><td><code>Ctrl+Q</code></td><td>Quit MINT</td></tr>
   <tr><td><code>Esc</code></td><td>Close the user manual window</td></tr>
+  <tr><td><code>Ctrl+Shift+A</code></td><td>Show or hide the assistant, when it is enabled</td></tr>
 </table>
 
 <h3 id="access-modes">4.2 Access modes</h3>

@@ -111,6 +111,7 @@ STANDARD_KEY_DISPLAYS = {
 # inherited from a base class). Keep this list short.
 EXTRA_SHORTCUTS = [
     ("Esc", "Close the user manual window"),
+    ("Ctrl+Shift+A", "Show or hide the assistant, when it is enabled"),
 ]
 
 
