@@ -1,7 +1,4 @@
-"""Processing recipes: expression templates with bounded numeric parameters.
-
-The model only names a recipe and numbers: the expression never contains model text.
-"""
+"""Processing recipes: expression templates the model fills only with a recipe name and bounded numbers."""
 import json
 import math
 import os

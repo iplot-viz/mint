@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 from PySide6.QtCore import QModelIndex, Qt
 
-from iplotlib.interface.iplotSignalAdapter import Result
+from iplotlib.interface.iplotSignalAdapter import Result, Stage, StatusInfo
 from iplotLogging import setupLogger
 from mint.assistant import prompt, snapshot
 from mint.assistant.actions import ActionError
@@ -20,6 +20,8 @@ READ_ONLY = ("Status", "Output Datatype")
 NOT_COPIED = READ_ONLY + ("uid",)
 # How the drawn signal of a row came out (see MintWorkspace.drawn_outcome).
 DRAWN, EMPTY, NOT_COMPUTED = "drawn", "empty", "not computed"
+# What the archive says about a variable's last sample (see MintWorkspace.latest_sample).
+FOUND, NONE_BEFORE, UNKNOWN_VARIABLE, UNTOLD = "found", "none before", "unknown variable", "untold"
 MAX_SEARCH_RESULTS = 40
 # Written like a code: "EC", "CRYO", "D1", "System1". The variable tree groups names by what comes
 # before their first separator.
@@ -163,6 +165,47 @@ class MintWorkspace:
             logger.debug(f"Assistant: no time range to describe: {e}")
             return "not set", None, False
 
+    def time_range_ns(self) -> Optional[Tuple[int, int]]:
+        """The time range in ns since the epoch (the last hours end now); None for pulses."""
+        selector = self.window.dataRangeSelector
+        try:
+            if selector.export_dict().get("mode") == "PULSE_NUMBER":
+                return None
+            start, end = selector.get_time_range()
+            return int(start), int(end)
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"Assistant: no time range: {e}")
+            return None
+
+    def latest_sample(self, source_name: str, variable: str, before_ns: int) -> Tuple[str, Optional[int]]:
+        """Last sample before ``before_ns``: (FOUND, ns), or (NONE_BEFORE | UNKNOWN_VARIABLE | UNTOLD, None).
+
+        Asked only of CODAC_UDA sources, which answer a one-sample "last" query in tens of milliseconds.
+        """
+        from iplotDataAccess.appDataAccess import AppDataAccess
+        try:
+            source = AppDataAccess.da.get_data_source(source_name)
+            if getattr(source, "source_type", None) != "CODAC_UDA":
+                return UNTOLD, None
+            data = source.get_data(varname=variable, tsS="0", tsE=str(int(before_ns)), nbp=1, decType="last")
+        except Exception as e:  # an archive that fails here must not undo what was applied
+            logger.warning(f"Assistant: no latest sample of {source_name}:{variable}: {e!r}")
+            return UNTOLD, None
+        code, said = getattr(data, "errcode", None), str(getattr(data, "errdesc", "") or "")
+        x = getattr(data, "xdata", None)
+        # Only the answers UDA gives to exactly these cases; any other error says nothing about the data.
+        if code == 0 and x is not None and len(x):
+            answer = FOUND, int(x[-1])
+        elif "variable does not exist" in said.lower():
+            answer = UNKNOWN_VARIABLE, None
+        elif "interval is empty" in said.lower():
+            answer = NONE_BEFORE, None
+        else:
+            answer = UNTOLD, None
+        logger.info(f"Assistant: latest sample of {source_name}:{variable} before {before_ns}: {code} {said!r} "
+                    f"-> {answer[0]}")
+        return answer
+
     def canvas_plot(self, row: int, col: int):
         return snapshot.canvas_plot(self.window.canvas, row, col)
 
@@ -187,7 +230,8 @@ class MintWorkspace:
 
     def sample_period_seconds(self, row) -> Optional[float]:
         """The median time between the samples of a drawn row, from the data already read; None if not drawn."""
-        uid = self.uid_of(row.index)
+        # By uid: a snapshot taken before rows were added or removed still points at the right one.
+        uid = getattr(row, "uid", "") or self.uid_of(row.index)
         try:
             x = getattr(self._drawn_signal(uid), "x_data", None)
             if x is None or len(x) < 3:
@@ -207,7 +251,7 @@ class MintWorkspace:
         try:
             signal = self._drawn_signal(uid)
             if signal is None:
-                return None
+                return self._failed_off_canvas(uid)
             result = signal.status_info.result
             if result == Result.FAIL:
                 return NOT_COMPUTED
@@ -224,6 +268,16 @@ class MintWorkspace:
             logger.debug(f"Assistant: can't tell how {uid} came out: {e}")
             return None
         return DRAWN if drawable.any() else EMPTY
+
+    def _failed_off_canvas(self, uid: str) -> Optional[str]:
+        """NOT_COMPUTED when the row's Status says reading or computing it failed: MINT leaves those signals off
+        the canvas. None for anything else (not drawn, still being read)."""
+        try:
+            status = str(self.row_values(self._position(uid)).get("Status") or "")
+        except ActionError:
+            return None
+        stage = status.partition(StatusInfo.sep)[0]
+        return NOT_COMPUTED if stage in (Stage.DA, Stage.PROC, Stage.INIT) else None
 
     def name_of(self, uid: str) -> str:
         """A row as the table shows it: by its alias, else its variable."""
@@ -368,11 +422,9 @@ class MintWorkspace:
         return source
 
     def search_variables(self, words, request: str = "") -> VariableSearch:
-        """Variables whose name (or HMI description) holds all the words.
+        """Variables of the named (else the default) data source whose name or HMI description holds all the words.
 
-        They come from the data source the request names, else the default one. A word typed like a
-        code ("EC", "CRYO", "System1") is first read as the group the names start with, the folders
-        Search Vars shows; when no name starts with it, it is looked for anywhere in the names.
+        A code-like word ("CRYO", "System1") is first tried as the tree group names start with, then anywhere in names.
         """
         words = [w for w in words if w]
         name = _named_source(words, request, self.data_source_names())

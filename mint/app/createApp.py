@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication
 import os
 from argparse import ArgumentParser, Namespace
 from iplotlib.core.display import apply_hidpi_policy
-# Worked out once, on import: from a checkout every reading runs git.
+# Computed once at import: from a checkout, every get_versions() call runs git.
 from mint import __version__
 
 

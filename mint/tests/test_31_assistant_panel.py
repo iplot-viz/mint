@@ -1,11 +1,15 @@
 """The assistant inside MINT: installation, the request-to-card flow and the model process."""
+import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 from PySide6.QtCore import QEventLoop, QObject, Signal
@@ -16,11 +20,13 @@ from iplotlib.interface.iplotSignalAdapter import AccessHelper
 
 from mint.assistant import commands
 from mint.assistant import controller as ctl
+from mint.assistant import voice
 from mint.assistant import worker
 from mint.assistant.config import AssistantConfig
 from mint.assistant.engine import FAILED, READY, ModelEngine
 from mint.assistant.prompt import ChatFormat
 from mint.assistant.workspace import VariableSearch
+from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 from mint.tests.test_30_assistant_actions import build_window
@@ -117,13 +123,17 @@ class AssistantFlowTest(unittest.TestCase):
         self.engine.state = "loading"
         self.engine.stateChanged.emit("loading")
         self.assertEqual(panel.title(), "AI Assistant", "as the button that opens it")
-        # Said above the input box, where the suggestions come once it is ready; not in the conversation.
+        # Shown as progress in the empty conversation, not as a message.
         self.assertEqual(panel._progress_label.text(), "Waking up the assistant…")
         self.assertFalse(panel._busy)
         self.assertFalse(panel.input.isEnabled())
         self.assertEqual(panel.input.toolTip(), "Getting everything ready…")
         self.assertEqual(panel.input.placeholderText(), "Getting everything ready…")
         self.assertTrue(panel.stop_button.isHidden(), "nothing to stop while it starts")
+        # Started again after it stopped: a message waits under the progress, with no Stop that would stop nothing.
+        panel.messageSubmitted.emit("smooth pirani 30s")
+        self.assertEqual(self.ctl._queued[0], "smooth pirani 30s")
+        self.assertTrue(panel._preparing and not panel._busy)
         for step, text in (("checking", "Checking the model file…"), ("loading", "Loading the model…")):
             self.engine.step.emit(step)
             self.assertEqual(panel._progress_label.text(), text)
@@ -179,6 +189,130 @@ class AssistantFlowTest(unittest.TestCase):
         self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
         self.assertEqual(list(self.ctl.workspace.table()["Alias"]), ["below", "below_log10", "above", "above_log10"])
         self.assertIn(self.note(cards[0]), DONE, "drawn: nothing more to say")
+
+    def _archive(self, outcome, latest, end):
+        """The drawn rows come out as ``outcome`` and the archive answers ``latest`` per variable (a moment, None for
+        no such variable, or what it says instead); now is ``end``."""
+        from mint.assistant.workspace import FOUND, UNKNOWN_VARIABLE
+        ws = self.ctl.workspace
+        ws.time_range_ns = lambda: (int((end - timedelta(hours=6)).timestamp()) * 10**9, int(end.timestamp()) * 10**9)
+        ws.drawn_outcome = lambda uid: outcome(uid)
+        answers = {name: (FOUND, int(moment.timestamp()) * 10**9) if isinstance(moment, datetime) else
+                   (moment or UNKNOWN_VARIABLE, None) for name, moment in latest.items()}
+        ws.latest_sample = lambda source, variable, before: answers[variable]
+
+    def test_a_new_range_without_data_says_when_the_latest_is_and_offers_it(self):
+        from mint.assistant import when
+        from mint.assistant.workspace import DRAWN, EMPTY
+        end = datetime.now(timezone.utc).replace(microsecond=0)
+        newest, older = end - timedelta(days=1, hours=3, seconds=13), end - timedelta(days=6)
+        state = {"outcome": EMPTY}
+        self._archive(lambda uid: state["outcome"],
+                      {"MAG-MCTB-F1:VAR1": newest, "MAG-MCTB-F1:VAR2": older, "CRYO:MT0001": None}, end)
+        cards = self.ask("show the last 6 hours", "range last 6 hours")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        now = datetime.now(timezone.utc)
+        self.assertEqual(self.said[-1], f"There's no data in the last 6 hours. The latest samples are from "
+                                        f"{when.at(newest, now)} (pirani) and {when.at(older, now)} (VAR2). other has "
+                                        f"no variable called CRYO:MT0001. Shall I show the 6 hours up to the most "
+                                        f"recent?")
+        offer = max(self.ctl._cards)
+        start = (newest + timedelta(minutes=1)).replace(second=0) - timedelta(hours=6)
+        self.assertEqual(self.ctl._cards[offer]["proposal"].lines,
+                         [f"Time range: {when.span(start, start + timedelta(hours=6), now)}"])
+        state["outcome"] = DRAWN
+        calls = len(self.engine.prompts)
+        self.ask("ok", 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls, "ok to the card on screen is its Apply")
+        self.assertIn(self.note(offer), voice.DONE)
+        self.assertEqual(self.win.dataRangeSelector.get_time_range(),
+                         (int(start.timestamp()) * 10**9, int((start + timedelta(hours=6)).timestamp()) * 10**9))
+
+    def test_an_offered_range_can_be_turned_down(self):
+        from mint.assistant.workspace import EMPTY
+        end = datetime.now(timezone.utc)
+        self._archive(lambda uid: EMPTY, {"MAG-MCTB-F1:VAR1": end - timedelta(days=2), "MAG-MCTB-F1:VAR2": None,
+                                          "CRYO:MT0001": None}, end)
+        cards = self.ask("show the last 6 hours", "range last 6 hours")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        offer = max(self.ctl._cards)
+        self.ask("no thanks", 'say "no model here"')
+        self.assertTrue(self.note(offer).startswith("No problem"))
+        self.assertEqual(self.ctl.workspace.range_dict()["mode"], MTGenericAccessMode.RELATIVE_TIME)
+
+    def test_signals_without_data_next_to_others_with_data_are_named_without_moving_the_range(self):
+        from mint.assistant import when
+        from mint.assistant.workspace import DRAWN, EMPTY
+        end = datetime.now(timezone.utc)
+        older = end - timedelta(days=6)
+        uid = self.ctl.workspace.uid_of(0)
+        self._archive(lambda u: EMPTY if u == uid else DRAWN, {"MAG-MCTB-F1:VAR1": older}, end)
+        cards = self.ask("show the last 6 hours", "range last 6 hours")
+        count = len(self.ctl._cards)
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(self.said[-1], f"pirani has no data in the last 6 hours. Its latest sample is from "
+                                        f"{when.at(older, datetime.now(timezone.utc))}.")
+        self.assertEqual(len(self.ctl._cards), count, "the others show data: no range offered")
+
+    def test_a_sample_inside_the_range_is_not_called_no_data(self):
+        from mint.assistant.workspace import EMPTY
+        end = datetime.now(timezone.utc)
+        inside = end - timedelta(hours=1)
+        self._archive(lambda uid: EMPTY, {"MAG-MCTB-F1:VAR1": inside, "MAG-MCTB-F1:VAR2": inside,
+                                          "CRYO:MT0001": inside}, end)
+        cards = self.ask("show the last 6 hours", "range last 6 hours")
+        said = len(self.said)
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(len(self.said), said, "reading failed; the Status says why, not 'no data'")
+        self.assertIn(self.note(cards[0]), voice.DONE)
+
+    def test_a_signal_the_archive_says_nothing_about_is_not_called_without_data(self):
+        from mint.assistant import when
+        from mint.assistant.workspace import NOT_COMPUTED, UNTOLD
+        end = datetime.now(timezone.utc)
+        older = end - timedelta(days=6)
+        silent = dict.fromkeys(("MAG-MCTB-F1:VAR1", "MAG-MCTB-F1:VAR2", "CRYO:MT0001"), UNTOLD)
+        for latest, expected in ((silent, None),
+                                 (dict(silent, **{"MAG-MCTB-F1:VAR1": older}),
+                                  f"pirani has no data in the last 6 hours. Its latest sample is from "
+                                  f"{when.at(older, end)}. Shall I show the 6 hours up to it?")):
+            with self.subTest(expected=expected):
+                self._archive(lambda uid: NOT_COMPUTED, latest, end)
+                cards = self.ask("show the last 6 hours", "range last 6 hours")
+                said = len(self.said)
+                self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+                # A read that failed with no answer from the archive (server down, say) is left to its Status.
+                self.assertEqual(self.said[said:], [expected] if expected else [])
+
+    def test_a_number_alone_after_a_processing_repeats_it_with_that_number(self):
+        cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        calls = len(self.engine.prompts)
+        cards = self.ask("now 12 s", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r1 moving_average window=12s"])
+        self.assertEqual(len(self.engine.prompts), calls)
+        self.ask("undo", 'say "no model here"')  # the 12 s card was not applied: the 30 s one is undone
+        self.ask("12 s", 'say "Sure."')
+        self.assertEqual(len(self.engine.prompts), calls + 1, "nothing applied any more: a request for the model")
+
+    def test_a_number_alone_changes_the_processing_on_screen_rather_than_the_one_applied(self):
+        cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.ask("smooth VAR2 over 30 s", "process r3 moving_average seconds=30")
+        cards = self.ask("12 s", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r3 moving_average window=12s"])
+
+    def test_ok_and_no_answer_the_card_on_screen(self):
+        cards = self.ask("remove row 2", "remove r2")
+        self.ask("yes please", 'say "no model here"')
+        self.assertEqual(len(self.rows()), 3)
+        cards = self.ask("remove row 1", "remove r1")
+        self.ask("no", 'say "no model here"')
+        self.assertTrue(self.note(cards[0]).startswith("No problem"))
+        self.assertEqual(len(self.rows()), 3)
+        self.ask("remove row 1", "remove r1")
+        self.ask("is that ok?", 'say "It takes row 1 out of the table."')
+        self.assertEqual(len(self.rows()), 3, "a question about the card is not its Apply")
 
     def test_messages_and_refusals_create_no_card(self):
         for answer in ('say "Hello!"', 'ask "Which one?"', "not a command", "process r9 abs"):
@@ -392,7 +526,7 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertEqual(len(self.engine.prompts), calls, "the number fills in the request it belongs to")
 
     def test_a_window_asked_again_is_answered_as_people_write(self):
-        # As on SDCC: a signal archived on change, a sample about every 12 s.
+        # A signal archived on change: a sample about every 12 s.
         self.ctl.workspace.sample_period_seconds = lambda row: 11.654
         for reply in ("50s it's okey", "ok", "vale, 50 s"):
             with self.subTest(reply=reply):
@@ -412,6 +546,12 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertNotIn("I still need", self.said[-1])
         cards = self.ask("ok", 'say "no model here"')
         self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r1 moving_average window=50s"])
+
+    def test_a_window_given_in_an_answer_that_would_not_show_is_explained(self):
+        self.ctl.workspace.sample_period_seconds = lambda row: 11.654
+        self.ask("smooth it", 'ask "Which signal, and over how long?"')
+        self.ask("over 1 second", "process r1 moving_average seconds=1")
+        self.assertIn("it would stay as it is", self.said[-1], "the number came: why it doesn't do, not 'I still need'")
 
     def test_a_long_reply_is_a_new_request(self):
         self.ask("smooth that", 'ask "Which one?"')
@@ -539,6 +679,17 @@ class NetworkIsolationTest(unittest.TestCase):
             model._on_finished(1, None)
             self.assertEqual((started, failed), ([[]], []), "started again without it, and nothing failed")
 
+    def test_a_fixed_prompt_that_fails_stops_the_model_instead_of_leaving_it_starting(self):
+        from mint.assistant import engine
+        ensure_qapp()
+        model = ModelEngine("model.gguf", 1)
+        failed = []
+        model.failed.connect(lambda *args: failed.append(args))
+        model._state = engine.READY  # loaded
+        model.prime("prefix")
+        model._on_event({"ev": "error", "id": None, "message": "ValueError: prompt longer than the context"})
+        self.assertEqual((model.state, failed), (FAILED, [(-1, "ValueError: prompt longer than the context")]))
+
 
 class WorkerProcessTest(unittest.TestCase):
     def start(self):
@@ -560,6 +711,29 @@ class WorkerProcessTest(unittest.TestCase):
         finally:
             if proc.poll() is None:
                 proc.kill()
+
+    @unittest.skipUnless(importlib.util.find_spec("llama_cpp"), "the model library is not installed")
+    def test_the_model_library_loads_while_the_next_request_is_awaited(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.gguf")
+            with open(path, "wb") as f:
+                f.write(b"GGUF not really")
+            with open(path, "rb") as f:
+                sha = hashlib.sha256(f.read()).hexdigest()
+            proc = self.start()
+            try:
+                proc.stdin.write(json.dumps({"op": "load", "model": path, "allowed_sha256": [sha]}) + "\n")
+                proc.stdin.flush()
+                events = []
+                reader = threading.Thread(target=lambda: events.extend(json.loads(proc.stdout.readline())
+                                                                       for _ in range(3)), daemon=True)
+                reader.start()
+                reader.join(60)
+                # Not a real model, so it ends in an error; what matters is that it ends (it hung on Windows).
+                self.assertEqual([e.get("step", e["ev"]) for e in events], ["checking", "loading", "error"])
+            finally:
+                proc.kill()
+                proc.wait(timeout=10)
 
     def test_unknown_weights_are_refused_before_loading(self):
         with tempfile.TemporaryDirectory() as tmp:

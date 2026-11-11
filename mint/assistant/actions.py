@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, List, Optional
 
 from iplotLogging import setupLogger
-from mint.assistant import recipes
+from mint.assistant import recipes, when
 from mint.assistant.commands import Command
 from mint.assistant.snapshot import ORDINALS, Snapshot
 
@@ -19,7 +19,7 @@ PROCESSABLE_PLOT_TYPES = ("PlotXY", "")
 COMMENT_PREFIX = "Assistant: "
 # Windows counted in samples: one sample wide, they give the signal back unchanged.
 ONE_SAMPLE_IS_A_COPY = ("moving_average", "median")
-# Nanosecond timestamps in int64 cover 1677-2262; plant data lives well inside this.
+# Dates a time range accepts: well inside what int64 nanoseconds hold (1677-2262).
 FIRST_YEAR, LAST_YEAR = 1970, 2100
 MAX_SPAN_SECONDS = 100 * 365 * 86400
 # The "Last" box of the relative time mode is a spin box that stops at 99.
@@ -97,6 +97,8 @@ class Change:
     needs_refresh: bool = False
     # Once done, the uid of the row whose values it computes, to check them once drawn.
     computes: Optional[Callable[[], Optional[str]]] = None
+    # It sets a time range (not a pulse): signals left without data in it are looked up once drawn.
+    sets_range: bool = False
 
 
 @dataclass
@@ -458,7 +460,7 @@ class Planner:
             set_range = lambda: ws.set_range_dict(new)  # noqa: E731
         else:
             start, end = self._period(cmd)
-            line = f"Time range: {start:%Y-%m-%d %H:%M} → {end:%Y-%m-%d %H:%M} UTC"
+            line = f"Time range: {when.span(start, end, self.snap.now)}"
             start_ns, end_ns = _ns(start), _ns(end)
             set_range = lambda: ws.set_time_range_ns(start_ns, end_ns)  # noqa: E731
         before = {}
@@ -472,7 +474,7 @@ class Planner:
             if before:
                 ws.set_range_dict(before)
 
-        proposal.changes.append(Change([line], do, undo, needs_draw=True))
+        proposal.changes.append(Change([line], do, undo, needs_draw=True, sets_range=kind != "pulse"))
         return "Time range"
 
     def _period(self, cmd: Command):

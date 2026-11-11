@@ -12,7 +12,7 @@ TOP = 5
 class TokenWatch:
     """A logits processor recording each generated token's log-probability and top alternatives.
 
-    It reads the scores before the grammar, so it costs one softmax per token.
+    It sees the raw scores, before the grammar masks them, at the cost of one softmax per token.
     """
 
     def __init__(self, top: int = TOP):

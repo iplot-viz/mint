@@ -25,11 +25,9 @@ _isolation_works = None
 
 
 def network_isolation():
-    """Command prefix that starts the model process without network access, or [] where it is unavailable.
+    """Command prefix that starts the model process without network access (Linux unshare), or [] where unavailable.
 
-    On Linux an empty network namespace (unshare) leaves the process nothing to connect to. It is not
-    tried beforehand, which would keep the window waiting: where it fails, the process is started again
-    without it.
+    Not probed beforehand, which would keep the window waiting: if unshare fails, the process restarts without it.
     """
     if _isolation_works is False or not sys.platform.startswith("linux"):
         return []
@@ -67,6 +65,7 @@ class ModelEngine(QObject):
         self._state = STOPPED
         self._next_id = 0
         self._pending = None
+        self._priming = False
         self._last_warm = None
         self.isolated = False
 
@@ -100,6 +99,7 @@ class ModelEngine(QObject):
     def prime(self, prompt: str, cache_dir: str = None):
         """Evaluate the fixed prompt prefix, restored from the local cache when it is there."""
         self._last_warm = None
+        self._priming = True
         self._send({"op": "prime", "prompt": prompt, "cache_dir": cache_dir})
 
     def warm(self, prompt: str):
@@ -177,6 +177,7 @@ class ModelEngine(QObject):
             self.loaded.emit(event)
         elif kind == "primed":
             logger.info(f"Assistant prompt ready in {event.get('seconds')} s ({event.get('source')})")
+            self._priming = False
             self.primed.emit(event)
         elif kind == "warmed":
             logger.debug(f"Assistant prompt warmed: {event}")
@@ -192,6 +193,12 @@ class ModelEngine(QObject):
             request = event.get("id")
             logger.warning(f"Assistant worker error: {message}")
             if self._state == LOADING:
+                self._set_state(FAILED)
+                self.failed.emit(-1, message)
+            elif self._priming and request is None:
+                # It can't answer without its fixed prompt: stopped, the next message starts it again.
+                self._priming, self._pending = False, None
+                self.shutdown()
                 self._set_state(FAILED)
                 self.failed.emit(-1, message)
             elif request is not None and request == self._pending:

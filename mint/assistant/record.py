@@ -11,7 +11,7 @@ logger = setupLogger.get_logger(__name__)
 
 FILE = "record.jsonl"
 # Past this the file starts again and the previous one is kept as record.jsonl.1: at most twice this on disk.
-MAX_BYTES = 5 * 1024 * 1024  # 1000 to 2000 cards: months of use for one operator
+MAX_BYTES = 5 * 1024 * 1024
 
 
 def path() -> str:
@@ -19,7 +19,7 @@ def path() -> str:
 
 
 def write(card: str, outcome: str, request: str, snap, commands) -> None:
-    """Adds one outcome ("applied", "dismissed", "undone") of a card. Never raises: it is a bonus."""
+    """Appends one outcome ("applied", "dismissed", "undone") of a card; never raises."""
     try:
         target = path()
         os.makedirs(os.path.dirname(target), exist_ok=True)

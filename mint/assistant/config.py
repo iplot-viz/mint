@@ -51,7 +51,7 @@ def runtime_available() -> bool:
 
 
 def _cgroup_cpu_limit():
-    # SDCC nodes cap each user with a cgroup quota while os.cpu_count() reports the whole machine.
+    # Shared nodes may cap each user with a cgroup quota while os.cpu_count() reports the whole machine.
     if not hasattr(os, "getuid"):
         return None
     for path in ("/sys/fs/cgroup/cpu.max", f"/sys/fs/cgroup/user.slice/user-{os.getuid()}.slice/cpu.max"):

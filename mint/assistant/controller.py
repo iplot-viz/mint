@@ -1,18 +1,20 @@
 """Glue between the chat panel, the model and the workspace."""
 import os
+from datetime import datetime, timedelta, timezone
 
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
-from mint.assistant import check, commands, doubt, followup, prompt, recipes, record
+from mint.assistant import check, commands, doubt, followup, prompt, recipes, record, when
 from mint.assistant.actions import ActionError, ApplyContext, Change, Lazy, MissingValue, Planner, Proposal
 from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
 from mint.assistant.models import KNOWN_MODELS, chat_format, few_shot
 from mint.assistant.voice import Voice
-from mint.assistant.workspace import EMPTY, NOT_COMPUTED, MintWorkspace
+from mint.assistant.workspace import (DRAWN, EMPTY, FOUND, NONE_BEFORE, NOT_COMPUTED, UNKNOWN_VARIABLE, UNTOLD,
+                                      MintWorkspace)
 
 logger = setupLogger.get_logger(__name__)
 
@@ -24,6 +26,19 @@ SUGGESTIONS = [
 ]
 MAX_SUGGESTION = 48
 PLACEHOLDER = "Tell me what you need…"
+
+
+# Variables looked up at most when a new time range leaves signals without data: one archive request each.
+MAX_LOOKUPS = 8
+
+
+def _called(row) -> str:
+    """A row as a message names it: its alias, else the end of its variable."""
+    return row.alias or row.variable.split(":")[-1]
+
+
+def _moment(ns: int) -> datetime:
+    return datetime.fromtimestamp(ns / 1e9, tz=timezone.utc)
 
 
 def _spoken(row) -> str:
@@ -149,6 +164,7 @@ class AssistantController(QObject):
         self._cards = {}
         self._searches = {}  # suggestion text -> words, for the searches MINT offers itself
         self._last_action = ""
+        self._last_applied = None  # the card entry of the last change applied and not undone
         self._sized = False
         self._session = f"{os.getpid()}-{id(self):x}"  # tells the cards of two MINT sessions apart in the record
         self._model_name = ""
@@ -264,7 +280,7 @@ class AssistantController(QObject):
         if state == LOADING:
             self._loading("start")
         elif state == BUSY:
-            # A request queued while it started waits for the fixed prompt (a minute the first time on a machine).
+            # A request queued during start-up waits for the fixed prompt to be evaluated first.
             self.panel.set_busy(True, "Thinking…" if self._primed else "Getting ready, then I'll answer…")
         elif state == READY and self._primed:
             self.panel.set_busy(False)
@@ -361,6 +377,7 @@ class AssistantController(QObject):
 
     def on_request(self, text: str):
         self.panel.add_user_message(text)
+        pending = self._pending_card
         self._set_pending(None)
         search, self._searches = self._searches.get(text), {}
         if search:
@@ -374,6 +391,8 @@ class AssistantController(QObject):
         # A reply to the last question: fills a number, names the signal "it" meant, or goes to the model
         # with the request it answers. Anything longer is a new request.
         question, self._open_question = self._open_question, None
+        if question is None and pending in self._cards and self._answer_card(pending, text):
+            return
         answering = question is not None and followup.is_answer(text)
         named = False
         if answering and question.command is not None:
@@ -383,6 +402,8 @@ class AssistantController(QObject):
             if value is not None:
                 self._answer_with_number(question, value, text)
                 return
+        if question is None and self._again_with(text, pending):
+            return
         if answering:
             rewritten = check.chosen(self.workspace.snapshot(), question.request, text) and \
                 check.in_place_of_it(question.request, text)
@@ -393,30 +414,63 @@ class AssistantController(QObject):
         if self.engine is None or self.engine.state == FAILED:  # the status says why
             return
         if self.engine.state == LOADING:
+            # Answered once it is ready; the progress in the panel already says what it is doing.
             self._queued = (text, answering, named)
-            self.panel.set_busy(True, "Getting ready, I'll answer in a moment…")
             return
         self._ask_model(text, answering, named)
 
+    def _answer_card(self, card, text: str) -> bool:
+        """"ok" or "no" to the card on screen, as its Apply or Dismiss; False when the text says something else."""
+        if followup.agrees(text):
+            self.on_card_action(card, APPLY, [])
+        elif followup.declines(text):
+            self.on_card_action(card, DISMISS, [])
+        else:
+            return False
+        return True
+
+    def _again_with(self, text: str, pending) -> bool:
+        """A number alone ("12 s") after a processing card, on screen or just applied: that one with the number."""
+        entry = self._cards[pending] if pending in self._cards else self._last_applied
+        if entry is None or entry.get("snap") is None:
+            return False
+        written = entry["proposal"].commands
+        try:
+            cmds = commands.parse(written[0]) if len(written) == 1 else []
+        except commands.CommandError:
+            return False
+        if len(cmds) != 1 or cmds[0].verb != "process":
+            return False
+        params = list((recipes.load().get(cmds[0].words[0]) or {}).get("params") or {})
+        value = followup.value_in(text, params[0]) if len(params) == 1 else None
+        if value is None:
+            return False
+        cmds[0].params[params[0]] = recipes.number(value)
+        request = followup.with_answer(followup.OpenQuestion(entry.get("request") or "", entry["snap"]), text)
+        self._plan_with_number(cmds, entry["snap"], request)
+        return True
+
     def _answer_with_number(self, question, value: float, answer: str):
         question.command.params[question.param] = recipes.number(value)
+        # The request with its answer, as the model would have read it (and as a recorded card keeps it).
+        self._plan_with_number(question.commands, question.snap, followup.with_answer(question, answer))
+
+    def _plan_with_number(self, cmds, snap, request: str):
         try:
-            proposal = Planner(self.workspace, question.snap).plan(question.commands)
+            proposal = Planner(self.workspace, snap).plan(cmds)
         except MissingValue as e:
-            # This number would not show either: why, with the same question open for the next one.
-            self._open_question = followup.OpenQuestion(question.request, question.snap, question.commands,
-                                                        e.command, e.param, e.example)
+            # This number would not show either: say why and keep the question open for the next one.
+            self._open_question = followup.OpenQuestion(request, snap, cmds, e.command, e.param, e.example)
             self.panel.add_assistant_message(str(e))
             return
         except ActionError as e:
             self.panel.add_assistant_message(str(e))
             return
         except Exception:
-            logger.exception("Assistant could not plan with the user's answer")
+            logger.exception("Assistant could not plan with the user's number")
             self.panel.add_assistant_message(self.voice.could_not_work_out())
             return
-        # The request with its answer, as the model would have read it (and as a recorded card keeps it).
-        self._present(proposal, followup.with_answer(question, answer), question.snap, answering=True)
+        self._present(proposal, request, snap, answering=True)
 
     def _ask_model(self, text: str, answering: bool = False, named: bool = False):
         if self.engine.state != READY:
@@ -475,7 +529,7 @@ class AssistantController(QObject):
             # The question stays open, so a reply with just the number fills in the request it belongs to.
             # After an answer it isn't asked in full again; a signal picked in reply to "which one?" still is.
             self._open_question = followup.OpenQuestion(request, snap, cmds, e.command, e.param, e.example)
-            if answering and not named:
+            if answering and not named and e.example is None:
                 self.panel.add_assistant_message(self.voice.still_missing_number())
             else:
                 self.panel.add_assistant_message(str(e))
@@ -666,17 +720,22 @@ class AssistantController(QObject):
         entry["applied"] = True
         # As commands, so "the same for X" can repeat it exactly.
         self._last_action = "; ".join(proposal.commands)
+        self._last_applied = entry
         redraw_problem = self._run_redraw(proposal.changes)
         note = "" if redraw_problem else self._nothing_to_draw(proposal.changes)
         if not note:
             note = self.voice.done() + redraw_problem
         self.panel.set_card_state(card_id, enabled=[UNDO], note=note)
+        if not redraw_problem and any(c.sets_range for c in proposal.changes):
+            self._look_for_data()
 
     def _undo(self, card_id, entry):
         proposal = entry["proposal"]
         problems = proposal.undo()
         entry["applied"] = False
         self._last_action = ""
+        if self._last_applied is entry:
+            self._last_applied = None
         note = self.voice.undone(problems) + self._run_redraw(proposal.changes)
         self.panel.set_card_state(card_id, enabled=self._ready_actions(entry), note=note)
 
@@ -711,6 +770,73 @@ class AssistantController(QObject):
             logger.exception("Assistant: could not check what the change drew")
             return ""
         return self.voice.nothing_to_draw(empty, failed) if empty or failed else ""
+
+    def _look_for_data(self):
+        """After a new time range, what the archive says of the signals it left without data and, if nothing was drawn,
+        the same span up to the newest sample. Only what MINT read or the archive answered is said."""
+        try:
+            window = self.workspace.time_range_ns()
+            if window is None:
+                return
+            snap = self.workspace.snapshot()
+            rows = [r for r in snap.rows + snap.unlisted if r.plot and not r.derived]
+            outcomes = {r.uid: self.workspace.drawn_outcome(r.uid) for r in rows}
+            read = [r for r in rows if outcomes[r.uid] is not None]  # still being read: nothing to tell yet
+            empty = [r for r in read if outcomes[r.uid] != DRAWN]
+            if not empty:
+                return
+            nothing_drawn = len(empty) == len(read)
+            start_ns, end_ns = window
+            answers, silent = {}, set()
+            for row in empty[:MAX_LOOKUPS]:
+                key = (row.data_source, row.variable)
+                if key not in answers and row.data_source not in silent:
+                    answers[key] = self.workspace.latest_sample(row.data_source, row.variable, end_ns)
+                    if answers[key][0] == UNTOLD:  # a source that can't say, or doesn't answer, is not asked again
+                        silent.add(row.data_source)
+
+            def without_data(row):
+                # What MINT read empty or the archive answered for; a sample inside the range means reading failed.
+                kind, ns = answers.get((row.data_source, row.variable), (UNTOLD, None))
+                return ns < start_ns if kind == FOUND else kind != UNTOLD or outcomes[row.uid] == EMPTY
+
+            empty = [r for r in empty if without_data(r)]
+            if not empty:
+                return
+            latest, none_before, unknown = {}, {}, {}
+            for row in empty:
+                kind, ns = answers.get((row.data_source, row.variable), (UNTOLD, None))
+                if kind == FOUND:
+                    latest.setdefault(_called(row), ns)
+                elif kind == NONE_BEFORE:
+                    none_before.setdefault(_called(row))
+                elif kind == UNKNOWN_VARIABLE:
+                    unknown.setdefault(row.variable, row.data_source)
+            latest = sorted(((ns, name) for name, ns in latest.items()), reverse=True)
+            span_s = (end_ns - start_ns) / 1e9
+            minutes = max(1, round(span_s / 60))
+            offer = self._range_up_to(latest[0][0], minutes, snap) if nothing_drawn and latest else None
+            relative = self.workspace.range_dict().get("mode") == "RELATIVE_TIME"
+            self.panel.add_assistant_message(self.voice.no_data(
+                f"in the last {when.period(span_s)}" if relative else "in this time range",
+                list(dict.fromkeys(_called(r) for r in empty)), len(empty) == len(read),
+                [(name, when.at(_moment(ns), snap.now)) for ns, name in latest], list(none_before),
+                list(unknown.items()), when.period(minutes * 60) if offer is not None else ""))
+            if offer is not None:
+                self._show_proposal(offer, spoken=True)
+        except Exception:  # applied already: telling more must not fail it
+            logger.exception("Assistant: could not look for the data of the new time range")
+
+    def _range_up_to(self, last_ns: int, minutes: int, snap):
+        """A proposal for that many minutes, ending just after the sample at ``last_ns``; or None."""
+        end = (_moment(last_ns) + timedelta(minutes=1)).replace(second=0, microsecond=0)
+        start = end - timedelta(minutes=minutes)
+        try:
+            return Planner(self.workspace, snap).plan(commands.parse(
+                f'range from "{start:%Y-%m-%d %H:%M}" to "{end:%Y-%m-%d %H:%M}"'))
+        except (ActionError, commands.CommandError) as e:
+            logger.info(f"Assistant: no range to offer up to {end}: {e}")
+            return None
 
     def _redraw_only(self, changes):
         # Draw does nothing while MINT streams, so say so rather than claim a redraw.

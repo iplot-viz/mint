@@ -552,7 +552,7 @@ class FollowUpTest(unittest.TestCase):
                  ("vale, 30 s", "seconds", 30), ("no, 1 min", "seconds", 60), ("1 minuto", "seconds", 60),
                  ("2 días", "seconds", 172800), ("50 s, it’s enough", "seconds", 50),
                  ("50 s for VOL3600", "seconds", None), ("50s for both", "seconds", None),
-                 ("50 or 60 s", "seconds", None)]
+                 ("50 or 60 s", "seconds", None), ("9" * 400 + " days", "seconds", None)]
         for text, param, expected in cases:
             with self.subTest(text=text, param=param):
                 self.assertEqual(value_in(text, param), expected)
@@ -562,7 +562,8 @@ class FollowUpTest(unittest.TestCase):
         for text in ("ok", "OK!", "yes please", "yes, that's fine", "sounds good", "vale", "sí, perfecto", "d'accord"):
             with self.subTest(text=text):
                 self.assertTrue(agrees(text))
-        for text in ("", "no", "thanks", "the pirani", "ok and log scale", "ok 50s", "not that"):
+        for text in ("", "no", "thanks", "the pirani", "ok and log scale", "ok 50s", "not that", "ok?", "is that ok?",
+                     "¿vale?"):
             with self.subTest(text=text):
                 self.assertFalse(agrees(text))
 
@@ -572,6 +573,85 @@ class FollowUpTest(unittest.TestCase):
         self.assertFalse(is_answer("actually show me the last six hours of data please"))
         self.assertFalse(is_answer("   "))
         self.assertEqual(with_answer(OpenQuestion("smooth that?", None), " the flow "), "smooth that. the flow")
+
+
+class ShortNamesTest(unittest.TestCase):
+    def snap(self):
+        return Snapshot(rows=[
+            RowInfo(id="r1", index=0, variable="CRYO-CH-MM-CRST:MLT1000-AA-IN", stack="1.1", plot="p1"),
+            RowInfo(id="r2", index=1, variable="CRYO-CH-MM-CRST:MLT1000-AA-IN", alias="MLT1000_AA_IN_avg_30s",
+                    y="moving(${self}.data)", stack="1.1", plot="p1"),
+            RowInfo(id="r3", index=2, variable="CRYO-CH-CB3-HESC:VOL3600-XI", stack="2.1", plot="p2")],
+            plots=[PlotInfo(id="p1", row=1, col=1), PlotInfo(id="p2", row=2, col=1)])
+
+    def test_the_letters_of_a_code_name_its_signal_in_any_case(self):
+        for request, rows in (("smooth mlt please", ["r1"]), ("SMOOTH MLT", ["r1"]), ("log scale on vol", ["r3"]),
+                              ("mlt and vol", ["r1", "r3"]), ("smooth ml", []), ("put the log on it", [])):
+            with self.subTest(request=request):
+                self.assertEqual([row.id for row, _ in prompt.named(self.snap(), request)], rows)
+
+    def test_a_short_name_answers_which_one(self):
+        from mint.assistant import check
+        self.assertEqual(check.chosen(self.snap(), "smooth that", "mlt please"), ["r1"])
+
+
+class WhenTest(unittest.TestCase):
+    NOW = datetime(2026, 11, 11, 19, 30, tzinfo=timezone.utc)
+
+    def test_moments_read_as_people_say_them(self):
+        from mint.assistant import when
+        for moment, said in ((datetime(2026, 11, 11, 8, 43, 47), "today at 08:43 UTC"),
+                             (datetime(2026, 11, 10, 8, 43, 47), "yesterday at 08:43 UTC"),
+                             (datetime(2026, 11, 5, 9, 6, 56), "5 Nov at 09:06 UTC"),
+                             (datetime(2024, 10, 30, 7, 5, 29), "30 Oct 2024 at 07:05 UTC")):
+            with self.subTest(said=said):
+                self.assertEqual(when.at(moment.replace(tzinfo=timezone.utc), self.NOW), said)
+
+    def test_spans_and_durations(self):
+        from mint.assistant import when
+        utc = timezone.utc
+        for start, end, said in ((datetime(2026, 11, 3, 8, tzinfo=utc), datetime(2026, 11, 4, 20, tzinfo=utc),
+                                  "3 Nov 08:00 → 4 Nov 20:00 UTC"),
+                                 (datetime(2026, 11, 10, 2, 44, tzinfo=utc), datetime(2026, 11, 10, 8, 44, tzinfo=utc),
+                                  "10 Nov 02:44 → 08:44 UTC"),
+                                 (datetime(2024, 10, 29, tzinfo=utc), datetime(2024, 10, 30, tzinfo=utc),
+                                  "29 Oct 2024, all day UTC"),
+                                 (datetime(2026, 2, 1, tzinfo=utc), datetime(2026, 3, 1, tzinfo=utc), "February 2026")):
+            with self.subTest(said=said):
+                self.assertEqual(when.span(start, end, self.NOW), said)
+        self.assertEqual([when.duration(s) for s in (21600, 3600, 86400, 172800, 5400, 86729, 45, 90)],
+                         ["6 hours", "1 hour", "1 day", "2 days", "90 minutes", "about 24 hours", "45 seconds",
+                          "90 seconds"])
+        self.assertEqual([when.period(s) for s in (3600, 21600, 86400)], ["hour", "6 hours", "day"])
+
+
+class NoDataWordsTest(unittest.TestCase):
+    def test_what_is_said_when_a_new_range_has_no_data(self):
+        from mint.assistant.voice import Voice
+        latest = [("VOL3600-XI", "yesterday at 08:43 UTC"), ("MLT1000-AA-IN", "5 Nov at 09:06 UTC")]
+        self.assertEqual(Voice.no_data("in the last 6 hours", ["MLT1000-AA-IN", "VOL3600-XI"], True, latest,
+                                       offer="6 hours"),
+                         "There's no data in the last 6 hours. The latest samples are from yesterday at 08:43 UTC "
+                         "(VOL3600-XI) and 5 Nov at 09:06 UTC (MLT1000-AA-IN). Shall I show the 6 hours up to the "
+                         "most recent?")
+        self.assertEqual(Voice.no_data("in the last hour", ["MLT1000-AA-IN"], True, latest[1:], offer="hour"),
+                         "There's no data for MLT1000-AA-IN in the last hour. Its latest sample is from 5 Nov at "
+                         "09:06 UTC. Shall I show the hour up to it?")
+        self.assertEqual(Voice.no_data("in this time range", ["MLT1000-AA-IN", "X1"], False, latest[1:],
+                                       none_before=["X1"]),
+                         "MLT1000-AA-IN and X1 have no data in this time range. The latest of MLT1000-AA-IN is from "
+                         "5 Nov at 09:06 UTC. X1 has none before then either.")
+        self.assertEqual(Voice.no_data("in this time range", ["TYPO"], True, [], unknown=[("TYPO", "codacuda")]),
+                         "There's no data for TYPO in this time range. codacuda has no variable called TYPO.")
+
+    def test_turning_a_card_down(self):
+        from mint.assistant.followup import declines
+        for text in ("no", "No thanks", "not now", "nope", "no, gracias"):
+            with self.subTest(text=text):
+                self.assertTrue(declines(text))
+        for text in ("", "ok", "no, 30 s", "no smooth it more", "not the pirani", "no?"):
+            with self.subTest(text=text):
+                self.assertFalse(declines(text))
 
 
 class RecipesTest(unittest.TestCase):

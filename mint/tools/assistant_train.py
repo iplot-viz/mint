@@ -138,7 +138,7 @@ class Maker:
                            "relative_time"])
         keep, params = [], ""
         if recipe in ("moving_average", "gaussian", "savgol", "median"):
-            # A quarter without a window: the answer leaves it out too, and MINT picks or asks.
+            # A quarter of these requests give no window: the answer leaves it out too, and MINT picks or asks.
             spoken, params = self.window()
             over = f" over {spoken}" if r.random() >= 0.25 else ""
             params = params if over else ""
@@ -820,8 +820,8 @@ def cmd_merge(args):
     reader = GGUFReader(args.gguf)
     arch = reader.fields["general.architecture"].contents()
     writer = GGUFWriter(args.out, arch)
-    # How MINT must run it: its chat format, no worked examples, and the context it needs (the
-    # short prompt, the largest workspace listing, a request and the answer fit in 2048 tokens).
+    # How MINT must run it: its chat format, no worked examples, and the context the short prompt, the largest
+    # workspace listing, a request and its answer need (--context).
     ours = {"mint.assistant.format": (FORMAT, GGUFValueType.STRING),
             "mint.assistant.few_shot": (False, GGUFValueType.BOOL),
             "mint.assistant.context": (args.context, GGUFValueType.UINT32),

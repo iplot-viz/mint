@@ -21,10 +21,7 @@ class Voice:
         return options[count % len(options)]
 
     def opener(self, after_words: bool = False) -> str:
-        """Before a card: the first-time explanation, then a short varied acknowledgement.
-
-        After the model's own words only the explanation is added.
-        """
+        """Before a card: the first-time explanation, then a varied acknowledgement (none after the model's words)."""
         if "opener" not in self._said:
             self._said["opener"] = 0
             return FIRST_OPENER
@@ -32,6 +29,32 @@ class Voice:
 
     def done(self) -> str:
         return self._next("done", DONE)
+
+    @staticmethod
+    def no_data(where: str, empty, all_empty: bool, latest, none_before=(), unknown=(), offer: str = "") -> str:
+        """What to say of the signals (``empty``) a new time range left without data, and what the archive says.
+
+        latest: [(name, when)], newest first; none_before: names; unknown: [(variable, source)]; offer: a span or ''.
+        """
+        if all_empty:
+            said = [f"There's no data for {empty[0]} {where}." if len(empty) == 1 else f"There's no data {where}."]
+        else:
+            said = [f"{_listed(empty)} {'has' if len(empty) == 1 else 'have'} no data {where}."]
+        if len(latest) == 1:
+            name, moment = latest[0]
+            said.append(f"Its latest sample is from {moment}." if len(empty) == 1
+                        else f"The latest of {name} is from {moment}.")
+        elif 1 < len(latest) <= 3:
+            said.append("The latest samples are from " + _listed([f"{moment} ({name})" for name, moment in latest]) + ".")
+        elif latest:
+            said.append(f"The most recent is from {latest[0][1]} ({latest[0][0]}).")
+        if none_before:
+            said.append(f"{_listed(none_before)} {'has' if len(none_before) == 1 else 'have'} none before then either.")
+        for name, source in unknown:
+            said.append(f"{source} has no variable called {name}.")
+        if offer:
+            said.append(f"Shall I show the {offer} up to {'it' if len(latest) == 1 else 'the most recent'}?")
+        return " ".join(said)
 
     @staticmethod
     def nothing_to_draw(empty, failed) -> str:

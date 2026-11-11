@@ -1,4 +1,5 @@
 """Answers to the assistant's own questions."""
+import math
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -29,8 +30,11 @@ POLITE = AGREE | set("it it's its is that that's this then please pls thanks tha
                      "use make do try set to the one example enough sounds works for me por favor gracias pon ponle "
                      "usa con es eso ese esa está esta suficiente mejor pues entonces de acuerdo ejemplo merci alors "
                      "s'il te vous plaît plait avec exemple assez bitte danke dann mit nimm beispiel reicht va per "
-                     "favore grazie allora esempio basta obrigado então pode ser exemplo".split())
+                     "favore grazie allora esempio basta obrigado então pode ser exemplo now ahora maintenant "
+                     "jetzt adesso agora".split())
 CORRECTING = set("no nope nah non nein não nao actually rather instead".split())
+# Turning down the card on screen: "no", "no thanks", "not now".
+DECLINE = set("no nope nah not cancel dismiss non nein não nao".split())
 
 
 @dataclass
@@ -59,21 +63,29 @@ def value_in(text: str, param: str) -> Optional[float]:
     m = VALUE.match(" ".join(_saying(text, POLITE | CORRECTING)))
     if not m:
         return None
-    value = float(m.group(1).replace(",", "."))
     unit = (m.group(2) or "").lower()
     if param == "seconds":
-        if not unit:
-            return value  # a bare number answering "over how long" is seconds
-        return value * SECONDS[unit] if unit in SECONDS else None
-    if param == "hz":
-        return value if unit in ("", "hz") else None
-    return value if not unit else None
+        scale = SECONDS.get(unit) if unit else 1  # a bare number answering "over how long" is seconds
+    elif param == "hz":
+        scale = 1 if unit in ("", "hz") else None
+    else:
+        scale = None if unit else 1
+    value = None if scale is None else float(m.group(1).replace(",", ".")) * scale
+    return value if value is not None and math.isfinite(value) else None
 
 
 def agrees(text: str) -> bool:
     """A reply that only agrees ("ok", "yes, that's fine", "vale"): to a question with an example, that one."""
     words = [word.lower() for word in _words(text)]
-    return bool(words) and not _saying(text, POLITE) and any(word in AGREE for word in words)
+    return (bool(words) and "?" not in text and not _saying(text, POLITE)
+            and any(word in AGREE for word in words))
+
+
+def declines(text: str) -> bool:
+    """A reply that only turns down ("no", "no thanks", "not now")."""
+    words = [word.lower() for word in _words(text)]
+    return (bool(words) and "?" not in text and not _saying(text, POLITE | DECLINE)
+            and any(word in DECLINE for word in words) and not any(word in AGREE for word in words))
 
 
 def is_answer(text: str) -> bool:

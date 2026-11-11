@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 import pandas as pd
+from PySide6.QtCore import Qt
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY
@@ -106,6 +107,11 @@ class AssistantActionsTest(_WindowCase):
                          ["New signal VAR2_over_pirani = MAG-MCTB-F1:VAR2 over pirani, in a new plot"])
         self.assertEqual(self.plan("range last 1 hours").lines, ["Time range: the last hour"])
         self.assertEqual(self.plan("range last 6 hours").lines, ["Time range: the last 6 hours"])
+        # Dates as people read them (another year than this one shows it).
+        self.assertEqual(self.plan('range from "2024-10-29 07:05" to "2024-10-30 07:05"').lines,
+                         ["Time range: 29 Oct 2024 07:05 → 30 Oct 2024 07:05 UTC"])
+        self.assertEqual(self.plan("range day 2024-10-29").lines, ["Time range: 29 Oct 2024, all day UTC"])
+        self.assertEqual(self.plan("range month 2024-10").lines, ["Time range: October 2024"])
         self.assertEqual(self.plan("process r1 median").title, "Spike removal")
         self.assertEqual(self.plan("move r1 to p2\nmove r2 to p3").title, "Move", "a title once")
         # The x axis of a plot changes for all its rows, and the card says why for the others.
@@ -216,7 +222,7 @@ class AssistantActionsTest(_WindowCase):
                 self.assertIn(fragment, str(ctx.exception))
 
     def test_a_change_the_samples_are_too_far_apart_to_show_is_asked_again(self):
-        # Archived on change: a sample every 12 s or so, as the cryo signals of DifiTest.
+        # Archived on change: a sample about every 12 s.
         self.ws.sample_period_seconds = lambda row: 11.654
         for text, param, fragment in (("process r1 moving_average seconds=10", "seconds", "For example 50 s."),
                                       ("process r1 median seconds=5", "seconds", "over 5 s it would stay as it is"),
@@ -266,6 +272,49 @@ class AssistantActionsTest(_WindowCase):
                     drawn.status_info.result, drawn.x_data, drawn.y_data = result, x, y
                     self.assertEqual(self.ws.drawn_outcome(uid), outcome)
             self.assertIsNone(self.ws.drawn_outcome("not drawn"), "a row that isn't drawn: nothing to tell")
+        # MINT leaves a signal that failed off the canvas: its Status says so.
+        uid = self.ws.uid_of(1)
+        status = self.ws._column("Status")
+        for shown, outcome in (("Data-Access|0 points", NOT_COMPUTED), ("Processing|0 points", NOT_COMPUTED),
+                               ("Busy|Data-Access", None), ("Ready", None), ("", None)):
+            with self.subTest(status=shown):
+                self.ws.model.setData(self.ws.model.index(1, status), shown, Qt.ItemDataRole.DisplayRole)
+                self.assertEqual(self.ws.drawn_outcome(uid), outcome)
+
+    def test_the_latest_sample_comes_from_one_request_to_the_archive(self):
+        from types import SimpleNamespace
+        import numpy as np
+        from mint.assistant.workspace import FOUND, NONE_BEFORE, UNKNOWN_VARIABLE, UNTOLD
+        asked = []
+
+        def archive(errcode=0, xdata=None, errdesc="OK"):
+            def get_data(**kwargs):
+                asked.append(kwargs)
+                if isinstance(errcode, Exception):
+                    raise errcode
+                return SimpleNamespace(errcode=errcode, xdata=xdata, errdesc=errdesc)
+            return SimpleNamespace(source_type="CODAC_UDA", get_data=get_data)
+
+        last = 1_778_403_827_000_000_000
+        for source, answer in ((archive(0, np.array([last], dtype=np.uint64)), (FOUND, last)),
+                               (archive(-1, None, "ERROR udaPlugin: Requested interval is empty"), (NONE_BEFORE, None)),
+                               (archive(-1, None, "ERROR udaPlugin: Requested variable does not exist"),
+                                (UNKNOWN_VARIABLE, None)),
+                               (archive(RuntimeError("server down")), (UNTOLD, None)),
+                               (archive(-3, None, "Requested data cannot be located"), (UNTOLD, None)),
+                               (archive(-1, None, "ERROR: plugin file does not exist"), (UNTOLD, None)),
+                               (SimpleNamespace(source_type="CSV", get_data=lambda **kw: asked.append(kw)), (UNTOLD, None))):
+            with self.subTest(answer=answer), mock.patch.object(AppDataAccess.da, "get_data_source", return_value=source):
+                self.assertEqual(self.ws.latest_sample("codacuda", "CRYO:MT0001", 2_000), answer)
+        self.assertEqual(len(asked), 6, "a source that can't say is not asked")
+        self.assertEqual(asked[0], {"varname": "CRYO:MT0001", "tsS": "0", "tsE": "2000", "nbp": 1, "decType": "last"})
+
+    def test_the_time_range_in_ns(self):
+        start, end = self.ws.time_range_ns()
+        self.assertEqual(end - start, 2 * 3600 * 10**9, "the last 2 hours, as build_window sets them")
+        self.ws.set_range_dict({"mode": MTGenericAccessMode.PULSE_NUMBER, "pulse_nb": ["ITER:MCTB-TEST/111"], "base": 1,
+                                "t_start": "", "t_end": ""})
+        self.assertIsNone(self.ws.time_range_ns(), "a pulse has no dates")
 
     def test_a_processing_or_a_combination_says_which_row_it_computes(self):
         for text, computed in (("process r1 moving_average seconds=30", "pirani_avg_30s"),

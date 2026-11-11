@@ -79,7 +79,7 @@ def unchanged(fd, path, key):
 def verify_model(fd, path, allowed, cache_path):
     """SHA-256 of the weights, refused unless allowed; runs before the model library opens the file.
 
-    Remembered per (path, size, mtime): hashing a few GB takes seconds.
+    Remembered per file_key (path, size, times, inode): hashing a few GB takes seconds.
     """
     key = file_key(fd, path)
     cache = {}
@@ -137,6 +137,12 @@ class Worker:
         self.requests.put({"op": "quit"})
 
     def run(self):
+        # Imported before stdin has a reader: on Windows, importing it while a thread waits on the stdin pipe
+        # never ends (numpy's extension module hangs while loading).
+        try:
+            import llama_cpp  # noqa: F401
+        except ImportError:
+            pass  # load says so
         threading.Thread(target=self.read_stdin, daemon=True).start()
         while True:
             msg = self.requests.get()
@@ -346,10 +352,9 @@ class Worker:
         t_end = time.perf_counter()
         cancelled = stopped()
         self.cancelled.discard(request)
-        # "length" means the answer was cut by max_tokens: its last line may be half a command.
         try:
             ids = watch.ids(lambda token: self.llm.detokenize([token]).decode("utf-8", "ignore"))
-        except Exception:  # how sure it was is a bonus: never lose the answer for it
+        except Exception:  # the confidence is optional: never lose the answer over it
             ids = []
         send(ev="done", id=request, text="".join(parts), cancelled=cancelled, finish=finish, ids=ids,
              timings={"prompt_tokens": len(tokens), "cached_tokens": cached, "generated": n_gen,

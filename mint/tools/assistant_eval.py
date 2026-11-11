@@ -3,7 +3,7 @@
     python -m mint.tools.assistant_eval --model M.gguf --format chatml --cases cases.jsonl [--threads 4]
 
 Each line of the cases file:
-    {"id": "...", "workspace": {...snapshot...}, "request": "...", "expect": ["process r1 moving_average seconds=30", ...]}
+    {"id": "...", "workspace": {...snapshot...}, "request": "...", "expect": ["process r1 moving_average window=30s", ...]}
 "expect" lists the acceptable answers, one command per line; for ask and say only the verb counts.
 "--quiet-failures" prints only the scores.
 """

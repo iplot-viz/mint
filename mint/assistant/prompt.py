@@ -83,14 +83,15 @@ TOKEN = re.compile(r"[A-Za-z0-9_]+(?:[-:.][A-Za-z0-9_]+)*")
 CODE_LIKE = re.compile(r"[0-9_:]")
 # Words of a name: "T_inlet" and "flow-he" are two words each, as people say them.
 WORD = re.compile(r"[a-z0-9]+")
+# The letters a code starts with, before its digits: "mlt" in "mlt1000".
+CODE_LETTERS = re.compile(r"([a-z]+)\d")
 # A name written in the request must not be glued to more letters or to more of a code:
 # "pirani" is not in "piranis", "PIR-1101" is not in "PIR-1101-XI", but a final dot is fine.
 NAME_START = r"(?<!\w)(?<!\w[-:.])"
 NAME_END = r"(?!\w)(?![-:.]\w)"
 MAX_LOOSE = 4
 MAX_ROWS = 50
-# Estimated tokens for the listed rows: ~12 s of prompt evaluation on 4 cores of an i5-8500 class CPU,
-# paid when a workspace is opened and, from the first changed row on, after each edit.
+# Token budget of the listed rows: evaluated when a workspace opens and, from the first changed row on, after each edit.
 ROW_BUDGET = 400
 FEW_PLOTS = 6
 MAX_TEXT = 100
@@ -141,7 +142,7 @@ def estimate_tokens(text: str) -> int:
 
 
 def visible(snap: Snapshot) -> Snapshot:
-    """The part of the workspace shown to the model: selected rows first, then table order, up to ROW_BUDGET.
+    """Rows shown to the model: the selected ones first, then table order, within ROW_BUDGET and MAX_ROWS.
 
     Rows left out stay in ``unlisted``, still reachable by name (see answer_ids).
     """
@@ -239,6 +240,11 @@ def measures(row: RowInfo) -> Optional[str]:
     return None
 
 
+def _code_letters(word: str) -> str:
+    match = CODE_LETTERS.match(word)
+    return match.group(1) if match else ""
+
+
 def _contains(words: List[str], part: List[str]) -> bool:
     return bool(part) and any(words[i:i + len(part)] == part for i in range(len(words) - len(part) + 1))
 
@@ -284,6 +290,10 @@ def named(snap: Snapshot, request: str, meanings: bool = True) -> List[Tuple[Row
         hits = [r for r in rows if any(low in WORD.findall(n) for n in names[r.id])]
         if not hits and len(low) >= 4 and CODE_LIKE.search(low):
             hits = [r for r in rows if any(low in n for n in names[r.id])]
+        if not hits and low.isalpha():
+            # The letters of a code, as people shorten it ("mlt" for MLT1000): the signal before its copies.
+            hits = [r for r in rows if any(_code_letters(w) == low for n in names[r.id] for w in WORD.findall(n))]
+            hits = [r for r in hits if not r.derived] or hits
         if len(hits) <= MAX_LOOSE:
             for row in hits:
                 point(row, token)
@@ -361,10 +371,7 @@ class ChatFormat:
 
 
 def fixed_prefix(fmt: ChatFormat, few_shot: bool = True) -> str:
-    """Instructions and worked examples for a general model; one line for a model trained for MINT.
-
-    A trained model learnt the commands in training, so the prefix is a few dozen tokens instead of about 1450.
-    """
+    """Instructions and worked examples for a general model; one system line for a model trained for MINT."""
     if not few_shot:
         return fmt.turn("system", SYSTEM_TRAINED)
     text = fmt.turn("system", SYSTEM)

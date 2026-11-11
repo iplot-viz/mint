@@ -1,7 +1,4 @@
-"""A plain-data picture of the workspace, the only thing the assistant reads.
-
-Rows are r1, r2... by table row; plots p1, p2... top to bottom, then left to right.
-"""
+"""A plain-data picture of the workspace, the only thing the assistant reads."""
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -135,7 +132,7 @@ def _cell(table, i, name):
 
 def build(table, selected_indices=(), canvas=None, range_text="", range_seconds=None, pulse_mode=False,
           last_action="") -> Snapshot:
-    """Snapshot of a signals table (pandas DataFrame with MINT's column labels)."""
+    """Snapshot of a signals table: rows r1, r2... in table order, plots p1, p2... row by row, left to right."""
     rows = []
     placed = {}
     for i in range(len(table.index)):
