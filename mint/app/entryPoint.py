@@ -20,10 +20,12 @@ def run_app(q_app: QApplication, args=None):
 
     from iplotlib.core import Canvas
     from iplotlib.core.display import DisplayScale, screen_pixel_width
+    import iplotlib.data_access as iplot_data_access
     from iplotlib.interface.iplotSignalAdapter import AccessHelper
     from iplotDataAccess.appDataAccess import AppDataAccess
     import iplotLogging.setupLogger as SetupLog
 
+    from mint.app.createApp import data_access_workers
     from mint.models import MTGenericAccessMode
     from mint.models.utils import mtBlueprintParser
     from mint.gui.mtMainWindow import MTMainWindow
@@ -106,6 +108,16 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
+    access_pool = getattr(iplot_data_access, 'AccessPool', None)
+    if access_pool is None:
+        logger.info(f"iplotlib {iplotlib_version} reads the data in the GUI thread")
+    workers = data_access_workers() if access_pool is not None else 0
+    if workers:
+        # The workers start once the table holds a signal of their data sources (see MTMainWindow).
+        AccessHelper.pool = access_pool(workers)
+        q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
+    logger.info(f"Data access worker threads: {workers}")
+
     data_sources = AccessHelper.da.get_connected_data_source_names()
 
     main_win = MTMainWindow(canvas,
@@ -132,9 +144,14 @@ def run_app(q_app: QApplication, args=None):
         main_win.import_json(workspace_file)
 
         if args.image_file:
+            # The import draws the plots as their data arrive.
+            main_win.wait_until_drawn()
             export_to_file(canvas_impl, main_win.canvas, args.image_file, dpi=args.export_dpi,
                            width=args.export_width, height=args.export_height,
                            autoscale=args.export_autoscale)
+            # Without aboutToQuit, nothing else stops the workers.
+            if getattr(AccessHelper, 'pool', None) is not None:
+                AccessHelper.pool.shutdown()
             exit(0)
 
     main_win.show()

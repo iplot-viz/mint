@@ -85,6 +85,19 @@ class BuildManualTest(unittest.TestCase):
 
 
 class ErrorCatalogConsistencyTest(unittest.TestCase):
+    def test_every_colour_of_the_manual_has_one_for_a_dark_palette(self):
+        # MTHelp shows the manual in them in a dark palette: a colour without one would stay light there.
+        sources = build_manual.HTML_TEMPLATE + build_manual.MANUAL_MD.read_text(encoding="utf-8")
+        colours = {colour.lower() for colour in build_manual.HEX_COLOR.findall(
+            "".join(re.findall(r'<style>.*?</style>|style="[^"]*"', sources, re.S)))}
+        self.assertTrue(colours)
+        self.assertEqual(colours - set(build_manual.DARK_COLORS), set())
+
+    def test_dark_colours_change_only_the_styles(self):
+        html = '<style>body { color: #222; }</style><p style="color:#555;">#222 <a href="#add">#555</a></p>'
+        self.assertEqual(build_manual.dark_colors(html),
+                         '<style>body { color: #e6e6e6; }</style><p style="color:#b0b0b0;">#222 <a href="#add">#555</a></p>')
+
     def test_catalogue_loads(self):
         # Smoke check that the singleton can read errors.json without raising,
         # so the docs-as-tests above run against a real catalogue.
