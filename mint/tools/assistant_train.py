@@ -18,8 +18,8 @@ import sys
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
-from mint.assistant import commands, prompt, recipes
-from mint.assistant.snapshot import RowInfo, build as build_snapshot
+from mint.assistant import commands, files, prompt, recipes
+from mint.assistant.snapshot import FileInfo, FileVariable, RowInfo, build as build_snapshot
 
 FORMAT = "qwen3-nothink"
 LANGUAGES = [("English", 55), ("French", 12), ("Spanish", 10), ("Italian", 8), ("German", 8), ("Portuguese", 7)]
@@ -501,6 +501,228 @@ class Maker:
         return (self.selected_process if kind == "selected" else getattr(self, kind))()
 
 
+FILE_NAMES = ["report.pdf", "test_plan.pdf", "cooldown_report.pdf", "signals.xlsx", "sensors.csv", "list.csv",
+              "commissioning.xlsx", "minutes.pdf", "procedure.pdf", "variables.txt"]
+FILE_WORDS = ["the file", "this file", "the report", "the table", "the document", "the attached file", "the list",
+              "this table", "the sheet"]
+DESCRIPTIONS = {"temperature": ["temperature", "inlet temperature", "outlet temperature", "temp."],
+                "pressure": ["pressure", "pirani", "inlet pressure", "vacuum pressure"],
+                "flow": ["flow", "mass flow", "helium flow"], "level": ["level", "liquid level"]}
+UNITS = {"temperature": ["K", "°C"], "pressure": ["mbar", "Pa", "bar"], "flow": ["g/s", "l/s"], "level": ["%", "mm"]}
+
+
+def _variable_pool(workspaces):
+    """(name, alias) of the plain ITER variables of the workspaces: what a file of the plant would list."""
+    pool = {}
+    for ws in workspaces.values():
+        for row in ws.get("rows", []):
+            name = row.get("variable", "")
+            if files.NAME.fullmatch(name):
+                pool.setdefault(name, row.get("alias", ""))
+    return sorted(pool.items())
+
+
+class FileMaker:
+    """Requests about an attached file (see prompt.render_file), with the answer MINT's own code gives."""
+
+    def __init__(self, snap, pool, rng):
+        self.snap, self.pool, self.rng = snap, pool, rng
+
+    def note(self, name, alias):
+        """The words a file would have beside a name: a description, perhaps with its unit, or nothing."""
+        r = self.rng
+        meaning = prompt.measures(RowInfo(id="", index=0, variable=name))
+        choice = r.random()
+        if choice < 0.25:
+            return ""
+        if choice < 0.45 and alias and "${" not in alias:
+            return alias.replace("_", " ")
+        if meaning:
+            words = r.choice(DESCRIPTIONS[meaning])
+            return f"{words} {r.choice(UNITS[meaning])}" if r.random() < 0.5 else words
+        return r.choice(["current", "voltage", "power", "position", "status", "valve opening", ""])
+
+    def file(self, count=None, avoid=()):
+        r = self.rng
+        count = count if count is not None else r.choice([1, 2, 2, 3, 3, 4, 5, 6, 8, 10, 12, 16, 30])
+        avoid = [a.lower() for a in avoid]
+        names = [(n, a) for n, a in self.pool if not any(w in n.lower() or (a and w in a.lower()) for w in avoid)]
+        chosen = r.sample(names, min(count, len(names)))
+        variables = [FileVariable(f"v{i + 1}", n, self.note(n, a)) for i, (n, a) in enumerate(chosen)]
+        times = []
+        if r.random() < 0.6:
+            start = (self.snap.now - timedelta(days=r.randint(1, 700))).replace(hour=r.randint(6, 20),
+                                                                                 minute=r.choice([0, 15, 30, 45]))
+            dated = r.random() < 0.3
+            times.append(f"{start:%Y-%m-%d}" if dated else f"{start:%Y-%m-%d %H:%M}")
+            if r.random() < 0.6:
+                end = start + timedelta(hours=r.choice([2, 6, 12, 24, 30, 48, 72]))
+                times.append(f"{end:%Y-%m-%d}" if dated else f"{end:%Y-%m-%d %H:%M}")
+        pulses = [r.choice(["ITER:MCTB_PSS-TF07_FD/{}", "ITER:CRYO-TEST/{}"]).format(r.randint(1, 60))] \
+            if r.random() < 0.15 else []
+        return FileInfo(r.choice(FILE_NAMES), variables, sorted(set(times)), pulses, "codacuda")
+
+    def make(self):
+        r = self.rng
+        info = self.file()
+        self.snap.file = info
+        listed = [v for v in info.variables if v.id in prompt.listed_file_variables(self.snap)]
+        f = r.choice(FILE_WORDS)
+        kinds = {"all": 14, "together": 8, "name": 16, "names": 10, "measure": 14, "position": 6, "range": 10,
+                 "add_range": 7, "pulse": 3, "no_measure": 5, "empty": 3}
+        kind = r.choices(list(kinds), list(kinds.values()))[0]
+        if kind == "empty":
+            info.variables = []
+            text = r.choice(["add the signals of {f}", "plot the variables in {f}", "make a workspace from {f}"])
+            return text.format(f=f), "say \"The file doesn't name any signal I can add.\"", [], "file-empty", info
+        if not listed:
+            return None
+        if kind == "all":
+            text = r.choice(["add the signals in {f}", "make a workspace with the variables of {f}",
+                             "plot everything in {f}", "add them all", "add all the signals from {f}, one plot each",
+                             "load the variables listed in {f}", "Add them, one plot each"])
+            return text.format(f=f), "add all", [], "file-all", info
+        if kind == "together":
+            if len(info.variables) < 2:
+                return None
+            text = r.choice(["put all the signals of {f} in one plot", "add everything from {f} together",
+                             "all the variables of {f} in a single plot", "Add them to one plot"])
+            return text.format(f=f), "add all together", [], "file-all", info
+        if kind in ("name", "names"):
+            k = 1 if kind == "name" else min(len(listed), r.choice([2, 2, 3]))
+            if k < (1 if kind == "name" else 2):
+                return None
+            # Now and then one past the listing: MINT's hint names it (see prompt.named_in_file).
+            pool = info.variables if kind == "name" and r.random() < 0.15 else listed
+            picked = r.sample(pool, k)
+            codes = [self.code(v.name) for v in picked]
+            if None in codes:
+                return None
+            together = kind == "names" and r.random() < 0.3
+            said = " and ".join(codes) if k < 3 else f"{codes[0]}, {codes[1]} and {codes[2]}"
+            if together:
+                text = r.choice(["{c} from {f} in one plot", "put {c} of {f} together"])
+            else:
+                text = r.choice(["add {c} from {f}", "plot {c}", "I want {c} from {f}", "just {c} please",
+                                 "add {c} of {f}"])
+            ids = " ".join(v.id for v in picked)
+            return text.format(c=said, f=f), f"add {ids}" + (" together" if together else ""), codes, "file-name", info
+        if kind in ("measure", "no_measure"):
+            groups = {}
+            for v in info.variables:
+                m = prompt.measures(RowInfo(id="", index=0, variable=v.name, alias=v.note))
+                if m:
+                    groups.setdefault(m, []).append(v)
+            if kind == "no_measure":
+                missing = [m for m in DESCRIPTIONS if m not in groups]
+                if not missing:
+                    return None
+                m = r.choice(missing)
+                text = r.choice(["add the {m}s from {f}", "plot the {m} signals of {f}"])
+                return text.format(m=m, f=f), f"say \"I don't see any {m} in the file.\"", [], "file-none", info
+            if not groups:
+                return None
+            m, chosen = r.choice(sorted(groups.items(), key=lambda g: g[0]))
+            if any(v not in listed for v in chosen) or len(chosen) > commands.MAX_IDS:
+                return None
+            together = len(chosen) > 1 and r.random() < 0.3
+            plural = f"{m}s" if len(chosen) > 1 else m
+            if together:
+                text = r.choice(["the {p} of {f} in one plot", "add the {p} from {f} together"])
+            else:
+                text = r.choice(["add the {p} from {f}", "plot the {p} of {f}", "only the {p}", "I need the {p}"])
+            ids = " ".join(v.id for v in chosen)
+            return (text.format(p=plural, f=f), f"add {ids}" + (" together" if together else ""), [],
+                    "file-measure", info)
+        if kind == "position":
+            if len(listed) < 3:
+                return None
+            k = r.choice([1, 2, 3])
+            if r.random() < 0.3:
+                return f"add the last signal of {f}", f"add {listed[-1].id}", [], "file-position", info
+            if k == 1:
+                return r.choice(["add the first one", f"the first signal of {f}"]), "add v1", [], "file-position", info
+            return (f"add the first {k} signals of {f}", "add " + " ".join(v.id for v in listed[:k]), [str(k)],
+                    "file-position", info)
+        if kind in ("range", "add_range"):
+            if not info.times:
+                return None
+            period = f"range from t1 to t{len(info.times)}" if len(info.times) > 1 else "range day t1"
+            if kind == "range":
+                text = r.choice(["Show the time in the file", "over the dates in {f}", "set the time range of {f}",
+                                 "show the period of {f}", "the same dates as {f}"])
+                return text.format(f=f), period, [], "file-range", info
+            text = r.choice(["add the signals of {f} over its dates", "plot everything in {f} for the dates in it",
+                             "make a workspace from {f}, with its time range"])
+            return text.format(f=f), f"add all\n{period}", [], "file-range", info
+        if kind == "pulse":
+            if not info.pulses:
+                return None
+            text = r.choice(["show the pulse of {f}", "load the pulse in {f}", "switch to the pulse of {f}"])
+            return text.format(f=f), f"range pulse {info.pulses[0]}", [], "file-range", info
+        return None
+
+    def code(self, name):
+        """How people write a variable of the file: its tag (MT0021), or its whole name."""
+        if self.rng.random() < 0.3:
+            return name
+        tag = name.split(":")[-1].split("-")[0]
+        same = [v for v in self.snap.file.variables if tag.lower() in prompt.WORD.findall(v.name.lower())]
+        return tag if len(same) == 1 and len(tag) >= 4 and prompt.CODE_LIKE.search(tag.lower()) else None
+
+
+def cmd_files(args):
+    """Cases with an attached file; and the data's own (all its searches too) with an unrelated one, as they were."""
+    from mint.tools.assistant_eval import snapshot_from_dict
+    rng = random.Random(args.seed)
+    with open(args.workspaces, encoding="utf-8") as f:
+        workspaces = json.load(f)
+    pool = _variable_pool(workspaces)
+    cases = []
+    for key, ws in workspaces.items():
+        made = 0
+        for _ in range(args.per_workspace * 3):
+            if made == args.per_workspace:
+                break
+            snap = snapshot_from_dict(ws)
+            snap.now = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=rng.randint(0, 600),
+                                                                              hours=rng.randint(6, 20))
+            snap.range_text, snap.range_seconds = rng.choice(RANGES)
+            item = FileMaker(snap, pool, rng).make()
+            if not item:
+                continue
+            request, answer, keep, kind, info = item
+            snap.file = info
+            if not _valid(answer, snap):
+                continue
+            cases.append({"ws": key, "selected": [], "now": snap.now.isoformat(), "range_text": snap.range_text,
+                          "range_seconds": snap.range_seconds, "request": request, "canonical": request,
+                          "answer": answer, "keep": keep, "kind": kind, "file": asdict(info)})
+            made += 1
+    with open(args.out, "w", encoding="utf-8") as f:
+        for case in cases:
+            f.write(json.dumps(case) + "\n")
+    base = [json.loads(line) for line in open(args.data, encoding="utf-8")]
+    distract = []
+    shared = rng.sample(base, int(len(base) * args.distract))
+    # All the searches as well: what a file doesn't name is still looked for in the data source.
+    shared += [case for case in base if case["answer"].startswith("find") and case not in shared]
+    for case in shared:
+        if case["ws"] not in workspaces:
+            continue
+        snap = snapshot_from_dict(workspaces[case["ws"]])
+        snap.now = datetime.fromisoformat(case["now"])
+        info = FileMaker(snap, pool, rng).file(avoid=case.get("keep", []))
+        distract.append(dict(case, file=asdict(info)))
+    with open(args.out.replace(".jsonl", "_distract.jsonl"), "w", encoding="utf-8") as f:
+        for case in distract:
+            f.write(json.dumps(case) + "\n")
+    kinds = {}
+    for c in cases:
+        kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
+    print(json.dumps({"variables": len(pool), "cases": len(cases), "kinds": kinds, "distract": len(distract)}))
+
+
 def cmd_data(args):
     rng = random.Random(args.seed)
     paths = list(args.workspaces)
@@ -563,6 +785,7 @@ def _valid(answer, snap):
     except commands.CommandError:
         return False
     ids = {r.id for r in snap.rows} | {p.id for p in snap.plots} | {"all", "new"}
+    ids |= {v.id for v in snap.file.variables} if snap.file else set()
     for cmd in cmds:
         if any(i not in ids for i in cmd.ids):
             return False
@@ -702,7 +925,8 @@ def render(case, workspaces):
     ws = workspaces[case["ws"]]
     snap = snapshot_from_dict(dict(ws, rows=ws["rows"] + case.get("extra_rows", []), selected=case["selected"],
                                    now=case["now"], range_text=case.get("range_text", ""),
-                                   range_seconds=case.get("range_seconds"), last_action=case.get("last_action", "")))
+                                   range_seconds=case.get("range_seconds"), last_action=case.get("last_action", ""),
+                                   file=case.get("file", ws.get("file"))))
     _, full = prompt.build(prompt.ChatFormat(FORMAT), prompt.visible(snap), case["request"], few_shot=False)
     return full, case["answer"] + "<|im_end|>"
 
@@ -813,10 +1037,22 @@ def lora_deltas(adapter_dir):
     return deltas
 
 
+def soup(adapter_dirs):
+    """The mean change of adapters trained alike from the same model (a model soup): steadier than any one alone."""
+    total = lora_deltas(adapter_dirs[0])
+    for adapter_dir in adapter_dirs[1:]:
+        deltas = lora_deltas(adapter_dir)
+        if set(deltas) != set(total):
+            raise SystemExit(f"{adapter_dir} changes other tensors than {adapter_dirs[0]}")
+        for name, delta in deltas.items():
+            total[name] += delta
+    return {name: delta / len(adapter_dirs) for name, delta in total.items()}
+
+
 def cmd_merge(args):
     import numpy as np
     from gguf import GGMLQuantizationType, GGUFReader, GGUFValueType, GGUFWriter
-    deltas = lora_deltas(args.adapter)
+    deltas = soup(args.adapter)
     reader = GGUFReader(args.gguf)
     arch = reader.fields["general.architecture"].contents()
     writer = GGUFWriter(args.out, arch)
@@ -825,6 +1061,7 @@ def cmd_merge(args):
     ours = {"mint.assistant.format": (FORMAT, GGUFValueType.STRING),
             "mint.assistant.few_shot": (False, GGUFValueType.BOOL),
             "mint.assistant.context": (args.context, GGUFValueType.UINT32),
+            "mint.assistant.files": (args.files, GGUFValueType.BOOL),
             "general.finetune": ("mint-assistant", GGUFValueType.STRING)}
     for field in reader.fields.values():
         if field.name.startswith("GGUF.") or field.name == "general.architecture" or field.name in ours:
@@ -881,6 +1118,13 @@ def main(argv=None):
     p.add_argument("--list", help="a file with one workspace path per line (names may have spaces)")
     p.add_argument("--kinds", help="only these kinds of request, comma separated (e.g. meaning,position)")
     p.add_argument("workspaces", nargs="*")
+    p = sub.add_parser("files")
+    p.add_argument("--out", required=True)
+    p.add_argument("--workspaces", required=True, help="the _workspaces.json of the data")
+    p.add_argument("--data", required=True, help="the cases of the data, a share of which get an unrelated file")
+    p.add_argument("--per-workspace", type=int, default=15)
+    p.add_argument("--distract", type=float, default=0.15)
+    p.add_argument("--seed", type=int, default=11)
     p = sub.add_parser("paraphrase")
     p.add_argument("--teacher", required=True)
     p.add_argument("--data", required=True)
@@ -905,15 +1149,16 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("merge")
     p.add_argument("--gguf", required=True)
-    p.add_argument("--adapter", required=True)
+    p.add_argument("--adapter", required=True, nargs="+", help="several, trained alike with other seeds: averaged")
     p.add_argument("--out", required=True)
     p.add_argument("--context", type=int, default=2048)
+    p.add_argument("--files", action="store_true", help="trained on attached files too (see the files command)")
     p = sub.add_parser("quantize")
     p.add_argument("--gguf", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--threads", type=int, default=8)
     args = ap.parse_args(argv)
-    {"data": cmd_data, "paraphrase": cmd_paraphrase, "feedback": cmd_feedback, "train": cmd_train,
+    {"data": cmd_data, "files": cmd_files, "paraphrase": cmd_paraphrase, "feedback": cmd_feedback, "train": cmd_train,
      "merge": cmd_merge, "quantize": cmd_quantize}[args.cmd](args)
 
 

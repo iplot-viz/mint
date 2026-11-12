@@ -26,3 +26,11 @@ def few_shot(sha256: str, declared: dict = None) -> bool:
     if known and "few_shot" in known:
         return known["few_shot"]
     return str((declared or {}).get("mint.assistant.few_shot", "true")).lower() != "false"
+
+
+def reads_files(sha256: str, declared: dict = None) -> bool:
+    """Whether the model was trained on the variables and times of an attached file (see prompt.render_file)."""
+    known = KNOWN_MODELS.get((sha256 or "").lower())
+    if known and "files" in known:
+        return known["files"]
+    return str((declared or {}).get("mint.assistant.files", "false")).lower() == "true"

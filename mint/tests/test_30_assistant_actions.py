@@ -1,5 +1,8 @@
 """Assistant commands applied to a real main window, and undone."""
+import importlib.util
+import os
 import re
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -11,8 +14,8 @@ from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import PlotXY
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 
-from mint.assistant import commands
-from mint.assistant.actions import ActionError, MissingValue, Planner
+from mint.assistant import commands, files
+from mint.assistant.actions import MAX_ADDED, ActionError, MissingValue, Planner
 from mint.assistant.workspace import MintWorkspace
 from mint.gui.mtMainWindow import MTMainWindow
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
@@ -393,6 +396,26 @@ class AssistantActionsTest(_WindowCase):
         self.assertEqual(source.patterns[-1], ".*MT[0-9].*")
         self.assertIn("CRYO-CP4:MT0014-XI", [name for name, _ in found])
 
+    def test_tags_are_looked_up_one_by_one(self):
+        class Source:
+            patterns = []
+
+            def get_var_list(self, pattern):
+                self.patterns.append(pattern)
+                names = ["CRYO-CP3:MT0012-XI", "CRYO-CP4:MT0012-XI", "CRYO-CH-MM-CRST:MLT1000-AA-IN",
+                         "CRYO-CH-MM-CRST:MLT1000-AA-IN-ALEN", "BUIL-B15:MLT1000-AA-INX"]
+                return [n for n in names if re.fullmatch(pattern, n)]
+
+        source = Source()
+        self.ws.default_data_source = lambda: ("codacuda", source)
+        search = self.ws.search_codes(["MLT1000-AA-IN", "MT0012", "PT-1101"])
+        self.assertEqual(source.patterns, [f".*{re.escape(code)}.*" for code in ("MLT1000-AA-IN", "MT0012", "PT-1101")],
+                         "one request each: the server takes no alternatives")
+        self.assertEqual([name for name, _ in search.found],
+                         ["CRYO-CH-MM-CRST:MLT1000-AA-IN", "CRYO-CP3:MT0012-XI", "CRYO-CP4:MT0012-XI"],
+                         "the variable with that very tag, else all that hold it")
+        self.assertEqual((search.source, search.missing), ("codacuda", ["PT-1101"]))
+
     def test_undo_finds_its_rows_after_other_edits(self):
         proposal = self.plan("process r2 derivative")
         proposal.apply()
@@ -400,6 +423,198 @@ class AssistantActionsTest(_WindowCase):
         self.assertEqual(proposal.undo(), [])
         self.assertEqual(list(self.table()["Variable"]),
                          ["X", "MAG-MCTB-F1:VAR1", "MAG-MCTB-F1:VAR2", "CRYO:MT0001", "MAG-MCTB-F1:VAR3"])
+
+
+REPORT = ["Signals of the TF07 cool-down, 2024-10-29 07:05 to 2024-10-30 07:05",
+          "MAG-MCTB-F1:VAR2 | coil current | kA",
+          "CRYO-CP-03:MT0021-XI | inlet temperature | K"]
+
+
+def write_pdf(path, lines=()):
+    """One page with a line of text for each item, or with only a drawing, as a scan is."""
+    # Written by hand: what Qt writes depends on the fonts the process has, so its text isn't always extractable.
+    shown = "".join("({}) Tj 0 -16 Td ".format(re.sub(r"([\\()])", r"\\\1", line)) for line in lines)
+    content = f"BT /F1 11 Tf 50 780 Td {shown}ET" if lines else "100 100 300 200 re S"
+    objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >>"
+               " /Contents 4 0 R >>",
+               f"<< /Length {len(content)} >>\nstream\n{content}\nendstream",
+               "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    data, offsets = b"%PDF-1.4\n", []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(data))
+        data += f"{number} 0 obj\n{body}\nendobj\n".encode("latin-1")
+    data += (f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n" + "".join(f"{o:010d} 00000 n \n" for o in offsets)
+             + f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{len(data)}\n%%EOF\n").encode("latin-1")
+    with open(path, "wb") as f:
+        f.write(data)
+
+
+class FileReadingTest(unittest.TestCase):
+    """The kinds of files the assistant reads, and what it says of those it can't."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = ensure_qapp()
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def path(self, name):
+        return os.path.join(self.dir.name, name)
+
+    def assert_report(self, found):
+        self.assertEqual([n for n, _ in found.variables], ["MAG-MCTB-F1:VAR2", "CRYO-CP-03:MT0021-XI"])
+        self.assertEqual(found.times, ["2024-10-29 07:05", "2024-10-30 07:05"])
+
+    def test_csv_and_text(self):
+        path = self.path("report.csv")
+        with open(path, "w", encoding="cp1252") as f:
+            f.write("\n".join(REPORT).replace(" | ", ";") + "\nnote;température\n")
+        self.assert_report(files.read(path))
+        signal_set = self.path("saved.scsv")  # a signal set MINT saved
+        with open(signal_set, "w", encoding="utf-8") as f:
+            f.write("DS;Variable;Stack\ncodacuda;MAG-MCTB-F1:VAR2;1.1\ncodacuda;CRYO-CP-03:MT0021-XI;2.1\n")
+        self.assertEqual([name for name, _ in files.read(signal_set).variables],
+                         ["MAG-MCTB-F1:VAR2", "CRYO-CP-03:MT0021-XI"])
+
+    @unittest.skipUnless(importlib.util.find_spec("openpyxl"), "openpyxl is not installed")
+    def test_excel(self):
+        import openpyxl
+        book = openpyxl.Workbook()
+        sheet = book.active
+        sheet.append(["Signals of the TF07 cool-down", datetime(2024, 10, 29, 7, 5), datetime(2024, 10, 30, 7, 5)])
+        for line in REPORT[1:]:
+            sheet.append(line.split(" | "))
+        path = self.path("report.xlsx")
+        book.save(path)
+        self.assert_report(files.read(path))
+
+    @unittest.skipUnless(importlib.util.find_spec("pypdf"), "pypdf is not installed")
+    def test_pdf(self):
+        path = self.path("report.pdf")
+        write_pdf(path, REPORT)
+        self.assert_report(files.read(path))
+        scanned = self.path("scan.pdf")
+        write_pdf(scanned)
+        with self.assertRaisesRegex(files.FileError, "no text I can read: it may be a scanned image"):
+            files.read(scanned)
+
+    def test_the_words_of_a_pdf_may_come_apart_with_tabs(self):
+        found = files.find(["Signals of the TF07 cool-down, 2024-10-29\t07:05 to 2024-10-30\t\t07:05"])
+        self.assertEqual(found.times, ["2024-10-29 07:05", "2024-10-30 07:05"])
+
+    def test_tags_without_their_system_are_kept_to_look_up(self):
+        found = files.find(["Inlet MT0021 and PT-1101; the level is MLT1000-AA-IN.", "ISO-8601 dates, TF07, MT0021.5 K",
+                            "CRYO-CP-03:MT0022-XI is named in full", "Shield MT0111-TTCB01-XI0"])
+        self.assertEqual(found.codes, ["MT0021", "PT-1101", "MLT1000-AA-IN", "MT0111-TTCB01-XI0"])
+        self.assertEqual([name for name, _ in found.variables], ["CRYO-CP-03:MT0022-XI"])
+
+    def test_a_list_pasted_in_a_message(self):
+        found, request = files.pasted("add these to one plot:\nCRYO-CH-MM-CRST:MLT1000-AA-IN\tlevel\n"
+                                      "CRYO-CH-CB3-HESC:VOL3600-XI\tvolume\n")
+        self.assertEqual([name for name, _ in found.variables],
+                         ["CRYO-CH-MM-CRST:MLT1000-AA-IN", "CRYO-CH-CB3-HESC:VOL3600-XI"])
+        self.assertEqual(request, "add these to one plot:", "the words around the list are the request")
+        found, request = files.pasted("Signal;Unit\nCRYO-A-1:X1;K\nCRYO-A-1:X2;K\nChecked on 29 Oct 2024 07:05")
+        self.assertEqual((len(found.variables), found.times, request), (2, ["2024-10-29 07:05"], ""),
+                         "a table and its date are what was pasted, not a request")
+        for message in ("smooth CRYO-A-1:X1 and CRYO-A-1:X2", "smooth it\nCRYO-A-1:X1", "hello\nthere"):
+            self.assertIsNone(files.pasted(message), message)
+
+    def test_a_pdf_table_keeps_each_row_on_one_line(self):
+        class Page:
+            def __init__(self, layout):
+                self.layout = layout
+
+            def extract_text(self, extraction_mode="plain"):
+                if extraction_mode == "layout":
+                    if self.layout is None:
+                        raise ValueError("this page breaks the layout mode")
+                    return self.layout
+                return "SYS-A:X1\nlevel"
+
+        self.assertEqual(files._page_text(Page("SYS-A:X1     level")), "SYS-A:X1     level")
+        self.assertEqual(files._page_text(Page(None)), "SYS-A:X1\nlevel", "the plain text, if layout fails")
+
+    def test_what_cannot_be_read_says_why(self):
+        image = self.path("photo.png")
+        open(image, "wb").close()
+        with self.assertRaisesRegex(files.FileError, "CSV, Excel and PDF files, not .png files"):
+            files.read(image)
+        big = self.path("big.csv")
+        open(big, "wb").close()
+        with mock.patch.object(files.os.path, "getsize", return_value=files.MAX_BYTES + 1), \
+                self.assertRaisesRegex(files.FileError, "I read files up to 20 MB"):
+            files.read(big)
+        broken = self.path("broken.pdf")
+        with open(broken, "wb") as f:
+            f.write(b"not a pdf")
+        with self.assertRaisesRegex(files.FileError, "can't read broken.pdf as a PDF"):
+            files.read(broken)
+        open(self.path("sheet.xlsx"), "wb").close()
+        with mock.patch.dict("sys.modules", {"openpyxl": None}), \
+                self.assertRaisesRegex(files.FileError, "pip install openpyxl"):
+            files.read(self.path("sheet.xlsx"))
+
+
+class FileActionsTest(_WindowCase):
+    """The commands that use an attached file: added variables and its times."""
+
+    def snap(self, count=2, times=("2024-10-29 07:05", "2024-10-30"), source="csv"):
+        snap = self.ws.snapshot()
+        found = files.Found([("MAG-MCTB-F1:VAR2", "current"), ("CRYO:MT0001", "")] +
+                            [(f"SYS-{i}:X{i}", "") for i in range(count - 2)], list(times), [])
+        snap.file = files.info("report.pdf", found, source)
+        return snap
+
+    def plan(self, text, snap=None):
+        return Planner(self.ws, snap or self.snap()).plan(commands.parse(text))
+
+    def test_variables_of_the_file_are_added_each_in_a_new_plot_or_together(self):
+        proposal = self.plan("add v1 v2")
+        self.assertEqual(proposal.title, "Add from report.pdf")
+        self.assertEqual(proposal.lines, ["Add MAG-MCTB-F1:VAR2", "Add CRYO:MT0001", "Each in a new plot"])
+        before = len(self.table())
+        proposal.apply()
+        added = self.table().iloc[before:]
+        self.assertEqual(list(added["DS"]), ["csv", "csv"])
+        self.assertEqual(list(added["Stack"]), ["4.1", "5.1"], "below the plots there are")
+        self.assertEqual(proposal.undo(), [])
+        self.assertEqual(len(self.table()), before)
+        together = self.plan("add all together")
+        self.assertEqual(together.lines[-1], "All in one new plot")
+        together.apply()
+        self.assertEqual(list(self.table().iloc[before:]["Stack"]), ["4.1", "4.1"])
+        self.assertEqual(self.plan("add v2").lines, ["Add CRYO:MT0001", "In a new plot"])
+
+    def test_what_add_cannot_do_is_said(self):
+        with self.assertRaisesRegex(ActionError, "no file with signal names"):
+            Planner(self.ws, self.ws.snapshot()).plan(commands.parse("add v1"))
+        with self.assertRaisesRegex(ActionError, "too many for one card"):
+            self.plan("add all", self.snap(MAX_ADDED + 1))
+        with self.assertRaisesRegex(ActionError, "isn't connected to any data source"):
+            self.plan("add v1", self.snap(source=""))
+        with self.assertRaisesRegex(ActionError, "doesn't name that variable"):
+            self.plan("add v7")
+
+    def test_the_times_of_the_file_set_the_range(self):
+        def spans(text):
+            proposal = self.plan(text)
+            proposal.apply()
+            start, end = self.ws.time_range_ns()
+            proposal.undo()
+            return [datetime.fromtimestamp(t / 1e9, timezone.utc).strftime("%Y-%m-%d %H:%M") for t in (start, end)]
+
+        self.assertEqual(spans("range from t1 to t2"), ["2024-10-29 07:05", "2024-10-31 00:00"],
+                         "a date alone at the end: up to the end of that day")
+        self.assertEqual(spans("range day t1"), ["2024-10-29 00:00", "2024-10-30 00:00"])
+        self.assertEqual(spans('range from t1 to "2024-10-29 08:00"'), ["2024-10-29 07:05", "2024-10-29 08:00"])
+        with self.assertRaisesRegex(ActionError, "no such time"):
+            self.plan("range day t3")
 
 
 class AssistantStateChangesTest(_WindowCase):

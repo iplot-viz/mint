@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -145,6 +146,153 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertTrue(panel.input.isEnabled())
         self.assertFalse(panel._preparing)
         self.assertEqual((panel.input.toolTip(), panel.input.placeholderText()), ("", ctl.PLACEHOLDER))
+
+    def _attach(self, name="signals.csv", text=None):
+        path = os.path.join(self._tmp.name, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text if text is not None else
+                    "Signal;Description\nMAG-MCTB-F1:VAR2;coil current\nCRYO-CP-01:MT0001-XI;inlet temperature\n"
+                    "Test from 2024-10-29 07:05 to 2024-10-30 19:00\n")
+        said = len(self.said)
+        self.ctl.panel.fileAttached.emit(path)
+        self.assertTrue(wait_until(lambda: len(self.said) > said), "read off the GUI thread, then told")
+        return path
+
+    def test_files_can_be_attached_only_with_a_model_trained_on_them(self):
+        panel = self.ctl.panel
+        trained = {"mint.assistant.format": "qwen3-nothink", "mint.assistant.few_shot": "false"}
+        self.engine.loaded.emit({"declared": trained})
+        self.assertFalse(panel.attach_button.isVisibleTo(panel))
+        self.engine.loaded.emit({"declared": dict(trained, **{"mint.assistant.files": "true"})})
+        self.assertTrue(panel.attach_button.isVisibleTo(panel))
+
+    def test_an_attached_file_is_read_and_its_offers_need_no_model(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._attach()
+        panel = self.ctl.panel
+        self.assertEqual(self.said[-1], "I read signals.csv: 2 signal names and 2 dates. What should I do with them?")
+        self.assertTrue(panel._attachment.isVisibleTo(panel))
+        self.assertEqual(panel._suggestions, ["Add them, one plot each", "Add them to one plot",
+                                              "Show the time in the file"])
+        calls = len(self.engine.prompts)
+        cards = self.ask("Add them, one plot each", 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls, "MINT knows what this one is")
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].lines,
+                         ["Add MAG-MCTB-F1:VAR2", "Add CRYO-CP-01:MT0001-XI", "Each in a new plot"])
+        rows = len(self.rows())
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(self.rows()[rows:], ["MAG-MCTB-F1:VAR2", "CRYO-CP-01:MT0001-XI"])
+        self.assertEqual(panel._suggestions, ["Show the time in the file"], "the time of the file comes next")
+        cards = self.ask("Show the time in the file", 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls)
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].lines,
+                         ["Time range: 29 Oct 2024 07:05 → 30 Oct 2024 19:00 UTC"])
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        cards = self.ask("add MT0001 from the file too", "add v2")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(panel._suggestions, [], "the plots show the time of the file already")
+
+    def test_a_file_is_read_into_the_prompt_before_the_next_request(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._attach()
+        self.assertIn('File "signals.csv":\nv1 MAG-MCTB-F1:VAR2', self.engine.warms[-1],
+                      "while the user reads what was found, not after the next request is sent")
+
+    def test_tags_without_their_system_are_looked_up_without_the_model(self):
+        class Source:
+            def get_var_list(self, pattern):
+                names = ["CRYO-CP3:MT0012-XI", "CRYO-CP4:MT0012-XI", "CRYO-CH-MM-CRST:MLT1000-AA-IN",
+                         "CRYO-CH-MM-CRST:MLT1000-AA-IN-ALEN"]
+                return [n for n in names if re.fullmatch(pattern, n)]
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.ctl.workspace.default_data_source = lambda: ("codacuda", Source())
+        self._attach("names.csv", "MAG-MCTB-F1:VAR2;coil current, was PT-1101\n")
+        self.assertEqual(self.ctl.panel._suggestions, ["Add them, one plot each"], "full names: no tag to look up")
+        self._attach("tags.csv", "Tag;Description\nMLT1000-AA-IN;cold box level\nMT0012;inlet temperature\n")
+        self.assertEqual(self.said[-1], "I read tags.csv: it gives MLT1000-AA-IN and MT0012 without the system part of "
+                                        "the name. Shall I look for them in codacuda?")
+        panel = self.ctl.panel
+        self.assertEqual(panel._suggestions, ["Find them in codacuda"])
+        calls = len(self.engine.prompts)
+        cards = self.ask("Find them in codacuda", 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls, "MINT looks them up itself")
+        boxes = {box.property("optionKey"): box.isChecked() for box in panel._cards[cards[0]].options}
+        self.assertEqual(boxes, {"CRYO-CH-MM-CRST:MLT1000-AA-IN": True, "CRYO-CP3:MT0012-XI": False,
+                                 "CRYO-CP4:MT0012-XI": False}, "only a tag one variable has exactly is ticked")
+        self.assertIn("Those named exactly as in the file are ticked.", self.said[-1])
+        rows = len(self.rows())
+        panel.cardActionTriggered.emit(cards[0], ctl.ADD_EACH, ["CRYO-CH-MM-CRST:MLT1000-AA-IN"])
+        self.assertEqual(self.rows()[rows:], ["CRYO-CH-MM-CRST:MLT1000-AA-IN"])
+
+    def test_a_list_pasted_in_a_message_is_taken_as_a_file(self):
+        trained = {"mint.assistant.format": "qwen3-nothink", "mint.assistant.few_shot": "false"}
+        listing = ("CRYO-CH-MM-CRST:MLT1000-AA-IN\tcold box level\nCRYO-CH-CB3-HESC:VOL3600-XI\thelium volume\n"
+                   "Checked on 29 Oct 2024 07:05")
+        self.engine.loaded.emit({"declared": trained})
+        self.ask(listing, 'say "Which of them?"')
+        self.assertIsNone(self.ctl._file, "not for a model that wasn't trained on files")
+        self.engine.loaded.emit({"declared": dict(trained, **{"mint.assistant.files": "true"})})
+        calls = len(self.engine.prompts)
+        self.ask(listing, 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls, "the list alone: MINT says what it read")
+        self.assertEqual(self.said[-1],
+                         "I read the text you pasted: 2 signal names and 1 date. What should I do with them?")
+        panel = self.ctl.panel
+        self.assertTrue(panel._attachment.isVisibleTo(panel))
+        self.assertEqual(panel._suggestions, ["Add them, one plot each", "Add them to one plot",
+                                              "Show the time in the text"])
+        cards = self.ask("put these two together\n" + listing, "add all together")
+        prompt_text, grammar = self.engine.prompts[-1]
+        self.assertIn('File "the text you pasted":\nv1 CRYO-CH-MM-CRST:MLT1000-AA-IN (cold box level)', prompt_text)
+        self.assertIn("put these two together", prompt_text)
+        self.assertEqual(prompt_text.count("CRYO-CH-CB3-HESC:VOL3600-XI"), 1, "the list is the file, not the request")
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].lines,
+                         ["Add CRYO-CH-MM-CRST:MLT1000-AA-IN", "Add CRYO-CH-CB3-HESC:VOL3600-XI", "All in one new plot"])
+        from mint.assistant import files
+        self.ctl._reading = "report.csv"
+        self.ask(listing, 'say "no model here"')
+        self.ctl._on_file_read("report.csv", files.Found([("SYS-A:X1", "")]))
+        self.assertEqual(self.ctl._file.name, "the text you pasted", "a file read before the paste is not taken")
+
+    def test_the_model_reads_the_file_and_may_answer_from_it_until_it_is_left_out(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._attach()
+        cards = self.ask("add MT0001 from the file", "add v2")
+        prompt_text, grammar = self.engine.prompts[-1]
+        self.assertIn('File "signals.csv":\nv1 MAG-MCTB-F1:VAR2 (coil current)\nv2 CRYO-CP-01:MT0001-XI', prompt_text)
+        self.assertIn("Times: t1 2024-10-29 07:05, t2 2024-10-30 19:00", prompt_text)
+        self.assertIn('fvar ::= "v1" | "v2"', grammar)
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].lines, ["Add CRYO-CP-01:MT0001-XI", "In a new plot"])
+        self.ctl.panel.attachmentRemoved.emit()
+        self.assertFalse(self.ctl.panel._attachment.isVisibleTo(self.ctl.panel))
+        self.ask("hello", 'say "Hi!"')
+        prompt_text, grammar = self.engine.prompts[-1]
+        self.assertNotIn('File "', prompt_text)
+        self.assertNotIn("fvar", grammar)
+
+    def test_only_the_last_file_attached_is_taken(self):
+        from mint.assistant import files
+        self.ctl._reading = "second.csv"
+        said = len(self.said)
+        self.ctl._on_file_read("first.csv", files.Found([("SYS-A:X1", "")]))
+        self.assertEqual((len(self.said), self.ctl._file), (said, None), "read after the second was attached")
+        self.ctl._on_file_read("second.csv", files.Found([("SYS-B:X2", "")]))
+        self.assertEqual(self.ctl._file.variables[0].name, "SYS-B:X2")
+
+    def test_a_file_that_cannot_be_read_says_why_and_attaches_nothing(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._attach("photo.png", "")
+        self.assertIn("not .png files", self.said[-1])
+        self.assertIsNone(self.ctl._file)
+        self._attach("empty.csv", "nothing to see here\n")
+        self.assertIn("names no signal I can use", self.said[-1])
+        self.assertEqual(self.ctl.panel._suggestions[:1], [], "nothing to offer")
 
     def test_request_card_apply_and_undo(self):
         cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
@@ -364,6 +512,22 @@ class AssistantFlowTest(unittest.TestCase):
         self.ask("hello", 'say "Hi!"')
         self.assertIn("Request: hello<|im_end|>", self.engine.prompts[-1][0], "a fresh request, not glued to the old one")
 
+    def test_this_with_a_row_selected_needs_no_question(self):
+        self.win.sigCfgWidget.item_widgets[0].view().selectRow(1)
+        answers = iter(['ask "Sure, which one: pirani or MAG-MCTB-F1:VAR2?"', "process r2 derivative"])
+        complete = self.engine.complete
+
+        def answer_in_turn(prompt_text, grammar, max_tokens=160):
+            self.engine.answer = next(answers)
+            return complete(prompt_text, grammar, max_tokens)
+
+        self.engine.complete = answer_in_turn
+        cards = self.ask("derivative of this", "")
+        self.assertIn("Request: derivative of MAG-MCTB-F1:VAR2", self.engine.prompts[-1][0])
+        self.assertEqual(len(self.engine.prompts), 2, "asked again once, about the selected row")
+        self.assertEqual(len(cards), 1)
+        self.assertNotIn("which one", " ".join(self.said).lower())
+
     def test_a_row_the_model_hesitated_on_becomes_a_question(self):
         self.engine.ids = [{"id": "r1", "p": 0.45, "alts": {"r2": 0.4}}]
         self.assertEqual(self.ask("smooth that one", "process r1 moving_average window=10s"), [], "no card")
@@ -507,7 +671,7 @@ class AssistantFlowTest(unittest.TestCase):
         from mint.assistant.snapshot import PlotInfo, RowInfo, Snapshot
         snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="VAC:MP0081-XI", alias="pirani", stack="1.1",
                                       plot="p1"),
-                              RowInfo(id="r2", index=1, variable="CRYO:MT0001-XI", stack="2.1", plot="p2")],
+                              RowInfo(id="r2", index=1, variable="CRYO-CP-01:MT0001-XI", stack="2.1", plot="p2")],
                         plots=[PlotInfo(id="p1", row=1, col=1), PlotInfo(id="p2", row=2, col=1)])
         self.assertEqual(ctl.suggestions(snap), ["Log scale on the top plot", "Smooth pirani over 10 s",
                                                  "pirani minus MT0001-XI", "Show the last 6 hours"])

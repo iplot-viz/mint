@@ -3,11 +3,11 @@ import calendar
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from iplotLogging import setupLogger
 from mint.assistant import recipes, when
-from mint.assistant.commands import Command
+from mint.assistant.commands import TIME_ID, Command
 from mint.assistant.snapshot import ORDINALS, Snapshot
 
 logger = setupLogger.get_logger(__name__)
@@ -24,6 +24,8 @@ FIRST_YEAR, LAST_YEAR = 1970, 2100
 MAX_SPAN_SECONDS = 100 * 365 * 86400
 # The "Last" box of the relative time mode is a spin box that stops at 99.
 MAX_RELATIVE_AMOUNT = 99
+# Variables of a file added by one card.
+MAX_ADDED = 30
 
 
 class ActionError(ValueError):
@@ -147,6 +149,24 @@ class Proposal:
                 logger.exception("Assistant: undo failed")
                 problems.append("One change couldn't be put back.")
         return problems
+
+
+def added_rows(workspace, context: ApplyContext, source: str, names, together: bool) -> List[Change]:
+    """A new row per variable of the data source, each in a new plot or all in one."""
+    changes = []
+    for name in names:
+        values = {"DS": source, "Variable": name, "Stack": Lazy("stack", "together" if together else name)}
+        created = {}
+
+        def do(values=values, created=created):
+            created["uid"] = workspace.append_row(context.values(values))
+
+        def undo(created=created):
+            if created.get("uid"):
+                workspace.remove_row(created.pop("uid"))
+
+        changes.append(Change([f"Add {name}"], do, undo, needs_draw=True))
+    return changes
 
 
 def _short(name: str, limit: int = 32) -> str:
@@ -477,23 +497,32 @@ class Planner:
         proposal.changes.append(Change([line], do, undo, needs_draw=True, sets_range=kind != "pulse"))
         return "Time range"
 
+    def period_ns(self, cmd: Command) -> Tuple[int, int]:
+        """The span, in ns since the epoch, of a range over a day or between two moments (dates or file times)."""
+        start, end = self._period(cmd)
+        return _ns(start), _ns(end)
+
     def _period(self, cmd: Command):
         kind = cmd.words[0]
+        # Before the dates are read: a time the file doesn't have must be said as such.
+        words = [self._file_time(word) for word in cmd.words[1:]]
         try:
             if kind == "day":
-                if cmd.words[1] in ("today", "yesterday"):
+                if words[0] in ("today", "yesterday"):
                     now = self.snap.now.astimezone(timezone.utc)
                     start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
-                    if cmd.words[1] == "yesterday":
+                    if words[0] == "yesterday":
                         start -= timedelta(days=1)
                 else:
-                    start = datetime.strptime(cmd.words[1], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    start = datetime.strptime(words[0][:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 end = start + timedelta(days=1)
             elif kind == "month":
-                start = datetime.strptime(cmd.words[1], "%Y-%m").replace(tzinfo=timezone.utc)
+                start = datetime.strptime(words[0], "%Y-%m").replace(tzinfo=timezone.utc)
                 end = start + timedelta(days=calendar.monthrange(start.year, start.month)[1])
             else:
-                start, end = (_parse_when(text) for text in cmd.words[1:3])
+                start, end = _parse_when(words[0]), _parse_when(words[1])
+                if TIME_ID.match(cmd.words[2]) and len(words[1]) == len("2024-10-29"):
+                    end += timedelta(days=1)  # a date of the file, without a time: up to the end of that day
         except ValueError:
             raise ActionError("I couldn't read those dates. Could you write them like 2026-11-03 08:00?")
         if end <= start:
@@ -515,6 +544,34 @@ class Planner:
     def _find(self, cmd: Command, proposal: Proposal) -> str:
         proposal.search = list(cmd.words)
         return ""
+
+    def _add(self, cmd: Command, proposal: Proposal) -> str:
+        info = self.snap.file
+        if info is None or not info.variables:
+            raise ActionError("There's no file with signal names attached.")
+        chosen = list(info.variables) if cmd.ids == ["all"] else [info.variable(i) for i in cmd.ids]
+        if None in chosen:
+            raise ActionError(f"{info.name} doesn't name that variable.")
+        if len(chosen) > MAX_ADDED:
+            raise ActionError(f"{info.name} names {len(chosen)} variables, too many for one card. "
+                              "Ask for some of them, the pressures for example.")
+        if not info.source:
+            raise ActionError("MINT isn't connected to any data source yet, so I can't add variables.")
+        together = "together" in cmd.flags
+        changes = added_rows(self.ws, self.context, info.source, [v.name for v in chosen], together)
+        changes[-1].lines.append("All in one new plot" if together and len(changes) > 1 else
+                                 "Each in a new plot" if len(changes) > 1 else "In a new plot")
+        proposal.changes += changes
+        return f"Add from {info.name}"
+
+    def _file_time(self, word: str) -> str:
+        """A date written in the command, or the time of the attached file it names (t1, t2...)."""
+        if not TIME_ID.match(word):
+            return word
+        text = self.snap.file.time(word) if self.snap.file else None
+        if text is None:
+            raise ActionError("The file has no such time.")
+        return text
 
 
     def _row(self, row_id: str):

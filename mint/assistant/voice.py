@@ -57,6 +57,31 @@ class Voice:
         return " ".join(said)
 
     @staticmethod
+    def file_read(info, partial: str = "", codes=()) -> str:
+        """What a file names, once read; ``partial`` says what was left unread, ``codes`` the tags to look up."""
+        read = f"I read {info.name}" + (f" ({partial})" if partial else "")
+        if not info.variables and codes:
+            return (f"{read}: it gives {_listed(codes)} without the system part of the name. "
+                    f"Shall I look for {'it' if len(codes) == 1 else 'them'} in {info.source}?")
+        if not info.variables:
+            return (f"{read}, but it names no signal I can use: I need the names written out in full, "
+                    "like CRYO-CP-03:MT0021-XI.")
+        found = [f"{len(info.variables)} signal name{'' if len(info.variables) == 1 else 's'}"]
+        if info.times:
+            found.append(f"{len(info.times)} date{'' if len(info.times) == 1 else 's'}")
+        if info.pulses:
+            found.append(f"{len(info.pulses)} pulse{'' if len(info.pulses) == 1 else 's'}")
+        return f"{read}: {_listed(found)}. What should I do with them?"
+
+    @staticmethod
+    def find_codes(codes, source: str) -> str:
+        return f"Find {'it' if len(codes) == 1 else 'them'} in {source}"
+
+    @staticmethod
+    def could_not_read(name: str) -> str:
+        return f"I couldn't read {name}."
+
+    @staticmethod
     def nothing_to_draw(empty, failed) -> str:
         """Applied, but a signal it computes came out with nothing to draw (``empty``) or not at all (``failed``)."""
         said = []
@@ -118,7 +143,7 @@ class Voice:
         return "I've redrawn the plots."
 
     @staticmethod
-    def found(search, wanted=None) -> str:
+    def found(search, wanted=None, ticked=False) -> str:
         where = (f"Here are the variables in {search.source} that start with {search.group}." if search.group
                  else f"Here's what I found in {search.source}.")
         if wanted == 1:
@@ -130,11 +155,13 @@ class Voice:
         shown = len(search.found)
         more = (f" There are {search.total}: these are the first {shown}, and Search Vars shows them all."
                 if search.total > shown else "")
-        return f"{where} {pick}{more}"
+        exact = " Those named exactly as in the file are ticked." if ticked else ""
+        missing = f" I found nothing for {_listed(search.missing)}." if search.missing else ""
+        return f"{where} {pick}{more}{exact}{missing}"
 
     @staticmethod
     def nothing_found(search) -> str:
-        what = " ".join(search.words) or search.group
+        what = " or ".join(search.missing) if search.missing else " ".join(search.words) or search.group
         return (f"I couldn't find anything called {what} in {search.source}. "
                 "Could you try other words? The Search Vars button can help too.")
 

@@ -37,7 +37,7 @@ dynamic = ["version"]
 test = ["pytest >= 6.0", "pytest-cov >= 5.0", "matplotlib >= 3.5", "markdown >= 3.4"]
 docs = ["markdown >= 3.4"]
 # Local assistant. CPU wheels: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-assistant = ["llama-cpp-python == 0.3.36"]
+assistant = ["llama-cpp-python == 0.3.36", "openpyxl >= 3.1", "pypdf >= 4.0"]
 
 [project.urls]
 Homepage = "https://github.com/iplot-viz/mint"

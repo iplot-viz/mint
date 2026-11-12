@@ -16,7 +16,7 @@ from dataclasses import fields
 from datetime import datetime, timedelta
 
 from mint.assistant import check, commands, doubt, models, prompt, recipes
-from mint.assistant.snapshot import PlotInfo, RowInfo, Snapshot
+from mint.assistant.snapshot import FileInfo, FileVariable, PlotInfo, RowInfo, Snapshot
 
 
 def _known(cls, values: dict) -> dict:
@@ -33,6 +33,10 @@ def snapshot_from_dict(d: dict) -> Snapshot:
                     last_action=d.get("last_action", ""))
     if d.get("now"):
         snap.now = datetime.fromisoformat(d["now"])
+    attached = d.get("file")
+    if attached:
+        snap.file = FileInfo(**dict(_known(FileInfo, attached), variables=[
+            FileVariable(**_known(FileVariable, v)) for v in attached.get("variables", [])]))
     return snap
 
 
@@ -119,7 +123,7 @@ def main(argv=None):
     failures = []
     asked = {}  # (asked instead, was right) -> cases
     for case in cases:
-        snap = prompt.visible(snapshot_from_dict(case["workspace"]))
+        snap = prompt.visible(snapshot_from_dict(dict(case["workspace"], file=case.get("file"))))
         warm, full = prompt.build(fmt, snap, case["request"], few)
         # Same as MINT: the workspace is evaluated while the user types, the request after Enter.
         tokens = llm.tokenize(warm.encode("utf-8"), special=True)
@@ -136,7 +140,9 @@ def main(argv=None):
         warm_s.append(time.perf_counter() - t0)
 
         row_ids, plot_ids = prompt.answer_ids(snap, case["request"])
-        grammar = LlamaGrammar.from_string(commands.build_grammar(row_ids, plot_ids, recipes.load()), verbose=False)
+        grammar = LlamaGrammar.from_string(commands.build_grammar(row_ids, plot_ids, recipes.load(),
+                                                                  *prompt.file_ids(snap, case["request"])),
+                                           verbose=False)
         t0 = time.perf_counter()
         watch = doubt.TokenWatch()
         out = llm.create_completion(full, max_tokens=160, temperature=0.0, top_k=1, repeat_penalty=1.0,
@@ -144,6 +150,20 @@ def main(argv=None):
         request_s.append(time.perf_counter() - t0)
         text = out["choices"][0]["text"]
         gen_tokens.append(out["usage"]["completion_tokens"])
+        # As MINT does: asked which signal although the request says "this" of selected rows, it is asked again.
+        try:
+            again = check.selection_for_it(snap, case["request"], commands.parse(text))
+        except commands.CommandError:
+            again = None
+        if again:
+            _, full = prompt.build(fmt, snap, again, few)
+            watch = doubt.TokenWatch()
+            grammar = LlamaGrammar.from_string(commands.build_grammar(*prompt.answer_ids(snap, again), recipes.load(),
+                                                                      *prompt.file_ids(snap, again)), verbose=False)
+            out = llm.create_completion(full, max_tokens=160, temperature=0.0, top_k=1, repeat_penalty=1.0,
+                                        grammar=grammar, logits_processor=LogitsProcessorList([watch]))
+            text = out["choices"][0]["text"]
+            request_s[-1] = time.perf_counter() - t0
         try:
             got = normalize(check.review(snap, case["request"], commands.parse(text)), snap.now, snap.range_seconds)
         except commands.CommandError as e:

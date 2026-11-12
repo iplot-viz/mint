@@ -3,7 +3,7 @@ import re
 from dataclasses import replace
 from typing import List, Optional, Tuple
 
-from mint.assistant.snapshot import RowInfo, Snapshot
+from mint.assistant.snapshot import FileVariable, RowInfo, Snapshot
 
 SYSTEM = """You are the assistant of MINT, a tool to plot and process ITER plant signals. Turn the user's request into commands for their workspace: one command for each thing the user asks, one per line, never the same command twice, and nothing else.
 
@@ -93,6 +93,9 @@ MAX_LOOSE = 4
 MAX_ROWS = 50
 # Token budget of the listed rows: evaluated when a workspace opens and, from the first changed row on, after each edit.
 ROW_BUDGET = 400
+# The same for the variables of an attached file: the rest stay reachable with "all".
+FILE_BUDGET = 400
+MAX_FILE_VARIABLES = 24
 FEW_PLOTS = 6
 MAX_TEXT = 100
 # What a signal measures, read from its ITER code (MT0021 is a temperature sensor) or the
@@ -224,6 +227,60 @@ def render_workspace(snap: Snapshot) -> str:
     return "\n".join(lines)
 
 
+def listed_file_variables(snap: Snapshot) -> List[str]:
+    """Ids of the attached file's variables shown to the model, within FILE_BUDGET and MAX_FILE_VARIABLES."""
+    ids, spent = [], 0
+    for v in snap.file.variables if snap.file else []:
+        cost = estimate_tokens(_file_line(v))
+        if len(ids) == MAX_FILE_VARIABLES or (ids and spent + cost > FILE_BUDGET):
+            break
+        ids.append(v.id)
+        spent += cost
+    return ids
+
+
+def _file_line(variable) -> str:
+    return f"{variable.id} {clean(variable.name)}" + (f" ({clean(variable.note, 48)})" if variable.note else "")
+
+
+def render_file(snap: Snapshot) -> str:
+    info = snap.file
+    listed = listed_file_variables(snap)
+    lines = [f"File \"{clean(info.name, 60)}\":"]
+    lines += [_file_line(v) for v in info.variables if v.id in listed]
+    if len(info.variables) > len(listed):
+        lines.append(f"({len(info.variables) - len(listed)} more variables)")
+    if not info.variables:
+        lines.append("No variable names in it.")
+    if info.times:
+        lines.append("Times: " + ", ".join(f"t{i + 1} {t}" for i, t in enumerate(info.times)))
+    if info.pulses:
+        lines.append("Pulses: " + ", ".join(clean(p, 80) for p in info.pulses))
+    return "\n".join(lines)
+
+
+def named_in_file(snap: Snapshot, request: str) -> List[Tuple[FileVariable, str]]:
+    """Variables of the attached file, listed or not, that the request names by a code (MT0021, PT-1101...)."""
+    found = []
+    for m in TOKEN.finditer(request or "") if snap.file else ():
+        token, low = m.group(), m.group().lower()
+        if len(low) < 4 or not CODE_LIKE.search(low):
+            continue
+        hits = [v for v in snap.file.variables if low == v.name.lower() or low in WORD.findall(v.name.lower())]
+        if 0 < len(hits) <= MAX_LOOSE:
+            found += [(v, token) for v in hits if v not in [f[0] for f in found]]
+    return found[:8]
+
+
+def file_ids(snap: Snapshot, request: str = "") -> Tuple[List[str], List[str]]:
+    """Variable and time ids of the attached file the answer may use: the listed ones and those the request names."""
+    if not snap.file:
+        return [], []
+    ids = listed_file_variables(snap)
+    ids += [v.id for v, _ in named_in_file(snap, clean(request, 600)) if v.id not in ids]
+    return ids, [f"t{i + 1}" for i in range(len(snap.file.times))]
+
+
 def points_back(request: str) -> bool:
     """Whether the request refers to the change just applied, so the model needs to see it."""
     return bool(BACK.search(request or ""))
@@ -317,6 +374,7 @@ def mentions(snap: Snapshot, request: str) -> str:
     """
     parts = [f"{row.id} = {' '.join(words)} ({'in ' + row.plot if row.plot else 'not plotted'})"
              for row, words in named(snap, request)]
+    parts += [f"{variable.id} = {word} (in the file)" for variable, word in named_in_file(snap, request)]
     return clean(", ".join(parts), 240)
 
 
@@ -387,10 +445,11 @@ def build(fmt: ChatFormat, snap: Snapshot, request: str, few_shot: bool = True) 
     head = fixed_prefix(fmt, few_shot)
     workspace = render_workspace(snap)
     request = clean(request, 600)
-    warm = head + fmt.user_opening() + _workspace_part(workspace) + "Request:"
+    attached = f"{render_file(snap)}\n\n" if snap.file else ""
+    warm = head + fmt.user_opening() + _workspace_part(workspace) + attached + "Request:"
     if snap.last_action and points_back(request):
         # After the part evaluated ahead, since only the request tells whether it is needed.
         workspace += f"\nLast applied: {clean(snap.last_action, 300)}"
-    full = head + fmt.turn("user", _workspace_part(workspace) + _request_part(request, mentions(snap, request))) + \
-        fmt.open_assistant()
+    full = head + fmt.turn("user", _workspace_part(workspace) + attached +
+                           _request_part(request, mentions(snap, request))) + fmt.open_assistant()
     return warm, full

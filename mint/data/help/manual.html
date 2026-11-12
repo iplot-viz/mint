@@ -355,8 +355,9 @@ $ mint
 <li><em>two signals from EC in sdnuda</em>: lists the variables of that data source that start with EC.</li>
 <li><em>last 6 hours</em>, <em>yesterday</em>, <em>pulse ITER:MCTB_PSS-TF07_FD/12</em>.</li>
 <li><em>the same for MP0071</em>: repeats the last change on another signal.</li>
+<li>With a file attached: <em>add the pressures from the report</em>, <em>over the dates in the file</em>.</li>
 </ul>
-<p>Each answer comes as a card: nothing changes until <strong>Apply</strong> (or Enter with nothing typed, or <em>ok</em>), and <strong>Undo</strong> (or typing <em>undo</em>) puts it back; <em>no</em> dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (<em>12 s</em>) repeats the last processing with it. <em>Formula</em> on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the <em>x</em> or <em>y</em> column like any other expression, so the workspace opens the same without the assistant.</p>
+<p>Each answer comes as a card: nothing changes until <strong>Apply</strong> (or Enter with nothing typed, or <em>ok</em>), and <strong>Undo</strong> (or typing <em>undo</em>) puts it back; <em>no</em> dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (<em>12 s</em>) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (<em>.scsv</em>) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (<em>MT0021-XI</em>) are looked up in the data source, and a list of names pasted into a message is read like a file. <em>Formula</em> on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the <em>x</em> or <em>y</em> column like any other expression, so the workspace opens the same without the assistant.</p>
 <p>It runs on this computer, without network, and is off unless these are set (also in the file named by <code>MINT_XK_CONFIG</code>):</p>
 <table>
 <thead>
@@ -388,7 +389,7 @@ $ mint
 </tr>
 </tbody>
 </table>
-<p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.</p>
+<p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler. It also brings what reads Excel (openpyxl) and PDF (pypdf) files.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>
 <p>MINT is installed on all CODAC XPOZ terminals. The CCI team grants access to the relevant machines. The tool connects to the central UDA servers; IMAS data is not yet accessible from CODAC terminals.</p>

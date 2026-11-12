@@ -36,6 +36,7 @@ class VariableSearch:
     total: int  # how many there were before the cut
     words: List[str] = field(default_factory=list)  # what was looked for, besides the group
     group: str = ""  # what the names start with, when the request gave it
+    missing: List[str] = field(default_factory=list)  # tags looked up one by one that nothing has
 
 
 def _leaves(document: dict):
@@ -445,6 +446,21 @@ class MintWorkspace:
                 return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), rest, group)
         found = self._matching(name, source, _server_pattern(words), words)
         return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), words)
+
+    def search_codes(self, codes) -> VariableSearch:
+        """Variables of the default data source for each tag (MT0021): those with that very tag, else all holding it."""
+        name, source = self.default_data_source()
+        if source is None:
+            raise ActionError("MINT isn't connected to any data source yet, so I can't search for variables.")
+        found, total, missing = [], 0, []
+        for code in codes:
+            holding = self._matching(name, source, f".*{re.escape(code)}.*", [code])
+            hits = [hit for hit in holding if hit[0].split(":")[-1] == code] or holding
+            if not hits:
+                missing.append(code)
+            total += len(hits)
+            found += [hit for hit in hits if hit not in found]
+        return VariableSearch(name, found[:MAX_SEARCH_RESULTS], max(total, len(found)), list(codes), missing=missing)
 
     def _matching(self, name, source, pattern, words, group=""):
         """The source's variables for the server pattern, ranked by how many of the words they hold.

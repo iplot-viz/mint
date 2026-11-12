@@ -111,6 +111,19 @@ def in_place_of_it(request: str, answer: str) -> Optional[str]:
     return IT.sub(answer.strip(" .!?"), request, count=1) if IT.search(request) else None
 
 
+def selection_for_it(snap: Snapshot, request: str, cmds: List[Command]) -> Optional[str]:
+    """The request with the selected rows in place of its "this", when the model asks which signal anyway."""
+    if len(cmds) != 1 or cmds[0].verb != "ask" or "which" not in cmds[0].text.lower():
+        return None
+    rows = [snap.row(row_id) for row_id in snap.selected]
+    names = [row.alias or row.variable for row in rows if row is not None]
+    it = IT.search(request)
+    # "It" with two rows selected is still a question; "these" needs more than one.
+    if not names or not it or (len(names) > 1) != (it.group(0).lower() in ("these", "those")):
+        return None
+    return in_place_of_it(request, " and ".join(names))
+
+
 def unknown_codes(snap: Snapshot, request: str) -> List[str]:
     """Codes in the request that no row has in its name ("need TF07 coil current"): signals to look for."""
     names = [name.lower() for row in snap.rows + snap.unlisted for name in (row.alias, row.variable)]

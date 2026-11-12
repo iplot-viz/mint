@@ -312,8 +312,9 @@ Ask in plain words for processing, plot settings, signals or a time range. Other
 - *two signals from EC in sdnuda*: lists the variables of that data source that start with EC.
 - *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
 - *the same for MP0071*: repeats the last change on another signal.
+- With a file attached: *add the pressures from the report*, *over the dates in the file*.
 
-Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed, or *ok*), and **Undo** (or typing *undo*) puts it back; *no* dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (*12 s*) repeats the last processing with it. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
+Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed, or *ok*), and **Undo** (or typing *undo*) puts it back; *no* dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (*12 s*) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (*.scsv*) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (*MT0021-XI*) are looked up in the data source, and a list of names pasted into a message is read like a file. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
 
 It runs on this computer, without network, and is off unless these are set (also in the file named by `MINT_XK_CONFIG`):
 
@@ -325,7 +326,7 @@ It runs on this computer, without network, and is off unless these are set (also
 | `MINT_ASSISTANT_SHA256` | SHA-256 of a model file MINT does not know yet, optional |
 | `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask and whether you apply each answer, to retrain the assistant with, optional |
 
-The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
+The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler. It also brings what reads Excel (openpyxl) and PDF (pypdf) files.
 
 ## 3. ITER environment {#iter-environment}
 

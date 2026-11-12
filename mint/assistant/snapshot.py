@@ -63,6 +63,30 @@ class PlotInfo:
 
 
 @dataclass
+class FileVariable:
+    id: str
+    name: str
+    note: str = ""
+
+
+@dataclass
+class FileInfo:
+    """What a file the user attached names: variables v1, v2..., times t1, t2... in order, and pulses."""
+    name: str
+    variables: List[FileVariable] = field(default_factory=list)
+    times: List[str] = field(default_factory=list)
+    pulses: List[str] = field(default_factory=list)
+    source: str = ""
+
+    def variable(self, variable_id: str) -> Optional[FileVariable]:
+        return next((v for v in self.variables if v.id == variable_id), None)
+
+    def time(self, time_id: str) -> Optional[str]:
+        index = int(time_id[1:]) - 1 if time_id[1:].isdigit() else -1
+        return self.times[index] if 0 <= index < len(self.times) else None
+
+
+@dataclass
 class Snapshot:
     rows: List[RowInfo] = field(default_factory=list)
     plots: List[PlotInfo] = field(default_factory=list)
@@ -74,6 +98,7 @@ class Snapshot:
     last_action: str = ""
     # Rows left out of what the model is shown (see prompt.visible), still reachable by name.
     unlisted: List[RowInfo] = field(default_factory=list)
+    file: Optional[FileInfo] = None
 
     @property
     def hidden_rows(self) -> int:

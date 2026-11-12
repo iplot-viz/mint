@@ -4,6 +4,7 @@ import re
 import unittest
 import warnings
 from datetime import datetime, timezone
+from unittest import mock
 
 import numpy as np
 
@@ -371,6 +372,26 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(places(column, "the top plot in log and average the flow over two minutes"), ["p1"],
                          "a number elsewhere in the request says nothing about the plots")
 
+    def test_this_is_the_selected_row_when_the_model_asks_which(self):
+        from mint.assistant.check import selection_for_it
+        snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="MAG-MCTB-F1:I_MAIN", alias="I_main", plot="p1"),
+                              RowInfo(id="r2", index=1, variable="CRYO:MT0003", alias="T_coil", plot="p1")],
+                        plots=[PlotInfo(id="p1", row=1, col=1)], selected=["r2"])
+        which = commands.parse('ask "Sure, which one: I_main or T_coil?"')
+        self.assertEqual(selection_for_it(snap, "derivative of this", which), "derivative of T_coil")
+        self.assertEqual(selection_for_it(snap, "calcule la dérivée de ça", which), "calcule la dérivée de T_coil")
+        self.assertIsNone(selection_for_it(snap, "derivative of this", commands.parse("process r2 derivative")))
+        self.assertIsNone(selection_for_it(snap, "derivative of the coil", which), "no 'this' in the request")
+        self.assertIsNone(selection_for_it(snap, "smooth this", commands.parse('ask "Over how many seconds?"')),
+                          "a question about something else")
+        snap.selected = ["r1", "r2"]
+        self.assertIsNone(selection_for_it(snap, "move it to the other plot", which), "it: one of the two, but which")
+        self.assertEqual(selection_for_it(snap, "smooth these", which), "smooth I_main and T_coil")
+        snap.selected = ["r2"]
+        self.assertIsNone(selection_for_it(snap, "smooth these", which), "these, and only one is selected")
+        snap.selected = []
+        self.assertIsNone(selection_for_it(snap, "derivative of this", which), "nothing selected")
+
     def test_an_answer_is_completed_where_the_request_is_plain(self):
         from mint.assistant.check import review
         grid = two_by_two()
@@ -517,6 +538,20 @@ class TrainingDataTest(unittest.TestCase):
                              kinds)
 
 
+class ModelSoupTest(unittest.TestCase):
+    def test_adapters_trained_alike_are_averaged(self):
+        from mint.tools import assistant_train
+        changes = {"a": {"blk.0.attn_q.weight": np.array([[1.0, 2.0]])},
+                   "b": {"blk.0.attn_q.weight": np.array([[3.0, 6.0]])},
+                   "c": {"blk.1.attn_q.weight": np.array([[1.0, 1.0]])}}
+        read = lambda adapter_dir: {k: v.copy() for k, v in changes[adapter_dir].items()}  # noqa: E731
+        with mock.patch.object(assistant_train, "lora_deltas", side_effect=read):
+            np.testing.assert_allclose(assistant_train.soup(["a", "b"])["blk.0.attn_q.weight"], [[2.0, 4.0]])
+            np.testing.assert_allclose(assistant_train.soup(["a"])["blk.0.attn_q.weight"], [[1.0, 2.0]])
+            with self.assertRaises(SystemExit):
+                assistant_train.soup(["a", "c"])
+
+
 class ModelProfileTest(unittest.TestCase):
     def test_a_model_trained_for_mint_gets_the_short_prompt_it_was_trained_on(self):
         from mint.assistant import models
@@ -652,6 +687,72 @@ class NoDataWordsTest(unittest.TestCase):
         for text in ("", "ok", "no, 30 s", "no smooth it more", "not the pirani", "no?"):
             with self.subTest(text=text):
                 self.assertFalse(declines(text))
+
+
+def attached(count=3, times=("2024-10-29 07:05", "2024-10-30")):
+    from mint.assistant import files
+    found = files.Found([(f"CRYO-CP-0{i}:MT00{i}1-XI", f"temperature {i}") for i in range(1, count + 1)],
+                        list(times), [])
+    return files.info("report.pdf", found, "codacuda")
+
+
+class FilesTest(unittest.TestCase):
+    """A file the user attaches: what MINT finds in it, and what the model is shown and may answer."""
+
+    def test_names_times_and_pulses_are_found_in_its_lines(self):
+        from mint.assistant import files
+        found = files.find([
+            "Signal | Description | Unit",
+            "CRYO-CP-03:MT0021-XI | inlet temperature | K",
+            "CRYO-CP-03:MP0015-XI; pirani pressure; mbar",
+            "Again CRYO-CP-03:MT0021-XI, and MAG-MCTB-F1:VAR1 on the same line",
+            "Test from 2024-10-30 07:05:12 to 30 Oct 2024 at 19:30, after 2024-10-29; pulse ITER:MCTB_PSS-TF07_FD/11",
+            "Not names: ITER:MCTB_PSS-TF07_FD, cryo-cp-03:mt0021, 2024-13-40, rev. 2024-02-30",
+        ])
+        self.assertEqual([n for n, _ in found.variables],
+                         ["CRYO-CP-03:MT0021-XI", "CRYO-CP-03:MP0015-XI", "MAG-MCTB-F1:VAR1"], "each once, in order")
+        self.assertEqual(found.variables[0][1], "inlet temperature K", "the words beside it on its row")
+        self.assertEqual(found.times, ["2024-10-29", "2024-10-30 07:05", "2024-10-30 19:30"], "in time order")
+        self.assertEqual(found.pulses, ["ITER:MCTB_PSS-TF07_FD/11"])
+
+    def test_the_model_is_shown_a_short_listing_and_the_names_the_request_gives(self):
+        snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="MAG-MCTB-F1:VAR1", plot="p1")],
+                        plots=[PlotInfo(id="p1", row=1, col=1)])
+        snap.file = attached(40)
+        text = prompt.render_file(snap)
+        self.assertTrue(text.startswith('File "report.pdf":\nv1 CRYO-CP-01:MT0011-XI (temperature 1)'))
+        listed = prompt.listed_file_variables(snap)
+        self.assertLessEqual(len(listed), prompt.MAX_FILE_VARIABLES)
+        self.assertIn(f"({40 - len(listed)} more variables)", text)
+        self.assertTrue(text.endswith("Times: t1 2024-10-29 07:05, t2 2024-10-30"))
+        last = snap.file.variables[-1]
+        self.assertNotIn(last.id, listed)
+        code = last.name.split(":")[1].split("-")[0]
+        request = f"add {code} from the report"
+        self.assertEqual(prompt.file_ids(snap, request), (listed + [last.id], ["t1", "t2"]),
+                         "one past the listing, when the request names it")
+        self.assertIn(f"{last.id} = {code} (in the file)", prompt.mentions(snap, request))
+        warm, full = prompt.build(prompt.ChatFormat("qwen3-nothink"), snap, request, few_shot=False)
+        self.assertTrue(full.startswith(warm[:-len("Request:")]) and "\n\nFile \"report.pdf\":\n" in warm,
+                        "the file is read ahead, with the workspace")
+
+    def test_the_answers_a_file_allows(self):
+        snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="X", plot="p1")], plots=[PlotInfo(id="p1", row=1, col=1)])
+        snap.file = attached(3)
+        accepts = grammar_regex(commands.build_grammar(["r1"], ["p1"], recipes.load(), *prompt.file_ids(snap)))
+        for answer in ("add v1", "add v1 v3 together", "add all", "add all together", "range from t1 to t2",
+                       "range day t2", 'range from "2026-11-03 08:00" to t1', "add v2\nrange from t1 to t2",
+                       "range pulse ITER:PCS/12", "range pulse t", "range pulse t1b", "range pulse test/3"):
+            self.assertTrue(accepts.fullmatch(answer), answer)
+        for answer in ("add v4", "add r1", "add", "range from t1 to t3", "add v1 together together",
+                       "range pulse t1", "range pulse t12"):
+            self.assertFalse(accepts.fullmatch(answer), answer)
+        without = grammar_regex(commands.build_grammar(["r1"], ["p1"], recipes.load()))
+        self.assertFalse(without.fullmatch("add v1"), "no file, no add")
+        self.assertFalse(without.fullmatch("range day t1"))
+        self.assertTrue(without.fullmatch("range pulse t1"), "without a file, any pulse name as before")
+        cmd = commands.parse("range from t1 to \"2024-10-31 08:00\"")[0]
+        self.assertEqual(str(cmd), 'range from t1 to "2024-10-31 08:00"', "written back as the model writes it")
 
 
 class RecipesTest(unittest.TestCase):

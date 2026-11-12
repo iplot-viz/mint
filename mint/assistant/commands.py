@@ -12,6 +12,8 @@ WINDOW_SECONDS = {"ms": 0.001, "s": 1, "min": 60, "h": 3600, "d": 86400}
 WINDOW = re.compile(r"^(-?\d+(?:\.\d+)?)(ms|s|min|h|d)$")
 COMBINE_OPS = ("subtract", "add", "multiply", "divide")
 PLOT_SWITCHES = ("log", "grid", "legend")
+# A time of the attached file (see snapshot.FileInfo), which a range can use instead of a date.
+TIME_ID = re.compile(r"^t\d+$")
 
 
 class CommandError(ValueError):
@@ -35,18 +37,22 @@ class Command:
         elif self.verb == "move":
             words = ["to"] + words
         elif self.verb == "range" and words[:1] == ["from"]:
-            words = ["from", f'"{words[1]}"', "to", f'"{words[2]}"']
+            words = ["from", _when(words[1]), "to", _when(words[2])]
         params = [f"window={v}s" if k == "seconds" else f'{k}="{v}"' if k == "title" else f"{k}={v}"
                   for k, v in self.params.items()]
         return " ".join([self.verb] + ids + words + params + self.flags + ([f'"{self.text}"'] if self.text else []))
+
+
+def _when(word: str) -> str:
+    return word if TIME_ID.match(word) else f'"{word}"'
 
 
 def _alt(options) -> str:
     return " | ".join(f'"{o}"' for o in options)
 
 
-def build_grammar(row_ids, plot_ids, recipes: dict) -> str:
-    """GBNF grammar of the answers valid for these rows and plots.
+def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) -> str:
+    """GBNF grammar of the answers valid for these rows and plots, and the variables and times of an attached file.
 
     Numbers are optional even where a recipe needs them: a forced number is invented, while MINT can ask.
     """
@@ -62,10 +68,14 @@ def build_grammar(row_ids, plot_ids, recipes: dict) -> str:
         # The window keeps the user's unit: converting "a quarter of an hour" is MINT's job.
         recipe_rules.insert(0, f'({_alt(windowed)}) (" window=" num ({_alt(WINDOW_UNITS)}))?')
 
-    verbs = (["plot-cmd"] if plot_ids else []) + ["find", "range", "draw", "say"]
+    verbs = (["plot-cmd"] if plot_ids else []) + (["add"] if file_ids else []) + ["find", "range", "draw", "say"]
     if row_ids:
         # ask is for choosing among rows: with an empty table, a request about a signal is a search.
         verbs = ["process", "combine", "move", "remove"] + verbs + ["ask"]
+    # With the times of a file (t1, t2...) a date can be one of them, and a pulse can't.
+    when = "when" if time_ids else "str"
+    pulse = ("[A-Za-z0-9_:.+/()-]{1,80}" if not time_ids else "([A-Za-su-z0-9_:.+/()-] [A-Za-z0-9_:.+/()-]{0,79} | "
+             "\"t\" ([0-9]{0,40} [A-Za-z_:.+/()-] [A-Za-z0-9_:.+/()-]{0,38})?)")
     lines = [
         f"root ::= cmd (\"\\n\" cmd){{0,{MAX_COMMANDS - 1}}}",
         "cmd ::= " + " | ".join(verbs),
@@ -75,8 +85,9 @@ def build_grammar(row_ids, plot_ids, recipes: dict) -> str:
         "word ::= [A-Za-z0-9_:.+-]{1,40}",
         "find ::= \"find\" (\" \" word){1,4}",
         "range ::= \"range \" (\"last \" int \" \" (" + _alt(RANGE_UNITS) + ") | \"day \" (\"today\" | \"yesterday\" | "
-        "[0-9]{4} \"-\" [0-9]{2} \"-\" [0-9]{2})"
-        " | \"month \" [0-9]{4} \"-\" [0-9]{2} | \"from \" str \" to \" str | \"pulse \" [A-Za-z0-9_:.+/()-]{1,80})",
+        "[0-9]{4} \"-\" [0-9]{2} \"-\" [0-9]{2}" + (" | tid" if time_ids else "") + ")"
+        " | \"month \" [0-9]{4} \"-\" [0-9]{2} | \"from \" " + when + " \" to \" " + when
+        + " | \"pulse \" " + pulse + ")",
         "draw ::= \"draw\"",
         "ask ::= \"ask \" str",
         "say ::= \"say \" str",
@@ -92,6 +103,13 @@ def build_grammar(row_ids, plot_ids, recipes: dict) -> str:
         ]
         target = "plot | \"new\"" if plot_ids else "\"new\""
         lines.append(f"move ::= \"move\" rows \" to \" ({target})")
+    if file_ids:
+        lines += [
+            "fvar ::= " + _alt(file_ids),
+            "add ::= \"add\" ((\" \" fvar){1," + str(MAX_IDS) + "} | \" all\") (\" together\")?",
+        ]
+    if time_ids:
+        lines += ["tid ::= " + _alt(time_ids), "when ::= str | tid"]
     if plot_ids:
         lines += [
             "plot ::= " + _alt(plot_ids),
@@ -211,6 +229,13 @@ def _parse_tokens(tokens, line) -> Command:
         if not ids or rest:
             raise CommandError(f"remove needs rows: {line!r}")
         return Command("remove", ids=ids)
+    if verb == "add":
+        ids = ["all"] if rest[:1] == ["all"] else _ids(rest, "v")
+        if ids == ["all"]:
+            rest = rest[1:]
+        if not ids or rest not in ([], ["together"]):
+            raise CommandError(f"add needs variables of the file: {line!r}")
+        return Command("add", ids=ids, flags=rest)
     if verb == "draw" and not rest:
         return Command("draw")
     if verb in ("ask", "say") and len(rest) == 1:

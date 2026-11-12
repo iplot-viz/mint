@@ -2,16 +2,16 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from PySide6.QtCore import QObject, Qt
+from PySide6.QtCore import QObject, QThreadPool, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
-from mint.assistant import check, commands, doubt, followup, prompt, recipes, record, when
-from mint.assistant.actions import ActionError, ApplyContext, Change, Lazy, MissingValue, Planner, Proposal
+from mint.assistant import check, commands, doubt, files, followup, prompt, recipes, record, when
+from mint.assistant.actions import MAX_ADDED, ActionError, ApplyContext, MissingValue, Planner, Proposal, added_rows
 from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
-from mint.assistant.models import KNOWN_MODELS, chat_format, few_shot
+from mint.assistant.models import KNOWN_MODELS, chat_format, few_shot, reads_files
 from mint.assistant.voice import Voice
 from mint.assistant.workspace import (DRAWN, EMPTY, FOUND, NONE_BEFORE, NOT_COMPUTED, UNKNOWN_VARIABLE, UNTOLD,
                                       MintWorkspace)
@@ -26,6 +26,26 @@ SUGGESTIONS = [
 ]
 MAX_SUGGESTION = 48
 PLACEHOLDER = "Tell me what you need…"
+
+
+def _time_offer(info) -> str:
+    return f"Show the time in the {'text' if info.name == files.PASTED else 'file'}"
+
+
+def _file_offers(info) -> dict:
+    """What MINT offers once a file is read, each with the commands it is: no model is needed for them."""
+    offers = {}
+    if 0 < len(info.variables) <= MAX_ADDED:
+        offers["Add them, one plot each"] = "add all"
+        if len(info.variables) > 1:
+            offers["Add them to one plot"] = "add all together"
+    if info.times:
+        offers[_time_offer(info)] = f"range from t1 to t{len(info.times)}" if len(info.times) > 1 else "range day t1"
+    return offers
+
+
+class _Codes(list):
+    """Tags a file gives without their system, each looked up on its own (see MintWorkspace.search_codes)."""
 
 
 # Variables looked up at most when a new time range leaves signals without data: one archive request each.
@@ -136,6 +156,9 @@ def install(window, splitter, signals_toolbar, view_menu):
 
 
 class AssistantController(QObject):
+    # (path, files.Found or the exception), from the thread that read the file.
+    fileRead = Signal(str, object)
+
     def __init__(self, window, config: AssistantConfig, panel_class, engine=None):
         super().__init__(window)
         self.window = window
@@ -151,6 +174,9 @@ class AssistantController(QObject):
         self.panel.cardActionTriggered.connect(self.on_card_action)
         self.panel.stopRequested.connect(self.on_stop)
         self.panel.emptySubmitted.connect(self._apply_pending)  # Enter with nothing typed applies the card
+        self.panel.fileAttached.connect(self.on_file_attached)
+        self.panel.attachmentRemoved.connect(self.on_attachment_removed)
+        self.fileRead.connect(self._on_file_read)
         self._pending_card = None
         self.toggle_action = None
         self.toolbar_button = None
@@ -163,6 +189,10 @@ class AssistantController(QObject):
         self._open_question = None
         self._cards = {}
         self._searches = {}  # suggestion text -> words, for the searches MINT offers itself
+        self._planned = {}  # suggestion text -> commands MINT plans itself, without the model
+        self._file = None  # snapshot.FileInfo of the attached file
+        self._reading = ""  # the file being read, whose result is the one awaited
+        self._reads_files = False  # the model was trained on attached files (see models.reads_files)
         self._last_action = ""
         self._last_applied = None  # the card entry of the last change applied and not undone
         self._sized = False
@@ -308,6 +338,8 @@ class AssistantController(QObject):
         declared = info.get("declared") or {}
         self.format = prompt.ChatFormat(chat_format(info.get("sha256", ""), declared))
         self._few_shot = few_shot(info.get("sha256", ""), declared)
+        self._reads_files = reads_files(info.get("sha256", ""), declared)
+        self.panel.set_attachable(files.NAME_FILTER if self._reads_files else "")
         self._model_name = KNOWN_MODELS.get(info.get("sha256", ""), {}).get("name", "custom model")
         self._primed = False
         self._loading("priming")
@@ -368,21 +400,101 @@ class AssistantController(QObject):
             return
         self._workspace_dirty = False
         try:
-            warm, _ = prompt.build(self.format, prompt.visible(self.workspace.snapshot()), "", self._few_shot)
+            warm, _ = prompt.build(self.format, prompt.visible(self._snapshot()), "", self._few_shot)
         except Exception:
             logger.exception("Assistant: could not read the workspace")
             return
         self.engine.warm(warm)
 
+    def _snapshot(self, last_action: str = ""):
+        """The workspace as the model reads it, with the attached file."""
+        snap = self.workspace.snapshot(last_action)
+        snap.file = self._file
+        return snap
+
+    def on_file_attached(self, path: str):
+        """Read off the GUI thread: a PDF of many pages takes seconds."""
+        self.panel.add_user_message(os.path.basename(path))
+        self._reading = path
+
+        def read():
+            try:
+                result = files.read(path)
+            except Exception as e:  # handed to the GUI thread, which says what went wrong
+                result = e
+            self.fileRead.emit(path, result)
+
+        QThreadPool.globalInstance().start(read)
+
+    def _on_file_read(self, path: str, result):
+        if path != self._reading:  # another file was attached meanwhile
+            return
+        self._reading = ""
+        name = os.path.basename(path)
+        if isinstance(result, files.FileError):
+            self.panel.add_assistant_message(str(result))
+            return
+        if isinstance(result, Exception):
+            logger.error(f"Assistant: could not read {path}: {result!r}")
+            self.panel.add_assistant_message(self.voice.could_not_read(name))
+            return
+        self._take_file(name, result, name)
+
+    def _take_file(self, name: str, found, label: str, say: bool = True):
+        """What the next requests go with, shown above the input box; told, with what to do, if ``say``."""
+        try:
+            source = self.workspace.default_data_source()[0] or ""
+        except Exception as e:
+            logger.warning(f"Assistant: no default data source for the variables of {name}: {e!r}")
+            source = ""
+        self._file = files.info(name, found, source)
+        self._workspace_dirty = True
+        self.panel.set_attachment(label)
+        if say:
+            codes = found.codes if source and not found.variables else []
+            self.panel.add_assistant_message(self.voice.file_read(self._file, found.partial, codes))
+            self._searches = {self.voice.find_codes(codes, source): _Codes(codes)} if codes else {}
+            self._planned = _file_offers(self._file)
+            self._suggest(list(self._searches) + list(self._planned))
+        # Read now, while the user reads the answer: then a request only adds its own words.
+        self._warm()
+
+    def on_attachment_removed(self):
+        self._file, self._reading, self._planned = None, "", {}
+        self._workspace_dirty = True
+        self.panel.set_attachment("")
+
+    def _plan_direct(self, cmds, request: str):
+        """Commands MINT knows without the model (a suggestion it offered), shown like the model's."""
+        snap = self._snapshot(self._last_action)
+        try:
+            proposal = Planner(self.workspace, snap).plan(cmds)
+        except ActionError as e:
+            self.panel.add_assistant_message(str(e))
+            return
+        self._present(proposal, request, snap, answering=False)
 
     def on_request(self, text: str):
         self.panel.add_user_message(text)
         pending = self._pending_card
         self._set_pending(None)
+        pasted = files.pasted(text) if self._reads_files else None
+        if pasted is not None:
+            # A list of signals pasted into the message is taken as a file, and the words around it as the request.
+            found, text = pasted
+            self._open_question, self._reading = None, ""
+            self._take_file(files.PASTED, found, "Pasted text", say=not text)
+            if not text:
+                return
         search, self._searches = self._searches.get(text), {}
+        planned, self._planned = self._planned.get(text), {}
         if search:
             self._open_question = None
             self._show_search(search, text)
+            return
+        if planned:
+            self._open_question = None
+            self._plan_direct(commands.parse(planned), text)
             return
         if followup.is_undo(text):
             self._open_question = None
@@ -477,10 +589,11 @@ class AssistantController(QObject):
             self.panel.add_assistant_message(self.voice.still_busy())
             return
         try:
-            snap = self.workspace.snapshot(self._last_action)
+            snap = self._snapshot(self._last_action)
             shown = prompt.visible(snap)
             _, full = prompt.build(self.format, shown, text, self._few_shot)
-            grammar = commands.build_grammar(*prompt.answer_ids(shown, text), recipes.load())
+            grammar = commands.build_grammar(*prompt.answer_ids(shown, text), recipes.load(),
+                                             *prompt.file_ids(shown, text))
         except Exception:
             logger.exception("Assistant: could not prepare the request")
             self.panel.add_assistant_message(self.voice.could_not_work_out())
@@ -516,6 +629,11 @@ class AssistantController(QObject):
             return
         try:
             cmds = check.review(snap, request, commands.parse(text))
+            rewritten = None if answering else check.selection_for_it(snap, request, cmds)
+            if rewritten:
+                # "Derivative of this" with a row selected: no question, the model is asked about that row.
+                self._ask_model(rewritten, answering=True, named=True)
+                return
             planner = Planner(self.workspace, snap)
             proposal = planner.plan(cmds)
             rows, plots = prompt.answer_ids(snap, request)
@@ -612,6 +730,8 @@ class AssistantController(QObject):
         if snap is None or len(written) != 1:
             return []
         cmd = commands.parse(written[0])[0]
+        if cmd.verb == "add":
+            return self._file_time_step()
         if cmd.verb == "plot" and cmd.ids != ["all"] and len(snap.plots) > 1:
             return ["The same for all plots"]
         row = snap.row(cmd.ids[0]) if cmd.verb == "process" and len(cmd.ids) == 1 else None
@@ -629,18 +749,34 @@ class AssistantController(QObject):
                     return [f"The same for {name}"]
         return []
 
-    def _show_search(self, words, request: str = ""):
+    def _file_time_step(self) -> list:
+        """Once variables of the file are added, the time it gives, unless the plots already show it."""
+        if self._file is None or not self._file.times:
+            return []
+        offer = _time_offer(self._file)
+        written = _file_offers(self._file)[offer]
         try:
-            search = self.workspace.search_variables(words, request)
+            span = Planner(self.workspace, self._snapshot()).period_ns(commands.parse(written)[0])
+        except ActionError:
+            return []
+        return [] if self.workspace.time_range_ns() == span else [offer]
+
+    def _show_search(self, words, request: str = ""):
+        by_code = isinstance(words, _Codes)
+        try:
+            search = self.workspace.search_codes(words) if by_code else self.workspace.search_variables(words, request)
         except ActionError as e:
             self.panel.add_assistant_message(str(e))
             return
         if not search.found:
             self.panel.add_assistant_message(self.voice.nothing_found(search))
             return
-        options = [(name, f"{name} — {description}" if description else name, False)
+        # A tag of the file that one variable has exactly is surely that one.
+        exact = [[name for name, _ in search.found if name.split(":")[-1] == code] for code in words] if by_code else []
+        ticked = {names[0] for names in exact if len(names) == 1}
+        options = [(name, f"{name} — {description}" if description else name, name in ticked)
                    for name, description in search.found]
-        self.panel.add_assistant_message(self.voice.found(search, check.wanted(request)))
+        self.panel.add_assistant_message(self.voice.found(search, check.wanted(request), ticked=bool(ticked)))
         shown = len(search.found)
         count = f"{shown} of {search.total}" if search.total > shown else str(shown)
         title = f"{count} variable{'' if search.total == 1 else 's'} in {search.source}"
@@ -691,7 +827,10 @@ class AssistantController(QObject):
             if outcome:
                 self._record(card_id, entry, outcome)
             if key == APPLY and entry.get("snap") is not None:
-                self._suggest(self._next_steps(entry))
+                steps = self._next_steps(entry)
+                offers = _file_offers(self._file) if self._file else {}
+                self._planned = {step: offers[step] for step in steps if step in offers}
+                self._suggest(steps)
         except Exception:
             logger.exception("Assistant: could not follow up a card")
 
@@ -848,17 +987,5 @@ class AssistantController(QObject):
 
     def _add_variables(self, source: str, names, together: bool) -> Proposal:
         context = ApplyContext(self.workspace)
-        proposal = Proposal(title="Add variables", context=context)
-        for n, name in enumerate(names):
-            values = {"DS": source, "Variable": name, "Stack": Lazy("stack", "together" if together else name)}
-            created = {}
-
-            def do(values=values, created=created):
-                created["uid"] = self.workspace.append_row(context.values(values))
-
-            def undo(created=created):
-                if created.get("uid"):
-                    self.workspace.remove_row(created.pop("uid"))
-
-            proposal.changes.append(Change([f"Add {name}"], do, undo, needs_draw=True))
-        return proposal
+        return Proposal(title="Add variables", context=context,
+                        changes=added_rows(self.workspace, context, source, names, together))
