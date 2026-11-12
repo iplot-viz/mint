@@ -372,6 +372,21 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(places(column, "the top plot in log and average the flow over two minutes"), ["p1"],
                          "a number elsewhere in the request says nothing about the plots")
 
+    def test_a_plot_switch_the_request_does_not_mention_is_dropped(self):
+        from mint.assistant.check import review
+        column = Snapshot(plots=[PlotInfo(id=f"p{i}", row=i, col=1) for i in range(1, 3)])
+        self.assertEqual([c.verb for c in review(column, "enable the marker on the second plot",
+                                                 commands.parse("plot p2 grid=on"))], ["say"])
+        self.assertEqual([str(c) for c in review(column, "put these in three plots",
+                                                 commands.parse("add all\nplot all grid=on"))], ["add all"])
+        for request, answer in (("add a grid to the second plot", "plot p2 grid=on"),
+                                ("eje logarítmico en el de arriba", "plot p1 log=on"),
+                                ("back to linear", "plot p1 log=off"), ("ohne Legende bitte", "plot all legend=off")):
+            self.assertEqual([str(c) for c in review(column, request, commands.parse(answer))], [answer], request)
+        self.assertEqual([str(c) for c in review(column, "call the top plot Pressures",
+                                                 commands.parse('plot p1 grid=on title="Pressures"'))],
+                         ['plot p1 title="Pressures"'], "a title is kept: its text says it was asked for")
+
     def test_this_is_the_selected_row_when_the_model_asks_which(self):
         from mint.assistant.check import selection_for_it
         snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="MAG-MCTB-F1:I_MAIN", alias="I_main", plot="p1"),
@@ -550,6 +565,32 @@ class ModelSoupTest(unittest.TestCase):
             np.testing.assert_allclose(assistant_train.soup(["a"])["blk.0.attn_q.weight"], [[1.0, 2.0]])
             with self.assertRaises(SystemExit):
                 assistant_train.soup(["a", "c"])
+
+
+class ProblemsTest(unittest.TestCase):
+    def test_what_keeps_rows_from_being_drawn_is_asked_in_many_ways(self):
+        from mint.assistant import diagnose
+        for text in ("in the data source table, all the signals are red. why?", "why is nothing drawn?",
+                     "¿por qué están en rojo?", "qu'est-ce qui ne marche pas ?", "warum sind sie rot?",
+                     "what's wrong with the table?"):
+            self.assertTrue(diagnose.asks_about_state(text), text)
+        for text in ("remove the spikes, they are wrong", "smooth the red one over 30 s", "why not smooth it?",
+                     "what is the maximum of MP0111?"):
+            self.assertFalse(diagnose.asks_about_state(text), text)
+
+    def test_a_data_source_no_longer_here_is_replaced_by_the_one_it_became(self):
+        from mint.assistant import diagnose
+        self.assertEqual(diagnose.replacement("imaspy", ["codacuda", "imas"]), "imas")
+        self.assertEqual(diagnose.replacement("codacudaa", ["codacuda", "imas"]), "codacuda")
+        self.assertIsNone(diagnose.replacement("sdnuda", ["codacuda", "imas"]), "no guess: the user picks")
+        self.assertEqual(diagnose.replacement("sdnuda", ["csv"]), "csv", "the only one there is")
+
+    def test_both_and_all_take_every_option(self):
+        from mint.assistant import followup
+        for text in ("all of them", "both", "las dos", "todas", "tous les deux", "alle beide", "both please"):
+            self.assertTrue(followup.means_every(text), text)
+        for text in ("yes", "the first one", "MP0111", "all of them?", "2 min", "smooth all"):
+            self.assertFalse(followup.means_every(text), text)
 
 
 class ModelProfileTest(unittest.TestCase):

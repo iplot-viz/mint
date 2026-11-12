@@ -10,7 +10,7 @@ from PySide6.QtCore import QModelIndex, Qt
 
 from iplotlib.interface.iplotSignalAdapter import Result, Stage, StatusInfo
 from iplotLogging import setupLogger
-from mint.assistant import prompt, snapshot
+from mint.assistant import files, prompt, snapshot
 from mint.assistant.actions import ActionError
 from mint.assistant.snapshot import RowInfo
 
@@ -384,6 +384,17 @@ class MintWorkspace:
     def set_range_dict(self, values: dict):
         self.window.dataRangeSelector.import_dict(values)
 
+    def time_range_fields(self) -> dict:
+        """What the From/To fields hold, whichever mode is in use."""
+        return self.window.dataRangeSelector.accessModes[0].to_dict()
+
+    def set_time_range_fields(self, fields: dict):
+        self.window.dataRangeSelector.accessModes[0].from_dict(fields)
+
+    def show_time_range_ns(self, start_ns: int, end_ns: int):
+        """From/To show this span, without leaving the mode in use."""
+        self.window.dataRangeSelector.accessModes[0].set_from_ns(start_ns, end_ns)
+
     def set_time_range_ns(self, start_ns: int, end_ns: int):
         selector = self.window.dataRangeSelector
         selector.force_apply_canvas_range_ns(start_ns, end_ns)
@@ -403,6 +414,10 @@ class MintWorkspace:
     def refresh_plots(self):
         self.window.update_canvas_preferences()
 
+
+    def data_source_choices(self) -> List[str]:
+        """The data sources a row can use here: those the table checks its DS cells against."""
+        return list(getattr(self.model, "data_sources", None) or [])
 
     def data_source_names(self) -> List[str]:
         from iplotDataAccess.appDataAccess import AppDataAccess
@@ -438,6 +453,9 @@ class MintWorkspace:
                 raise ActionError("MINT isn't connected to any data source yet, so I can't search for variables.")
         if not words:
             raise ActionError(f"What should I look for in {name}? A system such as CRYO, or part of a name.")
+        names = [w for w in words if files.NAME.fullmatch(w)]
+        if len(names) > 1:
+            return self._exactly(name, source, names)
         group = _group(words, request)
         if group:
             rest = [w for w in words if w.lower() != group.lower()]
@@ -446,6 +464,16 @@ class MintWorkspace:
                 return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), rest, group)
         found = self._matching(name, source, _server_pattern(words), words)
         return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), words)
+
+    def _exactly(self, name, source, names) -> VariableSearch:
+        """These full names in the source, each looked up on its own; those it hasn't are missing."""
+        found, missing = [], []
+        for wanted in names:
+            hits = [hit for hit in self._matching(name, source, re.escape(wanted), [wanted]) if hit[0] == wanted]
+            found += [hit for hit in hits if hit not in found]
+            if not hits:
+                missing.append(wanted)
+        return VariableSearch(name, found[:MAX_SEARCH_RESULTS], len(found), list(names), missing=missing)
 
     def search_codes(self, codes) -> VariableSearch:
         """Variables of the default data source for each tag (MT0021): those with that very tag, else all holding it."""

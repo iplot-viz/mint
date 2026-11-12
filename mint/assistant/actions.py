@@ -193,6 +193,16 @@ def _capital(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
+def _listed(names) -> str:
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
+def _pulse_name(pulse: str) -> str:
+    # An IMAS URI ends with the name that tells it apart: ".../105027/pf_active_5k".
+    return pulse if len(pulse) <= 30 else [part for part in re.split(r"[/=?]", pulse) if part][-1]
+
+
 class Planner:
     """Builds a Proposal from commands, checking them against a snapshot of the workspace."""
 
@@ -222,14 +232,20 @@ class Planner:
         proposal.commands = [str(c) for c in cmds if c.verb not in ("ask", "say", "find")]
         return proposal
 
+    def name(self, row) -> str:
+        return self._name(row)
+
     def _name(self, row) -> str:
-        """A row as the user knows it: by its name, plus its plot or order only when names repeat."""
+        """A row as the user knows it: by its name, plus its plot, pulse or order only when names repeat."""
         label = _short(row.label)
         twins = [r for r in self.snap.rows if _short(r.label).lower() == label.lower()]
         if len(twins) <= 1:
             return label
         if row.plot and sum(r.plot == row.plot for r in twins) == 1:
             return f"{label} (in {self.snap.place(row.plot)})"
+        pulses = [r.pulse for r in twins]
+        if len(set(pulses)) == len(pulses):  # the same signal of different pulses
+            return f"{label} (pulse {_pulse_name(row.pulse)})" if row.pulse else f"{label} (the workspace's pulse)"
         order = [r.id for r in twins].index(row.id)
         return f"{label} (the {ORDINALS[order] if order < len(ORDINALS) else f'{order + 1}th'} one in the table)"
 
@@ -393,6 +409,27 @@ class Planner:
                 row, {"Stack": stack}, line))
         return "Move"
 
+    def _source(self, cmd: Command, proposal: Proposal) -> str:
+        """The data source of rows, among those MINT has here; grouped by the one each had on the card."""
+        name = cmd.words[0]
+        choices = self.ws.data_source_choices()
+        if name not in choices:
+            raise ActionError(f"{name} isn't one of the data sources here: {_listed(choices) or 'none'}.")
+        rows = [self._row(row_id) for row_id in cmd.ids]
+        rows = [row for row in rows if row.data_source != name]
+        if not rows:
+            raise ActionError(f"They already use {name}.")
+        groups = {}
+        for row in rows:
+            groups.setdefault(row.data_source, []).append(row)
+        for old, members in groups.items():
+            names = [self._name(row) for row in members]
+            said = _listed(names) if len(names) <= 3 else f"{', '.join(names[:2])} and {len(names) - 2} more"
+            for n, row in enumerate(members):
+                line = f"{said}: {old or 'none'} → {name}" if n == 0 else ""
+                proposal.changes.append(self._set_cells_change(row, {"DS": name}, line))
+        return "Data source"
+
     def _remove(self, cmd: Command, proposal: Proposal) -> str:
         for row_id in cmd.ids:
             proposal.changes.append(self._remove_row_change(self._row(row_id)))
@@ -467,7 +504,13 @@ class Planner:
             if relative is not None:
                 new = {"mode": "RELATIVE_TIME", "relative": relative[0], "base": relative[1],
                        "auto_refresh": ws.relative_auto_refresh()}
-                set_range = lambda: ws.set_range_dict(new)  # noqa: E731
+                end = self.snap.now.astimezone(timezone.utc)
+                shown = (_ns(end - timedelta(seconds=span)), _ns(end))
+
+                def set_range():
+                    ws.set_range_dict(new)
+                    # From/To say the span too, as if it had been typed there.
+                    ws.show_time_range_ns(*shown)
             else:
                 # Too many units for the relative mode's box: the same span, ending now.
                 end = self.snap.now.astimezone(timezone.utc)
@@ -487,12 +530,13 @@ class Planner:
 
         def do():
             before.clear()
-            before.update(ws.range_dict())
+            before.update(range=ws.range_dict(), fields=ws.time_range_fields())
             set_range()
 
         def undo():
             if before:
-                ws.set_range_dict(before)
+                ws.set_range_dict(before["range"])
+                ws.set_time_range_fields(before["fields"])
 
         proposal.changes.append(Change([line], do, undo, needs_draw=True, sets_range=kind != "pulse"))
         return "Time range"

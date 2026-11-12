@@ -1,4 +1,5 @@
 """Glue between the chat panel, the model and the workspace."""
+import dataclasses
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -7,7 +8,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
-from mint.assistant import check, commands, doubt, files, followup, prompt, recipes, record, when
+from mint.assistant import check, commands, diagnose, doubt, files, followup, prompt, recipes, record, when
 from mint.assistant.actions import MAX_ADDED, ActionError, ApplyContext, MissingValue, Planner, Proposal, added_rows
 from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
@@ -190,6 +191,8 @@ class AssistantController(QObject):
         self._cards = {}
         self._searches = {}  # suggestion text -> words, for the searches MINT offers itself
         self._planned = {}  # suggestion text -> commands MINT plans itself, without the model
+        self._fix_offer = ""  # the one change of data source just offered, which "yes" takes
+        self._told_problems = ""  # the missing data sources last told on opening the panel
         self._file = None  # snapshot.FileInfo of the attached file
         self._reading = ""  # the file being read, whose result is the one awaited
         self._reads_files = False  # the model was trained on attached files (see models.reads_files)
@@ -214,6 +217,7 @@ class AssistantController(QObject):
         if self.panel.is_detached():
             self.floating.setVisible(visible)
         if not visible:
+            self._release_model()
             return
         if self.panel.is_detached():
             self.floating.raise_()
@@ -227,6 +231,49 @@ class AssistantController(QObject):
                 logger.debug(f"Assistant: no suggestions from the table: {e}")
         self.panel.input.setFocus()
         self._ensure_engine()
+        self._tell_problems(on_open=True)
+
+    def _release_model(self):
+        """Closing the panel frees the memory the model takes; opening it again loads it in a few seconds."""
+        if self.engine is None:
+            return
+        engine, self.engine = self.engine, None
+        engine.shutdown()
+        engine.deleteLater()
+        self._inflight, self._queued, self._primed = None, None, False
+        self.panel.set_busy(False)
+
+    def _tell_problems(self, on_open: bool = False) -> bool:
+        """Why rows aren't drawn, from MINT's own state, with the change of data source that fixes the commonest case.
+
+        On opening the panel only a data source that isn't here is told, and once. False when nothing is told.
+        """
+        try:
+            snap = self.workspace.snapshot()
+            problems = diagnose.find(snap, self.workspace.data_source_choices())
+        except Exception:
+            logger.exception("Assistant: could not look at the table's problems")
+            return False
+        told = repr(sorted((source, [row.uid for row in rows]) for source, rows in problems.missing.items()))
+        if not problems or (on_open and (not problems.missing or told == self._told_problems)):
+            return False
+        self._told_problems = told
+        planner = Planner(self.workspace, snap)
+        fixes = {source: diagnose.replacement(source, problems.sources) for source in problems.missing}
+        offers = {}
+        for source, rows in problems.missing.items():
+            for target in [fixes[source]] if fixes[source] else problems.sources[:3]:
+                offers[self.voice.change_source(source, target)] = f"source {' '.join(r.id for r in rows)} to {target}"
+        shown = problems.invalid[:3]
+        self.panel.add_assistant_message(self.voice.problems(
+            [(source, [planner.name(row) for row in rows]) for source, rows in problems.missing.items()], fixes,
+            [(planner.name(row), reason) for row, reason in shown], problems.sources,
+            more=len(problems.invalid) - len(shown)))
+        self._planned = offers
+        # "Yes" to "Shall I change them to imas?" is that one change.
+        self._fix_offer = next(iter(offers)) if len(offers) == 1 else ""
+        self._suggest(list(offers))
+        return True
 
     def _fit_in_splitter(self):
         """The first time the panel shows in the splitter, it takes its width from the canvas."""
@@ -478,7 +525,11 @@ class AssistantController(QObject):
         self.panel.add_user_message(text)
         pending = self._pending_card
         self._set_pending(None)
-        pasted = files.pasted(text) if self._reads_files else None
+        fix, self._fix_offer = self._fix_offer, ""
+        if fix and followup.agrees(text):
+            text = fix
+        known = [row.variable for row in self.workspace.snapshot().rows] if self._reads_files else ()
+        pasted = files.pasted(text, known) if self._reads_files else None
         if pasted is not None:
             # A list of signals pasted into the message is taken as a file, and the words around it as the request.
             found, text = pasted
@@ -500,6 +551,9 @@ class AssistantController(QObject):
             self._open_question = None
             self._undo_last()
             return
+        if diagnose.asks_about_state(text) and self._tell_problems():
+            self._open_question = None
+            return
         # A reply to the last question: fills a number, names the signal "it" meant, or goes to the model
         # with the request it answers. Anything longer is a new request.
         question, self._open_question = self._open_question, None
@@ -507,6 +561,8 @@ class AssistantController(QObject):
             return
         answering = question is not None and followup.is_answer(text)
         named = False
+        if answering and question.options and followup.means_every(text) and self._every_option(question, text):
+            return
         if answering and question.command is not None:
             value = followup.value_in(text, question.param)
             if value is None and question.example is not None and followup.agrees(text):
@@ -530,6 +586,19 @@ class AssistantController(QObject):
             self._queued = (text, answering, named)
             return
         self._ask_model(text, answering, named)
+
+    def _every_option(self, question, answer: str) -> bool:
+        """"Both" to "which one: A or B?": what the model meant, done to all of them, without asking it again."""
+        widened = []
+        for cmd in question.commands:
+            ids = [i for i in cmd.ids if i not in question.options]
+            if len(ids) != len(cmd.ids) and cmd.verb != "combine":
+                cmd = dataclasses.replace(cmd, ids=ids + list(question.options))
+            widened.append(cmd)
+        if not widened or widened == question.commands:
+            return False
+        self._plan_with_number(widened, question.snap, followup.with_answer(question, answer))
+        return True
 
     def _answer_card(self, card, text: str) -> bool:
         """"ok" or "no" to the card on screen, as its Apply or Dismiss; False when the text says something else."""
@@ -627,6 +696,7 @@ class AssistantController(QObject):
             # Its last line may be half a command that still parses, e.g. a window cut from 30 s to 3 s.
             self.panel.add_assistant_message(self.voice.too_long())
             return
+        between = None
         try:
             cmds = check.review(snap, request, commands.parse(text))
             rewritten = None if answering else check.selection_for_it(snap, request, cmds)
@@ -643,6 +713,8 @@ class AssistantController(QObject):
                 # It hesitated between two rows or plots: asking costs the user less than a wrong change.
                 logger.info(f"Assistant unsure between {unsure[0]} and {unsure[1]} in {text!r}")
                 proposal = planner.plan([commands.Command("ask", text=f"Sure, which one: {unsure[0]} or {unsure[1]}?")])
+                # "Both" is then what the model meant, for each of them.
+                between = (cmds, list(unsure))
         except MissingValue as e:
             # The question stays open, so a reply with just the number fills in the request it belongs to.
             # After an answer it isn't asked in full again; a signal picked in reply to "which one?" still is.
@@ -661,6 +733,8 @@ class AssistantController(QObject):
             self.panel.add_assistant_message(self.voice.could_not_work_out())
             return
         self._present(proposal, request, snap, answering)
+        if between and self._open_question is not None:
+            self._open_question.commands, self._open_question.options = between
         if not proposal.changes and proposal.search is None:
             # A code that is in no row ("need TF07 coil current") is most likely a signal to add.
             codes = check.unknown_codes(snap, request)

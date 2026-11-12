@@ -92,14 +92,38 @@ def find(lines: Iterable[str]) -> Found:
     return found
 
 
-def pasted(text: str) -> Optional[Tuple[Found, str]]:
-    """A message holding a pasted list of signals: what the list names, and the request written around it."""
+# A run of names in a line ("A, B and C"), and the words before it that already say what they are.
+NAME_RUN = re.compile(r"\x00(?:[\s,;&]*(?:and|y|et|und|e|or)?[\s,;&]*\x00)*")
+SAID_BEFORE = re.compile(r"\b(?:variables?|signals?|names?|these|those|following|vars)\s*:?\s*$", re.IGNORECASE)
+
+
+def pasted(text: str, known=()) -> Optional[Tuple[Found, str]]:
+    """A message holding a list of signals, one per line or in a line: what it names, and the request around it.
+
+    In a line, names already in the table don't count: "combine A and B" is about those rows.
+    """
     lines = [line for line in text.splitlines() if line.strip()]
-    found = find(lines) if len(lines) > 1 else None
-    if found is None or len(found.variables) < 2:
+    if len(lines) > 1:
+        found = find(lines)
+        if len(found.variables) < 2:
+            return None
+        said = [line.strip() for line in lines if not (NAME.search(line) or CELLS.search(line) or _moments(line))]
+        return found, " ".join(said)
+    known = set(known)
+    names = [name for name in dict.fromkeys(NAME.findall(text)) if name not in known]
+    if len(names) < 2:
         return None
-    said = [line.strip() for line in lines if not (NAME.search(line) or CELLS.search(line) or _moments(line))]
-    return found, " ".join(said)
+    found = Found(variables=[(name, "") for name in names[:MAX_VARIABLES]])
+    # "add A, B and C, one plot each" -> "add them, one plot each"
+    marked = NAME.sub("\x00", text)
+    said, start = "", 0
+    for run in NAME_RUN.finditer(marked):
+        before = marked[start:run.start()]
+        said += before + (" " if SAID_BEFORE.search(before) else " them ")
+        start = run.end()
+    said = " ".join((said + marked[start:]).split())
+    said = re.sub(r"\s+([,.;:!?])", r"\1", said).strip(" ,;:")
+    return found, "" if said.lower() == "them" else said
 
 
 def _note(line: str, names: List[str]) -> str:

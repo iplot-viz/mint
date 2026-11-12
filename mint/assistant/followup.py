@@ -35,6 +35,11 @@ POLITE = AGREE | set("it it's its is that that's this then please pls thanks tha
 CORRECTING = set("no nope nah non nein não nao actually rather instead".split())
 # Turning down the card on screen: "no", "no thanks", "not now".
 DECLINE = set("no nope nah not cancel dismiss non nein não nao".split())
+# "Both", "all of them", "las dos": every option of the question, in the languages the assistant understands.
+EVERY = set("all both each every two todos todas ambos ambas cada dos tous toutes chacun chacune deux alle beide "
+            "jeder jede jedes zwei tutti tutte entrambi entrambe ognuno due dois duas".split())
+EVERY_AROUND = set("of them the these those ones one signals signal rows plots los las les eux elles ellos ellas "
+                   "die sie le la loro i gli eles elas os as and y et und e".split())
 
 
 @dataclass
@@ -45,6 +50,7 @@ class OpenQuestion:
     command: Optional[Command] = None
     param: str = ""
     example: Optional[float] = None  # the value the question suggested
+    options: List[str] = field(default_factory=list)  # the rows or plots "which one?" offered
 
 
 def _words(text: str) -> List[str]:
@@ -86,6 +92,13 @@ def declines(text: str) -> bool:
     words = [word.lower() for word in _words(text)]
     return (bool(words) and "?" not in text and not _saying(text, POLITE | DECLINE)
             and any(word in DECLINE for word in words) and not any(word in AGREE for word in words))
+
+
+def means_every(text: str) -> bool:
+    """A reply that takes every option offered: "both", "all of them", "las dos", "tous"."""
+    words = [word.lower() for word in _words(text)]
+    said = [word for word in words if word not in EVERY_AROUND and word not in POLITE]
+    return bool(said) and "?" not in text and all(word in EVERY for word in said)
 
 
 def is_answer(text: str) -> bool:

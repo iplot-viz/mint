@@ -528,6 +528,40 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertEqual(len(cards), 1)
         self.assertNotIn("which one", " ".join(self.said).lower())
 
+    def test_both_does_to_each_what_the_model_meant(self):
+        self.engine.ids = [{"id": "r1", "p": 0.45, "alts": {"r2": 0.4}}]
+        self.assertEqual(self.ask("smooth that one", "process r1 moving_average window=10s"), [])
+        calls = len(self.engine.prompts)
+        cards = self.ask("both", 'say "no model here"')
+        self.assertEqual(len(self.engine.prompts), calls, "every option, without asking the model again")
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r1 r2 moving_average window=10s"])
+
+    def test_a_data_source_not_here_is_told_on_opening_and_fixed_without_the_model(self):
+        self.ctl.set_visible(True)
+        self.assertEqual(self.said[-1], "CRYO:MT0001 uses the data source other, which isn't available here, so it "
+                                        "isn't drawn: the data sources here are csv. Shall I change it to csv?")
+        self.assertIn("Change other to csv", [b.text() for b in self.ctl.panel.findChildren(QPushButton)])
+        calls = len(self.engine.prompts)
+        cards = self.ask("Change other to csv", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].lines, ["CRYO:MT0001: other → csv"])
+        self.ctl.on_card_action(cards[0], ctl.APPLY, [])
+        self.assertEqual(list(self.ctl.workspace.table()["DS"])[:4], ["csv"] * 4)
+        self.ctl.on_card_action(cards[0], ctl.UNDO, [])
+        # Asked why, MINT says it again; a yes is the change it offers.
+        self.ask("why is one of them red?", 'say "no model here"')
+        self.assertIn("uses the data source other", self.said[-1])
+        cards = self.ask("yes", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["source r3 to csv"])
+        self.assertEqual(len(self.engine.prompts), calls, "none of it needs the model")
+
+    def test_closing_the_panel_frees_the_model(self):
+        self.ctl.set_visible(True)
+        stopped = []
+        self.engine.shutdown = lambda: stopped.append(1)
+        self.ctl.set_visible(False)
+        self.assertIsNone(self.ctl.engine)
+        self.assertEqual(stopped, [1])
+
     def test_a_row_the_model_hesitated_on_becomes_a_question(self):
         self.engine.ids = [{"id": "r1", "p": 0.45, "alts": {"r2": 0.4}}]
         self.assertEqual(self.ask("smooth that one", "process r1 moving_average window=10s"), [], "no card")
@@ -677,6 +711,7 @@ class AssistantFlowTest(unittest.TestCase):
                                                  "pirani minus MT0001-XI", "Show the last 6 hours"])
         snap.plots[0].log_scale, snap.selected = True, ["r2"]
         self.assertEqual(ctl.suggestions(snap)[0], "Smooth the selected signals over 10 s")
+        self.ctl.workspace.data_source_choices = lambda: ["csv", "other"]  # nothing to tell first
         self.ctl.set_visible(True)
         self.assertIn("Smooth pirani over 10 s", [b.text() for b in self.ctl.panel.findChildren(QPushButton)])
 

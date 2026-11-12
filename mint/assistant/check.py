@@ -73,15 +73,31 @@ def _partners(snap: Snapshot, request: str):
     return (rows, prompt.clean(after.strip(), 60)) if rows else None
 
 
+# The words of each plot switch, in the languages the assistant understands: one not said is not asked for.
+SWITCH_WORDS = {
+    "log": re.compile(r"\blog|linear|lineal|lin[eé]aire|lineare", re.IGNORECASE),
+    "grid": re.compile(r"grid|rejilla|cuadr[ií]cula|malla|grill|quadrillage|gitter|raster|griglia|grade|grelha",
+                       re.IGNORECASE),
+    "legend": re.compile(r"legend|leyenda|l[eé]gende", re.IGNORECASE),
+}
+
+
 def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
     """The model's commands, completed where the request is plain about what they leave out.
 
-    A command moving the rows that others should join becomes a question.
+    A command moving the rows that others should join becomes a question. A plot switch the request
+    doesn't mention is dropped: "enable the markers" must not turn the grid on.
     """
     hits = places(snap, request)
     for cmd in cmds:
         if cmd.verb == "plot" and set(cmd.ids) < set(hits):
             cmd.ids = list(hits)
+        if cmd.verb == "plot":
+            cmd.params = {key: value for key, value in cmd.params.items()
+                          if key not in SWITCH_WORDS or SWITCH_WORDS[key].search(request or "")}
+    if any(cmd.verb == "plot" and not cmd.params for cmd in cmds):
+        cmds = [cmd for cmd in cmds if cmd.verb != "plot" or cmd.params] or [
+            Command("say", text="I can't change that yet. On a plot I can set log scale, grid, legend and title.")]
     partners = _partners(snap, request) if any(c.verb == "move" for c in cmds) else None
     if partners and any(c.verb == "move" and set(c.ids) <= partners[0] for c in cmds):
         return [Command("ask", text=f"Sure, which signal should go with {partners[1]}?")]

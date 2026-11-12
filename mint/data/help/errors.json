@@ -2,6 +2,21 @@
     "version": 2,
     "entries": [
         {
+            "id": "invalid-data-source",
+            "patterns": [
+                "^Invalid\\|data source"
+            ],
+            "title": "Data source not available",
+            "manual_anchor": "errors-invalid-data-source",
+            "summary": "The DS cell of this row names a data source that MINT can't use here: it isn't in this machine's data sources, or it didn't connect. The row isn't drawn until it uses one that is available.",
+            "what_to_do": [
+                "Pick a data source from the list in the DS cell, or ask the AI Assistant to change it.",
+                "If the data source was renamed (imaspy is now imas, for example), use the new name.",
+                "If it should be available on this machine, check its data sources configuration."
+            ],
+            "if_it_persists": "Contact MINT support and share the log file at .local/1Dtool/logs/mint.log inside your home directory."
+        },
+        {
             "id": "permission-denied",
             "patterns": [
                 "PermissionError",

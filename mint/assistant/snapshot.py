@@ -32,6 +32,8 @@ class RowInfo:
     envelope: bool = False
     plot_type: str = "PlotXY"
     uid: str = ""
+    pulse: str = ""  # its own PulseId, when it doesn't use the workspace's
+    status: str = ""
 
     @property
     def is_expression(self) -> bool:
@@ -168,7 +170,8 @@ def build(table, selected_indices=(), canvas=None, range_text="", range_seconds=
         row = RowInfo(id=f"r{i + 1}", index=i, variable=variable, data_source=_cell(table, i, "DS"),
                       alias=alias, stack=_cell(table, i, "Stack"), x=_cell(table, i, "x"), y=_cell(table, i, "y"),
                       envelope=_cell(table, i, "Envelope") in ("1", "True", "true"),
-                      plot_type=_cell(table, i, "Plot type") or "PlotXY", uid=_cell(table, i, "uid"))
+                      plot_type=_cell(table, i, "Plot type") or "PlotXY", uid=_cell(table, i, "uid"),
+                      pulse=_cell(table, i, "PulseId"), status=_cell(table, i, "Status"))
         rows.append(row)
         position = parse_stack(row.stack)
         if position:

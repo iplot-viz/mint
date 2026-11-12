@@ -34,7 +34,7 @@ class Command:
         ids, words = self.ids, self.words
         if self.verb == "combine":
             ids, words = words + ids, []
-        elif self.verb == "move":
+        elif self.verb in ("move", "source"):
             words = ["to"] + words
         elif self.verb == "range" and words[:1] == ["from"]:
             words = ["from", _when(words[1]), "to", _when(words[2])]
@@ -224,6 +224,11 @@ def _parse_tokens(tokens, line) -> Command:
         if not ids or len(rest) != 2 or rest[0] != "to":
             raise CommandError(f"move needs rows and a target: {line!r}")
         return Command("move", ids=ids, words=[rest[1]])
+    if verb == "source":
+        ids = _ids(rest, "r")
+        if not ids or len(rest) != 2 or rest[0] != "to":
+            raise CommandError(f"source needs rows and a data source: {line!r}")
+        return Command("source", ids=ids, words=[rest[1]])
     if verb == "remove":
         ids = _ids(rest, "r")
         if not ids or rest:

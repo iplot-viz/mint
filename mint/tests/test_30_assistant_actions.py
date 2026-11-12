@@ -366,6 +366,52 @@ class AssistantActionsTest(_WindowCase):
             self.ws.search_variables(["sdnuda"], "variables in sdnuda")
         self.assertIn("What should I look for in sdnuda", str(ctx.exception))
 
+    def test_full_names_are_each_looked_up(self):
+        class Source:
+            def get_var_list(self, pattern):
+                names = ["CRYO-CA-SQB:PC-6200-DP12", "CRYO-CA-SQB:PC-6200-DP13", "CRYO-CA-SQB:MZ6290-XI0",
+                         "CRYO-CA-SQB:MZ6290-XI"]
+                return [n for n in names if re.fullmatch(pattern, n)]
+
+        self.ws.default_data_source = lambda: ("codacuda", Source())
+        names = ["CRYO-CA-SQB:PC-6200-DP12", "CRYO-CA-SQB:MZ6290-XI0", "CRYO-CA-SQB:MPD6200-XI"]
+        search = self.ws.search_variables(names, "add " + ", ".join(names))
+        self.assertEqual([name for name, _ in search.found], names[:2], "each one, not those holding them all")
+        self.assertEqual(search.missing, names[2:])
+
+    def test_the_data_source_of_rows_changes_among_those_here(self):
+        proposal, after = self.apply_and_undo("source r3 to csv")
+        self.assertEqual(proposal.lines, ["CRYO:MT0001: other → csv"])
+        self.assertEqual(proposal.commands, ["source r3 to csv"])
+        self.assertEqual(list(after["DS"]), ["csv"] * 4)
+        with self.assertRaises(ActionError) as ctx:
+            self.plan("source r1 to imaspy")
+        self.assertIn("imaspy isn't one of the data sources here", str(ctx.exception))
+
+    def test_the_same_signal_of_two_pulses_is_told_by_its_pulse(self):
+        from mint.assistant.snapshot import PlotInfo, RowInfo, Snapshot
+        coil = "pf_active/coil[1]/current/data"
+        rows = [RowInfo(id="r1", index=0, variable=coil, stack="1", plot="p1",
+                        pulse="imas:hdf5?path=/home/ITER/user/public/imasdb/test/105027/pf_active_5k"),
+                RowInfo(id="r2", index=1, variable=coil, stack="1", plot="p1")]
+        planner = Planner(self.ws, Snapshot(rows=rows, plots=[PlotInfo(id="p1", row=1, col=1)]))
+        self.assertEqual([planner.name(row) for row in rows],
+                         [f"{coil} (pulse pf_active_5k)", f"{coil} (the workspace's pulse)"])
+
+    def test_a_relative_range_shows_its_span_in_from_and_to(self):
+        fields = self.win.dataRangeSelector.accessModes[0]
+        before = fields.to_dict()
+        snap = self.ws.snapshot()
+        proposal = Planner(self.ws, snap).plan(commands.parse("range last 6 hours"))
+        proposal.apply()
+        self.assertEqual(self.ws.range_dict()["mode"], "RELATIVE_TIME")
+        end = snap.now.astimezone(timezone.utc).replace(tzinfo=None)
+        shown = [datetime.fromisoformat(fields.to_dict()[key]) for key in ("ts_start", "ts_end")]
+        self.assertLess(abs((shown[1] - end).total_seconds()), 1)
+        self.assertLess(abs((shown[1] - shown[0]).total_seconds() - 6 * 3600), 1)
+        self.assertEqual(proposal.undo(), [])
+        self.assertEqual(fields.to_dict(), before, "Undo puts From and To back too")
+
     def test_variable_search_in_a_source_that_is_not_connected_says_so(self):
         self.ws.data_source_names = lambda: ["sdnuda"]
         with mock.patch.object(AppDataAccess, "da") as da:
@@ -522,8 +568,20 @@ class FileReadingTest(unittest.TestCase):
         found, request = files.pasted("Signal;Unit\nCRYO-A-1:X1;K\nCRYO-A-1:X2;K\nChecked on 29 Oct 2024 07:05")
         self.assertEqual((len(found.variables), found.times, request), (2, ["2024-10-29 07:05"], ""),
                          "a table and its date are what was pasted, not a request")
-        for message in ("smooth CRYO-A-1:X1 and CRYO-A-1:X2", "smooth it\nCRYO-A-1:X1", "hello\nthere"):
+        self.assertIsNone(files.pasted("smooth CRYO-A-1:X1 and CRYO-A-1:X2", ["CRYO-A-1:X1", "CRYO-A-1:X2"]),
+                          "rows of the table named in a request are not a list")
+        for message in ("smooth it\nCRYO-A-1:X1", "hello\nthere", "smooth CRYO-A-1:X1 over 30 s"):
             self.assertIsNone(files.pasted(message), message)
+
+    def test_names_written_in_a_line_are_a_list(self):
+        found, request = files.pasted("make me a workspace with these three variables CRYO-CA-SQB:PC-6200-DP12, "
+                                      "CRYO-CA-SQB:MZ6290-XI0,CRYO-CA-SQB:MPD6200-XI and put three plots")
+        self.assertEqual([name for name, _ in found.variables],
+                         ["CRYO-CA-SQB:PC-6200-DP12", "CRYO-CA-SQB:MZ6290-XI0", "CRYO-CA-SQB:MPD6200-XI"])
+        self.assertEqual(request, "make me a workspace with these three variables and put three plots")
+        self.assertEqual(files.pasted("add CRYO-A-1:X1, CRYO-A-1:X2 and CRYO-A-1:X3, one plot each")[1],
+                         "add them, one plot each")
+        self.assertEqual(files.pasted("CRYO-A-1:X1, CRYO-A-1:X2")[1], "", "only names: the list alone")
 
     def test_a_pdf_table_keeps_each_row_on_one_line(self):
         class Page:

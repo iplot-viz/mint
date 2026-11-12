@@ -11,7 +11,7 @@ logger = setupLogger.get_logger(__name__)
 
 FILE = "record.jsonl"
 # Past this the file starts again and the previous one is kept as record.jsonl.1: at most twice this on disk.
-MAX_BYTES = 5 * 1024 * 1024
+MAX_BYTES = 512 * 1024
 
 
 def path() -> str:

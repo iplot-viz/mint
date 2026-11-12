@@ -77,6 +77,7 @@ class MTSignalsModel(QAbstractItemModel):
 
         self._table = pd.DataFrame(columns=column_names)
         self._table_fails = pd.DataFrame(columns=column_names)
+        self._row_reasons = {}  # table row (from 1) -> why a cell of it can't be used
         self._signal_stack_ids = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         self._alias_list = set()
         self._alias_checked = False
@@ -95,10 +96,11 @@ class MTSignalsModel(QAbstractItemModel):
         return QModelIndex()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.index.size
+        # A table: its cells have no children of their own. Find & Replace asks with None.
+        return 0 if parent is not None and parent.isValid() else self._table.index.size
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.columns.size
+        return 0 if parent is not None and parent.isValid() else self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
@@ -228,9 +230,13 @@ class MTSignalsModel(QAbstractItemModel):
                 return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
+        return Qt.ItemFlag.NoItemFlags
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginInsertRows(parent, row, row + count)
+        # Qt's last row is inclusive; one more, or a layout change while the rows go in, can leave views behind.
+        # A layout change follows once they are in, not while they go in: what waits for a complete table (the
+        # data access workers) listens to it.
+        self.beginInsertRows(parent, row, row + count - 1)
 
         for new_row in range(row, row + count):
             # Create empty row
@@ -251,24 +257,27 @@ class MTSignalsModel(QAbstractItemModel):
             self._table_fails = pd.concat(
                 [self._table_fails.iloc[:new_row], empty_row_fails, self._table_fails.iloc[new_row:]]).reset_index(
                 drop=True)
-        self.layoutChanged.emit()
 
         self.endInsertRows()
+        self.layoutAboutToBeChanged.emit()
+        self.layoutChanged.emit()
 
         return super().insertRows(row, count, parent=parent)
 
     def removeRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginRemoveRows(parent, row, row + count)
+        self.beginRemoveRows(parent, row, row + count - 1)
 
         try:
             self._table = self._table.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
             self._table_fails = self._table_fails.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
-            self.layoutChanged.emit()
             success = True
         except KeyError:
             success = False
 
         self.endRemoveRows()
+        if success:
+            self.layoutAboutToBeChanged.emit()
+            self.layoutChanged.emit()
 
         return success
 
@@ -479,8 +488,20 @@ class MTSignalsModel(QAbstractItemModel):
         finally:
             self._signal_stack_ids.clear()
 
+    def _invalid(self, table_row: int, message: str):
+        """Logs why a cell can't be used, and keeps the first reason of the row for its Status."""
+        logger.warning(message)
+        self._row_reasons.setdefault(table_row, message)
+
+    def _invalid_status(self, row_idx: int) -> str:
+        """The Status of a row that can't be drawn: why, as the log says it, without the row number."""
+        reason = re.sub(r"\s*(?:in|Check) (?:the )?table row \[\d+\]\.?", "", self._row_reasons.get(row_idx + 1, ""))
+        reason = re.sub(r"^Invalid\s+", "", " ".join(reason.split()))
+        return f"{Result.INVALID}|{reason}" if reason else Result.READY
+
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
         signal_params = dict()
+        self._row_reasons.pop(row_idx + 1, None)
         # Initialize attributes for Waypoint
         col_num = row_num = col_span = row_span = stack_num = ts_start = ts_end = -1
 
@@ -489,11 +510,11 @@ class MTSignalsModel(QAbstractItemModel):
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)
-            # Update Status to "Ready" if any cell is invalid.
+            # A row with an invalid cell isn't drawn: its Status says why.
             status_col = mtBP.get_column_name(self.blueprint, 'Status')
             sc = self._table.columns.get_loc(status_col)
             if errors:
-                self._table.iat[row_idx, sc] = "Ready"
+                self._table.iat[row_idx, sc] = self._invalid_status(row_idx)
                 status_idx = self.createIndex(row_idx, sc)
                 self.dataChanged.emit(status_idx, status_idx)
 
@@ -645,13 +666,13 @@ class MTSignalsModel(QAbstractItemModel):
                                         fls[column_name] = 0
                                     else:
                                         fls[column_name] = 1
-                                        logger.warning(
+                                        self._invalid(table_row, 
                                             f"The pulse '{pulse}' could not be found in the data source '{inp['DS']}' "
                                             f"in the table row [{table_row}]")
                                         break
                                 else:
                                     fls[column_name] = 1
-                                    logger.warning(
+                                    self._invalid(table_row, 
                                         f"The pulse '{pulse}' could not be found in the data source '{inp['DS']}' "
                                         f"in the table row [{table_row}]")
                                     break
@@ -690,7 +711,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid date format: expected an absolute timestamp in nanoseconds in "
+                                self._invalid(table_row, f"Invalid date format: expected an absolute timestamp in nanoseconds in "
                                                f"the table row [{table_row}]")
                             value = default_value
 
@@ -700,7 +721,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid date format: expected a relative timestamp when using pulses "
+                                self._invalid(table_row, f"Invalid date format: expected a relative timestamp when using pulses "
                                                f"in the table row [{table_row}]")
 
                             if default_value == '':
@@ -728,7 +749,7 @@ class MTSignalsModel(QAbstractItemModel):
                             else:
                                 value = default_value
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid date format: expected an absolute timestamp when using a time "
+                                self._invalid(table_row, f"Invalid date format: expected an absolute timestamp when using a time "
                                                f"range without pulses in the table row [{table_row}]")
 
                         # There is a value and pulses
@@ -740,7 +761,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     value = None
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid date format: expected a relative timestamp when using pulses "
+                                self._invalid(table_row, f"Invalid date format: expected a relative timestamp when using pulses "
                                                f"in the table row [{table_row}]")
                             else:
                                 # keep value
@@ -752,7 +773,7 @@ class MTSignalsModel(QAbstractItemModel):
                             if value <= out['StartTime'] or fls['StartTime'] == 1 or fls[column_name] == 1:
                                 fls[column_name] = 1
                                 fls['StartTime'] = 1
-                                logger.warning(f"Chronology error: EndTime must be later than the StartTime in the "
+                                self._invalid(table_row, f"Chronology error: EndTime must be later than the StartTime in the "
                                                f"table row [{table_row}]")
                             else:
                                 fls[column_name] = 0
@@ -762,15 +783,16 @@ class MTSignalsModel(QAbstractItemModel):
                         value = get_value(inp, column_name, type_func)
                         if value == '':
                             fls[column_name] = 1
-                            logger.warning(f"Invalid datasource: the 'Datasource' field cannot be empty in the table "
+                            self._invalid(table_row, f"Invalid datasource: the 'Datasource' field cannot be empty in the table "
                                            f"row [{table_row}]")
                         else:
                             if value in self.data_sources:
                                 fls[column_name] = 0
                             else:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid datasource: the value '{value}' is not found in the list of "
-                                               f"available datasources in the table row [{table_row}]")
+                                self._invalid(table_row, f"Invalid data source: '{value}' is not one of the data sources "
+                                                         f"available here ({', '.join(self.data_sources)}) in the "
+                                                         f"table row [{table_row}]")
                     else:
                         value = get_value(inp, column_name, type_func) or default_value
 
@@ -787,7 +809,7 @@ class MTSignalsModel(QAbstractItemModel):
                                 fls[column_name] = 0
                             elif value in stack:
                                 fls[column_name] = 1
-                                logger.warning(
+                                self._invalid(table_row, 
                                     f"Invalid stack in table row [{table_row}]: "
                                     f"Plot of type PlotContour, PlotContourWithSlider or PlotXYWithSlider cannot be stacked, just PlotXY.\n"
                                     f"Mixing different plot types in the same stack is not allowed.")
@@ -796,7 +818,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
-                                    logger.warning(f"Invalid stack: The stack identifier must be a numeric value in the"
+                                    self._invalid(table_row, f"Invalid stack: The stack identifier must be a numeric value in the"
                                                    f" table row [{table_row}]")
 
                         # Row Span - Col Span
@@ -804,19 +826,19 @@ class MTSignalsModel(QAbstractItemModel):
                             if value <= 0:
                                 fls[column_name] = 1
                                 value = 1
-                                logger.warning(f"Invalid value for '{column_name}': the value must be greater than 0 in"
+                                self._invalid(table_row, f"Invalid value for '{column_name}': the value must be greater than 0 in"
                                                f" the table row [{table_row}]")
                             elif value == 1:
                                 if inp[column_name] == '1' or inp[column_name] == '':
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
-                                    logger.warning(f"Invalid value for '{column_name}': the value must be numeric in "
+                                    self._invalid(table_row, f"Invalid value for '{column_name}': the value must be numeric in "
                                                    f"the table row [{table_row}]")
                             elif value > 10:
                                 fls[column_name] = 1
                                 value = 1
-                                logger.warning(f"Invalid value for '{column_name}': the value exceeds the maximum limit"
+                                self._invalid(table_row, f"Invalid value for '{column_name}': the value exceeds the maximum limit"
                                                f" of 10 in the table row [{table_row}]")
                             else:
                                 # Keep value
@@ -832,7 +854,7 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
-                                    logger.warning(f"Invalid envelope value: expected '0' or an empty string to disable"
+                                    self._invalid(table_row, f"Invalid envelope value: expected '0' or an empty string to disable"
                                                    f" the envelope, or '1' to enable it in the table row [{table_row}]")
 
                         # Alias
@@ -844,13 +866,13 @@ class MTSignalsModel(QAbstractItemModel):
                                 else:
                                     # Repeated alias
                                     fls[column_name] = 1
-                                    logger.warning(f"Invalid alias: the alias '{value}' is already present in the list "
+                                    self._invalid(table_row, f"Invalid alias: the alias '{value}' is already present in the list "
                                                    f"of aliases in the table row [{table_row}]")
                             else:
                                 # Check if there is variable name
                                 if inp['Variable'] == "" and any(inp[exp] != "" for exp in ["x", "y", "z"]):
                                     fls[column_name] = 1
-                                    logger.warning(
+                                    self._invalid(table_row, 
                                         f"An alias must be specified when no variable is provided in order to"
                                         f" perform the query correctly. Check the table row [{table_row}]")
                                 else:
@@ -864,18 +886,18 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 0
                                 else:
                                     fls[column_name] = 1
-                                    logger.warning(f"Invalid '{column_name}' expression: the provided expression cannot"
+                                    self._invalid(table_row, f"Invalid '{column_name}' expression: the provided expression cannot"
                                                    f" be evaluated correctly")
                             except InvalidExpression:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid '{column_name}' expression: the provided expression cannot be "
+                                self._invalid(table_row, f"Invalid '{column_name}' expression: the provided expression cannot be "
                                                f"evaluated correctly")
 
                         # Plot Type
                         elif column_name == 'Plot type':
                             if value not in ['PlotXY', 'PlotContour', 'PlotXYWithSlider', 'PlotContourWithSlider']:
                                 fls[column_name] = 1
-                                logger.warning(f"Invalid plot type: '{value}' is not a valid plot type. Expected"
+                                self._invalid(table_row, f"Invalid plot type: '{value}' is not a valid plot type. Expected"
                                                f" 'PlotXY' or 'PlotContour' or 'PlotXYWithSlider' or 'PlotContourWithSlider'")
                             else:
                                 fls[column_name] = 0

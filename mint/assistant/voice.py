@@ -74,6 +74,34 @@ class Voice:
         return f"{read}: {_listed(found)}. What should I do with them?"
 
     @staticmethod
+    def problems(missing, fixes: dict, invalid, sources, more: int = 0) -> str:
+        """Why rows aren't drawn: a data source that isn't here first, with what to change it to, then other rows.
+
+        missing: [(source, row names)]; fixes: {source: the one to use, or None}; invalid: [(row name, reason)].
+        """
+        said = []
+        here = f"the data sources here are {_listed(sources)}" if sources else "no data source is connected here"
+        for source, names in missing:
+            who = f"{names[0]} uses" if len(names) == 1 else f"{len(names)} rows use"
+            them = "it" if len(names) == 1 else "them"
+            said.append(f"{who} the data source {source}, which isn't available here, so "
+                        f"{'it isn' if len(names) == 1 else 'they aren'}'t drawn: {here}.")
+            fix = fixes.get(source)
+            said.append(f"Shall I change {them} to {fix}?" if fix else
+                        f"Which one should {them} use?" if sources else "")
+        for name, reason in invalid:
+            said.append(f"{name} isn't drawn: {reason}.")
+        if more:
+            said.append(f"{more} more {'row isn' if more == 1 else 'rows aren'}'t drawn either: the Status says why.")
+        if invalid and not missing:
+            said.append("Fix the cell in red, then Draw.")
+        return " ".join(part for part in said if part)
+
+    @staticmethod
+    def change_source(old: str, new: str) -> str:
+        return f"Change {old} to {new}"
+
+    @staticmethod
     def find_codes(codes, source: str) -> str:
         return f"Find {'it' if len(codes) == 1 else 'them'} in {source}"
 
