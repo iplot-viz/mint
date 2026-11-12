@@ -411,6 +411,38 @@ class MintWorkspace:
     def draw(self):
         self.window.draw_clicked()
 
+    def open_statistics(self) -> bool:
+        """Opens Statistics on the signals drawn; False when none is drawn."""
+        if not self.window.canvasStack.currentWidget().get_signals(self.window.canvas):
+            return False
+        self.window.show_stats()
+        return True
+
+    def minimap(self, on: bool) -> Optional[bool]:
+        """Turns the mini-map on or off. Whether it already was, or None when it can't be shown now."""
+        action = self.window.toolBar.minimapAction
+        if action.isChecked() == on:
+            return True
+        if not action.isEnabled():
+            return None
+        action.setChecked(on)
+        return False
+
+    def open_search_vars(self):
+        self.window.sigCfgWidget.on_tree_view()
+
+    def is_hidden(self, uid: str) -> Optional[bool]:
+        """Whether the drawn signal of a row is hidden from its legend; None when it isn't drawn."""
+        signal = self._drawn_signal(uid)
+        return None if signal is None else bool(getattr(signal, "hidden", False))
+
+    def set_hidden(self, uid: str, hidden: bool):
+        """Hides or shows a drawn signal as a click on its legend entry does, so Draw keeps it."""
+        signal = self._drawn_signal(uid)
+        if signal is None:
+            raise ActionError(f"{self.name_of(uid)} isn't drawn any more, so I couldn't change it.")
+        signal.hidden = hidden
+
     def refresh_plots(self):
         self.window.update_canvas_preferences()
 
@@ -437,13 +469,15 @@ class MintWorkspace:
                               "Check it in Search Vars, or try another data source.")
         return source
 
-    def search_variables(self, words, request: str = "") -> VariableSearch:
-        """Variables of the named (else the default) data source whose name or HMI description holds all the words.
+    def search_variables(self, words, request: str = "", source: str = "") -> VariableSearch:
+        """Variables of the named data source (else ``source``, else the default) whose name or HMI description holds
+        all the words.
 
         A code-like word ("CRYO", "System1") is first tried as the tree group names start with, then anywhere in names.
         """
         words = [w for w in words if w]
-        name = _named_source(words, request, self.data_source_names())
+        name = _named_source(words, request, self.data_source_names()) or \
+            _named_source([source], "", self.data_source_names())
         if name:
             words = [w for w in words if w.lower() != name.lower()]
             source = self.data_source(name)

@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from mint.assistant.check import NUMBERS
 from mint.assistant.commands import Command
 from mint.assistant.snapshot import Snapshot
 
@@ -94,11 +95,13 @@ def declines(text: str) -> bool:
             and any(word in DECLINE for word in words) and not any(word in AGREE for word in words))
 
 
-def means_every(text: str) -> bool:
-    """A reply that takes every option offered: "both", "all of them", "las dos", "tous"."""
+def means_every(text: str, count: int = 0) -> bool:
+    """A reply that takes every option offered: "both", "all of them", "las dos", "tous", "the 3 of them" to a
+    question offering three."""
     words = [word.lower() for word in _words(text)]
     said = [word for word in words if word not in EVERY_AROUND and word not in POLITE]
-    return bool(said) and "?" not in text and all(word in EVERY for word in said)
+    return bool(said) and "?" not in text and all(
+        word in EVERY or (count > 1 and (word == str(count) or NUMBERS.get(word) == count)) for word in said)
 
 
 def is_answer(text: str) -> bool:

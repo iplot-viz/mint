@@ -102,6 +102,36 @@ class Voice:
         return f"Change {old} to {new}"
 
     @staticmethod
+    def statistics_opened() -> str:
+        return ("Here are the statistics of each signal drawn: minimum, average and maximum, first and last values "
+                "with their times, and samples. The bar chart button above the plots opens them too.")
+
+    @staticmethod
+    def statistics_nothing_drawn() -> str:
+        return ("Statistics shows the minimum, average and maximum, the first and last values and the samples of "
+                "each signal drawn, and nothing is drawn yet. Click Draw, then ask me again.")
+
+    @staticmethod
+    def minimap(on: bool, was, plots: int, streaming: bool) -> str:
+        """After turning the mini-map on or off: ``was`` says it already was, None that it can't be shown now."""
+        if was is None:
+            if streaming:
+                return "The mini-map doesn't work while streaming. Click Stop first, then ask me again."
+            return (f"The mini-map only works when a single plot is visible, on its own or in focus mode, and there "
+                    f"are {plots} now.")
+        if was:
+            return "The mini-map is already on, under the plot." if on else "The mini-map is already off."
+        if not on:
+            return "I've hidden the mini-map."
+        return ("Here's the mini-map, under the plot: the orange part is what the plot shows. Its button is next to "
+                "Statistics, above the plots.")
+
+    @staticmethod
+    def search_vars_opened() -> str:
+        return ("I've opened Search Vars: tick the variables there to add them. I can look for them too: tell me a "
+                "system such as CRYO, or part of a name.")
+
+    @staticmethod
     def find_codes(codes, source: str) -> str:
         return f"Find {'it' if len(codes) == 1 else 'them'} in {source}"
 

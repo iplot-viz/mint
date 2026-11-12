@@ -398,6 +398,27 @@ class AssistantActionsTest(_WindowCase):
         self.assertEqual([planner.name(row) for row in rows],
                          [f"{coil} (pulse pf_active_5k)", f"{coil} (the workspace's pulse)"])
 
+    def test_hiding_a_drawn_signal_keeps_its_row_and_undo_shows_it(self):
+        hidden = {}
+        uids = {r.id: r.uid for r in self.ws.snapshot().rows}
+        self.ws.is_hidden = lambda uid: hidden.get(uid, False) if uid != uids["r3"] else None
+        self.ws.set_hidden = lambda uid, value: hidden.__setitem__(uid, value)
+        proposal = Planner(self.ws, self.ws.snapshot()).plan(commands.parse("hide r1 r2"))
+        self.assertEqual(proposal.title, "Hide")
+        self.assertEqual(proposal.lines, ["Hide pirani and MAG-MCTB-F1:VAR2 on the plot (the legend still lists them)"])
+        rows = len(self.ws.table().index)
+        proposal.apply()
+        self.assertEqual(hidden, {uids["r1"]: True, uids["r2"]: True})
+        self.assertEqual(len(self.ws.table().index), rows, "the rows stay in the table")
+        proposal.undo()
+        self.assertEqual(hidden, {uids["r1"]: False, uids["r2"]: False})
+        with self.assertRaises(ActionError) as e:
+            Planner(self.ws, self.ws.snapshot()).plan(commands.parse("hide r3"))
+        self.assertIn("isn't drawn", str(e.exception))
+        hidden[uids["r1"]] = True
+        self.assertEqual(Planner(self.ws, self.ws.snapshot()).plan(commands.parse("show r1")).lines,
+                         ["Show pirani again"])
+
     def test_a_relative_range_shows_its_span_in_from_and_to(self):
         fields = self.win.dataRangeSelector.accessModes[0]
         before = fields.to_dict()

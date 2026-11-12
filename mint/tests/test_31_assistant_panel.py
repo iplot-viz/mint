@@ -604,7 +604,7 @@ class AssistantFlowTest(unittest.TestCase):
 
     def test_a_code_that_is_in_no_row_offers_a_search_without_the_model(self):
         searched = []
-        self.ctl.workspace.search_variables = lambda words, request="": (
+        self.ctl.workspace.search_variables = lambda words, request="", source="": (
             searched.append(words), VariableSearch("csv", [], 0, list(words)))[1]
         self.ask("need TF07 coil current", 'say "I can\'t compute statistics yet."')
         self.assertEqual(self.ctl.panel._suggestions, ["Find TF07"])
@@ -618,7 +618,8 @@ class AssistantFlowTest(unittest.TestCase):
 
     def test_a_search_says_where_it_looked_and_how_many_to_tick(self):
         names = [(f"EC-GYA-{i:02d}:PSU-YSTA", "") for i in range(40)]
-        self.ctl.workspace.search_variables = lambda words, request="": VariableSearch("sdnuda", names, 312, [], "EC")
+        self.ctl.workspace.search_variables = lambda words, request="", source="": VariableSearch("sdnuda", names, 312,
+                                                                                                  [], "EC")
         cards = self.ask("I need a workspace with 2 signals from EC in sdnuda, whatever you want", "find EC sdnuda")
         self.assertEqual(self.said[-1], "Here are the variables in sdnuda that start with EC. Tick the 2 you want and "
                                         "I'll add them. There are 312: these are the first 40, and Search Vars shows "
@@ -626,6 +627,75 @@ class AssistantFlowTest(unittest.TestCase):
         card = self.ctl.panel._cards[cards[0]]
         self.assertEqual(len(card.options), 40)
         self.assertEqual(self.ctl._cards[cards[0]]["source"], "sdnuda", "added from the source it found them in")
+
+    def test_mint_opens_its_own_tools_without_the_model(self):
+        ws = self.ctl.workspace
+        opened = []
+        ws.open_statistics = lambda: opened.append("statistics") or True
+        ws.open_search_vars = lambda: opened.append("search")
+        self.ask("can you open the stats table?", 'say "no model here"')
+        self.ask("how many samples do we have per signal?", 'say "no model here"')
+        self.assertEqual(self.said[-1], self.ctl.voice.statistics_opened())
+        self.ask("can you open the search variables?", 'say "no model here"')
+        self.assertEqual(opened, ["statistics", "statistics", "search"])
+        # Three plots in the table and none drawn: the mini-map can't show.
+        self.ask("can you enable the mini-map", 'say "no model here"')
+        self.assertTrue(self.said[-1].startswith("The mini-map only works when a single plot is visible"),
+                        self.said[-1])
+        self.assertFalse(self.win.toolBar.minimapAction.isChecked())
+        self.ask("what is the mini-map?", 'say "no model here"')
+        self.assertTrue(self.said[-1].startswith("The mini-map is a small overview"), self.said[-1])
+        self.assertEqual(self.engine.prompts, [])
+        del ws.open_statistics
+        self.ask("the statistics", 'say "no model here"')
+        self.assertEqual(self.said[-1], self.ctl.voice.statistics_nothing_drawn())
+
+    def test_no_take_sdnuda_searches_the_same_again_there(self):
+        ws, searched = self.ctl.workspace, []
+
+        def search(words, request="", source=""):
+            # As MINT does: a source the words name, else the one chosen, else the default.
+            named = [w for w in words if w in ("codacuda", "sdnuda")]
+            where = (named or [source or "codacuda"])[0]
+            searched.append(([w for w in words if w not in named], where))
+            return VariableSearch(where, [("EC-GN-AUX-GCC:FAST-TC0", "")], 1, list(words))
+
+        ws.search_variables = search
+        ws.data_source_names = lambda: ["codacuda", "sdnuda"]
+        ws.default_data_source = lambda: ("codacuda", None)
+        self.ask("search for EC-GN signals", "find EC-GN")
+        calls = len(self.engine.prompts)
+        self.ask("no take sdnuda", 'say "Sorry, I didn\'t get that."')
+        self.assertEqual(len(self.engine.prompts), calls, "MINT searches again itself")
+        self.assertEqual(searched[-1], (["EC-GN"], "sdnuda"))
+        # The source chosen stays the one searched, until the default is named.
+        self.ask("ok can you then filter for the EC-GN*FAST*", "find EC-GN*FAST*")
+        self.assertEqual(searched[-1], (["EC-GN*FAST*"], "sdnuda"))
+        self.ask("EC-GN in codacuda", "find EC-GN codacuda")
+        self.ask("instead of looking in codacuda use sdnuda", 'say "I can\'t look things up."')
+        self.assertEqual(searched[-2:], [(["EC-GN"], "codacuda"), (["EC-GN"], "sdnuda")])
+        self.assertNotIn("I can't look things up.", self.said)
+        # Only right after a search.
+        self.ask("smooth pirani 30s", "process r1 moving_average window=30s")
+        self.ask("use sdnuda", 'say "Okay."')
+        self.assertEqual(self.said[-1], "Okay.")
+
+    def test_the_3_of_them_to_the_models_question_names_them(self):
+        self.ask("can you plot the envelope?", 'ask "Sure, which one: the pirani, VAR2 or MT0001?"')
+        self.ask("the 3 of them", 'say "Okay."')
+        self.assertIn("Request: can you plot the envelope. pirani, MAG-MCTB-F1:VAR2 and CRYO:MT0001",
+                      self.engine.prompts[-1][0])
+
+    def test_disabling_a_signal_hides_it_and_keeps_its_row(self):
+        ws, hidden = self.ctl.workspace, {}
+        ws.is_hidden = lambda uid: hidden.get(uid, False)
+        ws.set_hidden = lambda uid, value: hidden.__setitem__(uid, value)
+        ws.refresh_plots = lambda: None
+        cards = self.ask("can you disable signal pirani", "remove r1")
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].title, "Hide")
+        self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
+        self.assertEqual(list(hidden.values()), [True])
+        self.assertEqual(len(self.rows()), 4)
 
     def test_what_was_asked_and_kept_is_recorded_to_learn_from(self):
         import argparse
@@ -643,10 +713,19 @@ class AssistantFlowTest(unittest.TestCase):
             self.ask("low-pass the pirani", "process r1 lowpass")
             filled = self.ask("2 Hz", "draw")
             self.ctl.panel.cardActionTriggered.emit(filled[0], ctl.APPLY, [])
+            self.ask("what is the mini-map?", 'say "no model here"')
             with open(record.path(), encoding="utf-8") as f:
                 lines = [json.loads(line) for line in f]
-            self.assertEqual([line["outcome"] for line in lines], ["applied", "applied", "undone", "dismissed", "applied"])
+            self.assertEqual([line["outcome"] for line in lines if "card" in line],
+                             ["applied", "applied", "undone", "dismissed", "applied"])
             self.assertEqual(len(lines[0]["workspace"]["rows"]), 4, "the workspace the model saw")
+            # Every request too, with its answer, also those no card came of.
+            self.assertEqual([(line["request"], line["answer"], line["by"]) for line in lines if "turn" in line],
+                             [("smooth pirani 30s", ["process r1 moving_average seconds=30"], "model"),
+                              ("abs of the pirani", ["process r1 abs"], "model"),
+                              ("remove row 2", ["remove r2"], "model"),
+                              ("low-pass the pirani", ["process r1 lowpass"], "model"),
+                              ("what is the mini-map?", ["about minimap"], "MINT")])
             out = os.path.join(folder, "feedback.jsonl")
             cmd_feedback(argparse.Namespace(records=[record.path()], out=out))
             with open(out, encoding="utf-8") as f:
@@ -660,7 +739,7 @@ class AssistantFlowTest(unittest.TestCase):
             self.ctl.panel.cardActionTriggered.emit(self.ctl.panel.card_count() - 1 if hasattr(
                 self.ctl.panel, "card_count") else max(self.ctl._cards), ctl.DISMISS, [])
             with open(record.path(), encoding="utf-8") as f:
-                self.assertEqual(len(f.readlines()), 5, "off: nothing more is kept")
+                self.assertEqual(len(f.readlines()), 10, "off: nothing more is kept")
 
     def test_undo_in_words_undoes_the_last_card_without_the_model(self):
         self.ask("undo", 'say "no model here"')

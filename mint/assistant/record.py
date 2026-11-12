@@ -1,4 +1,4 @@
-"""What was asked and what the user did with each answer, kept on this machine to retrain the model on."""
+"""Each request, its answer and what the user did with each card, kept on this machine to retrain the model on."""
 import json
 import os
 from dataclasses import asdict
@@ -20,6 +20,15 @@ def path() -> str:
 
 def write(card: str, outcome: str, request: str, snap, commands) -> None:
     """Appends one outcome ("applied", "dismissed", "undone") of a card; never raises."""
+    _append({"card": card, "outcome": outcome, "request": request, "commands": list(commands)}, snap)
+
+
+def write_turn(turn: str, request: str, snap, answer, by: str) -> None:
+    """Appends a request and its answer: the model's commands, or what MINT did itself (``by``); never raises."""
+    _append({"turn": turn, "request": request, "answer": list(answer), "by": by}, snap)
+
+
+def _append(entry: dict, snap) -> None:
     try:
         target = path()
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -28,9 +37,8 @@ def write(card: str, outcome: str, request: str, snap, commands) -> None:
         workspace = asdict(snap)
         workspace.pop("unlisted", None)
         workspace["now"] = snap.now.isoformat()
-        line = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "card": card, "outcome": outcome,
-                "request": request, "commands": list(commands), "workspace": workspace}
+        line = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **entry, "workspace": workspace}
         with open(target, "a", encoding="utf-8") as f:
             f.write(json.dumps(line) + "\n")
     except Exception as e:
-        logger.warning(f"Assistant: could not record the outcome of a card: {e}")
+        logger.warning(f"Assistant: could not write to the record: {e}")

@@ -898,7 +898,8 @@ def cmd_feedback(args):
                     entry = json.loads(line)
                 except ValueError:
                     continue
-                last[entry.get("card")] = entry  # its final outcome: applied, then maybe undone
+                if "card" in entry:  # requests and answers ("turn") say nothing of what was kept
+                    last[entry["card"]] = entry  # its final outcome: applied, then maybe undone
     workspaces, cases, outcomes = {}, [], {}
     for entry in last.values():
         outcomes[entry.get("outcome")] = outcomes.get(entry.get("outcome"), 0) + 1

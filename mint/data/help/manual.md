@@ -311,13 +311,15 @@ Ask in plain words for processing, plot settings, signals or a time range. Other
 - *put the second plot in log scale*, *no grid anywhere*.
 - *outlet minus inlet*: a new signal in a new plot.
 - *add the TF07 current*: lists the matching variables to tick and add.
-- *two signals from EC in sdnuda*: lists the variables of that data source that start with EC.
+- *two signals from EC in sdnuda*: lists the variables of that data source that start with EC. Right after a search, *no, in sdnuda* looks there instead.
 - *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
 - *the same for MP0071*: repeats the last change on another signal.
 - *why are these red?*: says why rows aren't drawn, and offers to change a data source that isn't available here.
+- *disable FAST-TC0*: hides it from the plot, as a click on its legend entry does.
+- *open the statistics*, *how many samples?*, *show the mini-map*, *open Search Vars*: opens them, or says what they are.
 - With a file attached: *add the pressures from the report*, *over the dates in the file*.
 
-Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed, or *ok*), and **Undo** (or typing *undo*) puts it back; *no* dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (*12 s*) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (*.scsv*) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (*MT0021-XI*) are looked up in the data source, and a list of names in a message, one per line or in a line, is read like a file. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks; *both* takes them all. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
+Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed, or *ok*), and **Undo** (or typing *undo*) puts it back; *no* dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (*12 s*) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (*.scsv*) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (*MT0021-XI*) are looked up in the data source, and a list of names in a message, one per line or in a line, is read like a file. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks; *both* or *the 3 of them* takes them all. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.
 
 It runs on this computer, without network. Closing the panel frees the memory the model takes (about 2 GB), and opening it again takes a few seconds. It is off unless these are set (also in the file named by `MINT_XK_CONFIG`):
 
@@ -327,7 +329,7 @@ It runs on this computer, without network. Closing the panel frees the memory th
 | `MINT_ASSISTANT_MODEL` | path to the model file (`.gguf`) |
 | `MINT_ASSISTANT_THREADS` | CPU threads, optional (up to 4 by default) |
 | `MINT_ASSISTANT_SHA256` | SHA-256 of a model file MINT does not know yet, optional |
-| `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask and whether you apply each answer (up to 1 MB), to retrain the assistant with, optional |
+| `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card (up to 1 MB), to retrain the assistant with, optional |
 
 The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler. It also brings what reads Excel (openpyxl) and PDF (pypdf) files.
 

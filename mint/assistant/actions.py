@@ -435,6 +435,41 @@ class Planner:
             proposal.changes.append(self._remove_row_change(self._row(row_id)))
         return "Remove"
 
+    def _hide(self, cmd: Command, proposal: Proposal) -> str:
+        return self._visibility(cmd, proposal, hidden=True)
+
+    def _show(self, cmd: Command, proposal: Proposal) -> str:
+        return self._visibility(cmd, proposal, hidden=False)
+
+    def _visibility(self, cmd: Command, proposal: Proposal, hidden: bool) -> str:
+        """Drawn signals hidden or shown again, as a click on their legend entry does: the row stays in the table."""
+        rows = [self._row(row_id) for row_id in cmd.ids]
+        states = {row.uid: self.ws.is_hidden(row.uid) for row in rows}
+        undrawn = [self._name(row) for row in rows if states[row.uid] is None]
+        if undrawn:
+            raise ActionError(f"{_capital(_listed(undrawn))} {'isn' if len(undrawn) == 1 else 'aren'}'t drawn. "
+                              "Click Draw, then ask me again.")
+        rows = [row for row in rows if states[row.uid] != hidden]
+        if not rows:
+            raise ActionError(f"{'They are' if len(cmd.ids) > 1 else 'It is'} already "
+                              f"{'hidden' if hidden else 'shown'}.")
+        ws, uids = self.ws, [row.uid for row in rows]
+
+        def do():
+            for uid in uids:
+                ws.set_hidden(uid, hidden)
+
+        def undo():
+            for uid in uids:
+                ws.set_hidden(uid, not hidden)
+
+        names = _listed([self._name(row) for row in rows])
+        line = f"Hide {names} on the plot (the legend still lists it)" if hidden else f"Show {names} again"
+        if hidden and len(rows) > 1:
+            line = line.replace("lists it", "lists them")
+        proposal.changes.append(Change([line], do, undo, needs_refresh=True))
+        return "Hide" if hidden else "Show"
+
     def _draw(self, cmd: Command, proposal: Proposal) -> str:
         proposal.changes.append(Change([], lambda: None, lambda: None, needs_draw=True))
         return "Draw"

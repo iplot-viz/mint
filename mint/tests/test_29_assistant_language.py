@@ -372,6 +372,17 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(places(column, "the top plot in log and average the flow over two minutes"), ["p1"],
                          "a number elsewhere in the request says nothing about the plots")
 
+    def test_disabling_a_signal_hides_it_instead_of_removing_it(self):
+        from mint.assistant.check import review
+        snap = Snapshot(rows=[RowInfo(id="r1", index=0, variable="EC-GN-AUX-GCC:FAST-TC0", plot="p1")],
+                        plots=[PlotInfo(id="p1", row=1, col=1)])
+        for request in ("can you disable signal FAST-TC0", "hide FAST-TC0 from the plot", "oculta FAST-TC0"):
+            self.assertEqual([str(c) for c in review(snap, request, commands.parse("remove r1"))], ["hide r1"],
+                             request)
+        for request in ("remove FAST-TC0", "disable FAST-TC0 and take it out of the table", "delete it"):
+            self.assertEqual([str(c) for c in review(snap, request, commands.parse("remove r1"))], ["remove r1"],
+                             request)
+
     def test_a_plot_switch_the_request_does_not_mention_is_dropped(self):
         from mint.assistant.check import review
         column = Snapshot(plots=[PlotInfo(id=f"p{i}", row=i, col=1) for i in range(1, 3)])
@@ -591,6 +602,40 @@ class ProblemsTest(unittest.TestCase):
             self.assertTrue(followup.means_every(text), text)
         for text in ("yes", "the first one", "MP0111", "all of them?", "2 min", "smooth all"):
             self.assertFalse(followup.means_every(text), text)
+        # A count that is every option offered.
+        for text in ("the 3 of them", "three", "los tres", "all 3"):
+            self.assertTrue(followup.means_every(text, 3), text)
+        for text in ("the 2 of them", "3", "the 3 of them"):
+            self.assertFalse(followup.means_every(text, 4 if text != "the 2 of them" else 3), text)
+
+
+class FeaturesTest(unittest.TestCase):
+    """Lana asked for MINT's own tools in her words, and got a search for "stats" or the grid turned on."""
+
+    def test_the_tools_are_told_from_the_words(self):
+        from mint.assistant import features as f
+        cases = {
+            "can you open the stats table?": (f.STATISTICS, f.OPEN),
+            "the statistics": (f.STATISTICS, f.OPEN),
+            "how many samples do we have per signal?": (f.STATISTICS, f.OPEN),
+            "can you tell me the last values for each of them?": (f.STATISTICS, f.OPEN),
+            "no i want to know what is the last sample i have no values...": (f.STATISTICS, f.OPEN),
+            "abre las estadísticas": (f.STATISTICS, f.OPEN),
+            "can you enable the mini-map": (f.MINIMAP, f.OPEN),
+            "turn off the minimap": (f.MINIMAP, f.CLOSE),
+            "what is the mini-map?": (f.MINIMAP, f.ABOUT),
+            "why is the mini map greyed out?": (f.MINIMAP, f.ABOUT),
+            "can you open the search variables?": (f.SEARCH, f.OPEN),
+            "open search vars": (f.SEARCH, f.OPEN),
+            "where is search vars?": (f.SEARCH, f.ABOUT),
+        }
+        for text, (feature, how) in cases.items():
+            self.assertEqual(f.asked(text), f.Asked(feature, how), text)
+        for text in ("search for EC-GN signals", "search variables of CRYO with FAST in the name",
+                     "smooth the pirani and show the last 6 hours", "show me the last 2 days",
+                     "remove the spikes of the statistics signal over 10 s", "average the flow over 15 min",
+                     "status of the pumps"):
+            self.assertIsNone(f.asked(text), text)
 
 
 class ModelProfileTest(unittest.TestCase):

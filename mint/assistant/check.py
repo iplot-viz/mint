@@ -82,12 +82,24 @@ SWITCH_WORDS = {
 }
 
 
+# "Disable" a signal is hiding it from the plot, as its legend entry does, not taking it out of the table.
+HIDING = re.compile(r"\b(?:disable|hide|turn off|switch off|deactivate|desactiv\w*|ocult\w*|escond\w*|masque\w*|"
+                    r"cacher?|d[ée]sactiv\w*|ausblenden|blende\w* aus|deaktivier\w*|versteck\w*|nascond\w*|"
+                    r"disattiv\w*|desativ\w*)\b", re.IGNORECASE)
+REMOVING = re.compile(r"\b(?:remove|delete|erase|drop|take out|table|borra\w*|elimin\w*|quita\w*|supprim\w*|"
+                      r"enl[eè]v\w*|l[öo]sch\w*|entfern\w*|rimuov\w*|cancell\w*|remov\w*|exclu\w*|tabla|"
+                      r"tableau|tabelle|tabella)\b", re.IGNORECASE)
+
+
 def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
     """The model's commands, completed where the request is plain about what they leave out.
 
     A command moving the rows that others should join becomes a question. A plot switch the request
-    doesn't mention is dropped: "enable the markers" must not turn the grid on.
+    doesn't mention is dropped: "enable the markers" must not turn the grid on. Rows the request
+    disables are hidden from the plot, not removed.
     """
+    if HIDING.search(request or "") and not REMOVING.search(request or ""):
+        cmds = [Command("hide", ids=list(cmd.ids)) if cmd.verb == "remove" else cmd for cmd in cmds]
     hits = places(snap, request)
     for cmd in cmds:
         if cmd.verb == "plot" and set(cmd.ids) < set(hits):

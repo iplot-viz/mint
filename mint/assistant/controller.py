@@ -1,6 +1,7 @@
 """Glue between the chat panel, the model and the workspace."""
 import dataclasses
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from PySide6.QtCore import QObject, QThreadPool, Qt, Signal
@@ -8,7 +9,8 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
-from mint.assistant import check, commands, diagnose, doubt, files, followup, prompt, recipes, record, when
+from mint.assistant import (check, commands, diagnose, doubt, features, files, followup, prompt, recipes, record,
+                            when)
 from mint.assistant.actions import MAX_ADDED, ActionError, ApplyContext, MissingValue, Planner, Proposal, added_rows
 from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
@@ -27,6 +29,12 @@ SUGGESTIONS = [
 ]
 MAX_SUGGESTION = 48
 PLACEHOLDER = "Tell me what you need…"
+# Words around a data source that only ask to search there instead: "no, take sdnuda", "use sdnuda instead".
+SEARCH_AGAIN = set("no not nope take use using instead of looking look search searching find in on at from with try "
+                   "it them the then ok okay please there again rather better en usa usar busca buscar prueba mejor "
+                   "mira de del dans utilise cherche plutôt essaie im nimm suche versuch lieber stattdessen cerca "
+                   "prova invece piuttosto em procure tente".split())
+NOT_THIS = set("instead not rather vez lugar lieu statt anstatt invece".split())
 
 
 def _time_offer(info) -> str:
@@ -193,6 +201,9 @@ class AssistantController(QObject):
         self._planned = {}  # suggestion text -> commands MINT plans itself, without the model
         self._fix_offer = ""  # the one change of data source just offered, which "yes" takes
         self._told_problems = ""  # the missing data sources last told on opening the panel
+        self._last_search = None  # (words, data source) of the last search shown, for "no, in sdnuda"
+        self._search_source = ""  # the data source the user chose to search in, until they choose the default again
+        self._turns = 0
         self._file = None  # snapshot.FileInfo of the attached file
         self._reading = ""  # the file being read, whose result is the one awaited
         self._reads_files = False  # the model was trained on attached files (see models.reads_files)
@@ -551,8 +562,22 @@ class AssistantController(QObject):
             self._open_question = None
             self._undo_last()
             return
+        # Only right after it: "use sdnuda" later on is another request.
+        last_search, self._last_search = self._last_search, None
+        wanted = features.asked(text)
+        if wanted is not None:
+            self._open_question = None
+            self._use_feature(wanted, text)
+            return
+        source = self._other_source(text, last_search)
+        if source:
+            self._open_question = None
+            self._record_turn(text, [f"find {' '.join(last_search[0])} {source}"], by="MINT")
+            self._show_search(last_search[0], source=source)
+            return
         if diagnose.asks_about_state(text) and self._tell_problems():
             self._open_question = None
+            self._record_turn(text, ["why are rows not drawn"], by="MINT")
             return
         # A reply to the last question: fills a number, names the signal "it" meant, or goes to the model
         # with the request it answers. Anything longer is a new request.
@@ -561,8 +586,11 @@ class AssistantController(QObject):
             return
         answering = question is not None and followup.is_answer(text)
         named = False
-        if answering and question.options and followup.means_every(text) and self._every_option(question, text):
-            return
+        if answering and question.options and followup.means_every(text, len(question.options)):
+            if self._every_option(question, text):
+                return
+            # "All three" to the model's "which one: A, B or C?" names each of them.
+            text = self._every_named(question)
         if answering and question.command is not None:
             value = followup.value_in(text, question.param)
             if value is None and question.example is not None and followup.agrees(text):
@@ -599,6 +627,60 @@ class AssistantController(QObject):
             return False
         self._plan_with_number(widened, question.snap, followup.with_answer(question, answer))
         return True
+
+    @staticmethod
+    def _every_named(question) -> str:
+        snap = question.snap
+        names = [snap.place(option) if option.startswith("p") else (snap.row(option).alias or snap.row(option).variable)
+                 for option in question.options]
+        return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+
+    def _use_feature(self, wanted, request: str):
+        """Statistics, the mini-map or Search Vars, opened, closed or told about (see features)."""
+        ws, voice = self.workspace, self.voice
+        try:
+            if wanted.how == features.ABOUT:
+                said = features.ABOUT_TEXT[wanted.feature]
+            elif wanted.feature == features.STATISTICS:
+                said = voice.statistics_opened() if ws.open_statistics() else voice.statistics_nothing_drawn()
+            elif wanted.feature == features.MINIMAP:
+                on = wanted.how == features.OPEN
+                said = voice.minimap(on, ws.minimap(on), len(ws.snapshot().plots), ws.is_streaming())
+            else:
+                ws.open_search_vars()
+                said = voice.search_vars_opened()
+        except Exception:
+            logger.exception(f"Assistant could not {wanted.how} {wanted.feature}")
+            said = voice.went_wrong()
+        self.panel.add_assistant_message(said)
+        self._record_turn(request, [f"{wanted.how} {wanted.feature}"], by="MINT")
+
+    def _other_source(self, text: str, last_search) -> str:
+        """Right after a search, "no, take sdnuda" or "use sdnuda instead": the data source to search again in."""
+        if last_search is None:
+            return ""
+        names = {name.lower(): name for name in self.workspace.data_source_names()}
+        said = [word.lower() for word in re.findall(r"[\w.-]+", text or "")]
+        if any(word not in names and word not in SEARCH_AGAIN for word in said):
+            return ""
+        # "Instead of looking in codacuda", "not codacuda": the one to leave.
+        left = {names[word] for i, word in enumerate(said)
+                if word in names and NOT_THIS & set(said[max(0, i - 4):i])}
+        named = {names[word] for word in said if word in names} - left - {last_search[1]}
+        return next(iter(named)) if len(named) == 1 else ""
+
+    def _record_turn(self, request: str, answer, snap=None, by: str = "model"):
+        """Every request and its answer go in the record, not only the cards: a question answered wrong is what
+        retraining needs most."""
+        if not self.config.record:
+            return
+        self._turns += 1
+        try:
+            snap = snap if snap is not None else self.workspace.snapshot()
+        except Exception as e:
+            logger.debug(f"Assistant: no snapshot for the record: {e}")
+            return
+        record.write_turn(f"{self._session}-t{self._turns}", request, snap, list(answer), by)
 
     def _answer_card(self, card, text: str) -> bool:
         """"ok" or "no" to the card on screen, as its Apply or Dismiss; False when the text says something else."""
@@ -692,6 +774,7 @@ class AssistantController(QObject):
         if timings.get("cancelled") or not text.strip():
             self.panel.add_assistant_message(self.voice.stopped())
             return
+        self._record_turn(request, text.strip().splitlines(), snap)
         if timings.get("finish") == "length":
             # Its last line may be half a command that still parses, e.g. a window cut from 30 s to 3 s.
             self.panel.add_assistant_message(self.voice.too_long())
@@ -752,6 +835,10 @@ class AssistantController(QObject):
                 self.panel.add_assistant_message(self.voice.still_unclear())
                 return
             self._open_question = followup.OpenQuestion(request, snap)
+            # "All three" to "which one: A, B or C?" takes the rows the question names.
+            asked = " ".join(proposal.messages)
+            self._open_question.options = sorted((row.id for row, _ in prompt.named(snap, asked, meanings=False)),
+                                                 key=lambda row_id: int(row_id[1:]))
         for message in proposal.messages:
             self.panel.add_assistant_message(message)
         if proposal.changes:
@@ -835,13 +922,18 @@ class AssistantController(QObject):
             return []
         return [] if self.workspace.time_range_ns() == span else [offer]
 
-    def _show_search(self, words, request: str = ""):
+    def _show_search(self, words, request: str = "", source: str = ""):
         by_code = isinstance(words, _Codes)
         try:
-            search = self.workspace.search_codes(words) if by_code else self.workspace.search_variables(words, request)
+            search = self.workspace.search_codes(words) if by_code else \
+                self.workspace.search_variables(words, request, source or self._search_source)
         except ActionError as e:
             self.panel.add_assistant_message(str(e))
             return
+        if not by_code:
+            self._last_search = ([word for word in words if word.lower() != search.source.lower()], search.source)
+            # A source the user chose stays the one searched until they choose the default again.
+            self._search_source = "" if search.source == self.workspace.default_data_source()[0] else search.source
         if not search.found:
             self.panel.add_assistant_message(self.voice.nothing_found(search))
             return

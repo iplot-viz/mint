@@ -124,7 +124,7 @@ def merge(cmds: List[Command]) -> List[Command]:
     """Fold commands that only differ in their ids, and drop repeated ones."""
     merged = []
     for c in cmds:
-        twin = next((m for m in merged if m.verb == c.verb and m.verb in ("process", "plot", "remove")
+        twin = next((m for m in merged if m.verb == c.verb and m.verb in ("process", "plot", "remove", "hide", "show")
                      and m.words == c.words and m.params == c.params and m.flags == c.flags
                      and "all" not in m.ids + c.ids), None)
         if twin is not None:
@@ -229,11 +229,11 @@ def _parse_tokens(tokens, line) -> Command:
         if not ids or len(rest) != 2 or rest[0] != "to":
             raise CommandError(f"source needs rows and a data source: {line!r}")
         return Command("source", ids=ids, words=[rest[1]])
-    if verb == "remove":
+    if verb in ("remove", "hide", "show"):
         ids = _ids(rest, "r")
         if not ids or rest:
-            raise CommandError(f"remove needs rows: {line!r}")
-        return Command("remove", ids=ids)
+            raise CommandError(f"{verb} needs rows: {line!r}")
+        return Command(verb, ids=ids)
     if verb == "add":
         ids = ["all"] if rest[:1] == ["all"] else _ids(rest, "v")
         if ids == ["all"]:
