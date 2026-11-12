@@ -62,9 +62,10 @@ class MTSignalsModel(QAbstractItemModel):
     def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
         super().__init__(parent)
-        self._white_brush = QBrush(QColor('white'))
         self._red_brush = QBrush(QColor('red'))
         self._orange_brush = QBrush(QColor('orange'))
+        # Readable on red and on orange, whichever the palette.
+        self._black_brush = QBrush(QColor('black'))
 
         self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
@@ -113,15 +114,17 @@ class MTSignalsModel(QAbstractItemModel):
             return self._table.iat[index.row(), index.column()]
         if role == Qt.ItemDataRole.BackgroundRole:
             fail_value = self._table_fails.iat[index.row(), index.column()]
-            # Value 0 corresponds to a correct cell.
+            # Value 0 corresponds to a correct cell, in the colours of the view.
             # Value 1 corresponds to a main error.
             # Value 2 corresponds to a secondary error resulting from a main error.
             if fail_value == 0:
-                return self._white_brush
+                return None
             elif fail_value == 1:
                 return self._red_brush
             else:
                 return self._orange_brush
+        if role == Qt.ItemDataRole.ForegroundRole:
+            return None if self._table_fails.iat[index.row(), index.column()] == 0 else self._black_brush
         if role == Qt.ItemDataRole.ToolTipRole:
             column_name = self._table.columns[index.column()]
             if column_name == "Comment":
@@ -286,6 +289,15 @@ class MTSignalsModel(QAbstractItemModel):
                 pulses.extend(str_to_arr(cell) or [])
         return pulses
 
+    def data_sources_in_table(self) -> typing.Set[str]:
+        """The data sources of the rows that name a variable."""
+        col_data_source = mtBP.get_column_name(self.blueprint, 'DataSource')
+        col_variable = mtBP.get_column_name(self.blueprint, 'Variable')
+        if col_data_source not in self._table.columns or col_variable not in self._table.columns:
+            return set()
+        return {data_source for data_source, variable in zip(self._table[col_data_source], self._table[col_variable])
+                if isinstance(data_source, str) and data_source and isinstance(variable, str) and variable.strip()}
+
     def get_dataframe(self):
         filtered_rows = self._table[self._table.iloc[:, 1:-5].any(axis=1)]
         if not filtered_rows.empty:
@@ -423,6 +435,22 @@ class MTSignalsModel(QAbstractItemModel):
                         if var != 'self':
                             self._alias_list.add(var)
 
+    def fetches_row(self, row_idx: int) -> bool:
+        """Whether update_signal_data(..., fetch_data=True) reads the data of the row."""
+        if not self._alias_checked:
+            self.check_alias_fetch()
+
+        alias = self._table.at[row_idx, mtBP.get_column_name(self._blueprint, 'Alias')]
+        stack_val = self._table.at[row_idx, mtBP.get_column_name(self._blueprint, 'Stack')]
+        # Rows with no stack are read only when another row's processing uses their alias
+        return bool(stack_val) or alias in self._alias_list
+
+    def aliases_used_in_xyz(self) -> set:
+        """Aliases a row uses in its x, y or z column: parsing that row checks whether the row of the alias failed
+        to read."""
+        return {alias for _, row in self._table.iterrows()
+                for alias in ParserHelper.get_dependencies([row['x'], row['y'], row['z']])}
+
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))
@@ -430,18 +458,8 @@ class MTSignalsModel(QAbstractItemModel):
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole)
 
             if fetch_data:
-                if not self._alias_checked:
-                    self.check_alias_fetch()
-
-                # Read alias and stack from the table row
-                alias_col = mtBP.get_column_name(self._blueprint, 'Alias')
-                stack_col = mtBP.get_column_name(self._blueprint, 'Stack')
-                alias = self._table.at[row_idx, alias_col]
-                stack_val = self._table.at[row_idx, stack_col]
-
-                # Skip rows with no stack unless their alias is used in another row's processing
-                if not stack_val and alias not in self._alias_list:
-                    logger.debug(f"Row {row_idx} skipped (no stack and alias {alias} is not referenced)")
+                if not self.fetches_row(row_idx):
+                    logger.debug(f"Row {row_idx} skipped (no stack and its alias is not referenced)")
                     return
 
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
@@ -486,6 +504,8 @@ class MTSignalsModel(QAbstractItemModel):
 
         for i, parsed_row in enumerate(
                 self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
+            # With copy-on-write (pandas 3) the row of fails the parse marks is a copy of the one in the table.
+            self._table_fails.loc[row_idx] = parsed_row[1]
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)

@@ -123,8 +123,8 @@ class MTAbsoluteTime(MTGenericAccessMode):
         }
 
     def set_valid_date(self, valid: bool):
-        color = "white" if valid else "red"
-        style = f"QDateTimeEdit {{background : {color}; }}"
+        # A valid time looks as the other fields do; an invalid one is red, with text readable on it in any palette.
+        style = "" if valid else "QDateTimeEdit {background: red; color: black;}"
         self.toTime.setStyleSheet(style)
         self.fromTime.setStyleSheet(style)
 

@@ -70,6 +70,15 @@ class ShiftHandlerMixin:
         self._shift_mother_original_pulse_id = {}  # Key: (Variable, DS) -> original PulseId
         self._shift_undo_in_progress = False  # Guard to skip row-removal handler during undo
 
+    def _x_offset(self, signal_uid: str, dx: float):
+        """`dx` as the x expression adds it: along a time axis in whole nanoseconds, which a float near 1e18 would
+        round to 256 ns."""
+        _, plot = self._find_signal_in_canvas(signal_uid)
+        axes = getattr(plot, 'axes', None)
+        if axes and getattr(axes[0], 'is_date', False):
+            return int(round(dx))
+        return dx
+
     def _format_offset_expr(self, base_expr: str, offset: float) -> str:
         """Format expression with offset, using subtraction for negative values."""
         if abs(offset) < 1e-10:
@@ -142,7 +151,7 @@ class ShiftHandlerMixin:
         self._shift_accumulated[signal_uid]['count'] += 1
         new_x, new_y = self._build_offset_expressions(
             model, signal_uid,
-            self._shift_accumulated[signal_uid]['dx'],
+            self._x_offset(signal_uid, self._shift_accumulated[signal_uid]['dx']),
             self._shift_accumulated[signal_uid]['dy']
         )
         self._set_row_xy(model, row_idx, new_x, new_y)
@@ -178,7 +187,8 @@ class ShiftHandlerMixin:
             # Adding and subtracting large offsets does not always give back 0.0.
             accumulated.update(dx=0.0, dy=0.0, count=0)
 
-        new_x, new_y = self._build_offset_expressions(model, signal_uid, accumulated['dx'], accumulated['dy'])
+        new_x, new_y = self._build_offset_expressions(model, signal_uid, self._x_offset(signal_uid, accumulated['dx']),
+                                                      accumulated['dy'])
         self._set_row_xy(model, row_idx, new_x, new_y)
 
         # Restore original alias and label when every shift is undone
@@ -569,7 +579,8 @@ class ShiftHandlerMixin:
         var_name = df.at[row_idx, 'Variable'] if 'Variable' in df.columns else ''
         original_x = df.at[row_idx, 'x'] if 'x' in df.columns else ''
         original_y = df.at[row_idx, 'y'] if 'y' in df.columns else ''
-        new_x, new_y = self._build_offset_expressions_from(model, original_x, original_y, dx, dy)
+        new_x, new_y = self._build_offset_expressions_from(model, original_x, original_y,
+                                                          self._x_offset(signal_uid, dx), dy)
 
         # Like a shifted pulse in pulse mode, the copy is only the pulse that was picked.
         pulse = str(getattr(original_signal, 'pulse_nb', None) or '').strip()
@@ -621,13 +632,18 @@ class ShiftHandlerMixin:
         signals = []
         with model.init_create_signals():
             waypoints = list(model.create_signals(row_idx, self.sigCfgWidget.invalid_stacks))
-        for waypt in waypoints:
-            if not waypt.stack_num or not waypt.col_num or not waypt.row_num:
-                continue
-            signal = waypt.func(*waypt.args, **waypt.kwargs)
-            if not signal.label:
-                continue
-            model.update_signal_data(waypt.idx, signal, True)
+        created = [(waypt, waypt.func(*waypt.args, **waypt.kwargs)) for waypt in waypoints
+                   if waypt.stack_num and waypt.col_num and waypt.row_num]
+        created = [(waypt, signal) for waypt, signal in created if signal.label]
+        read_ahead = self._read_ahead([signal for waypt, signal in created])
+        # Like a Draw, a copy ends the progress its reads showed.
+        if not self._progressBar.isHidden():
+            self.indicate_ready()
+        if read_ahead is None:
+            return signals
+        for waypt, signal in created:
+            with self._prefetched(read_ahead):
+                model.update_signal_data(waypt.idx, signal, True)
             if signal.status_info.result == 'Fail':
                 continue
             signals.append((self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1], waypt.stack_num, signal))

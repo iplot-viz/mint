@@ -6,10 +6,12 @@ from typing import Optional, Type, Union
 from functools import partial
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt, QEvent
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QAbstractItemView, QCheckBox, QMenu, QTableView, QTreeView, QVBoxLayout, QWidget, \
     QWidgetAction, QAbstractButton
 
 from iplotWidgets.sizing import FontScaledView
+from mint.gui.mtAppearance import blend
 from mint.models.mtSignalsModel import MTSignalsModel
 
 
@@ -34,21 +36,26 @@ class MTSignalItemView(QWidget):
         self.setLayout(QVBoxLayout())
 
         self._view = _FONT_SCALED_VIEWS.get(view_type, view_type)(parent=self)
-
-        self._view.setStyleSheet("""
-            QTableView, QTreeView { background: palette(Base); gridline-color: palette(Mid); }
-            QTableView::viewport, QTreeView::viewport { background: palette(Base); }
-            QTableView::item, QTreeView::item { color: palette(Text); }
-            QTableView::item:selected, QTreeView::item:selected {
-                background: palette(Highlight); color: palette(HighlightedText); }
-            QHeaderView::section { background: palette(Window); color: palette(WindowText); border: 0; padding: 0.25em 0.5em; }
-            QTableCornerButton::section { background: palette(Window); border: 0; }
-        """)
+        self._set_style_sheet()
 
         self._menu = QMenu('', self)
         self._actions = []  # to avoid unexpected deletion of c++ actions
 
         self.layout().addWidget(self._view)
+
+    def _set_style_sheet(self):
+        # The grid between Base and Text: the Mid of some palettes is as light as Base, which hid the cells.
+        palette = self.palette()
+        grid = blend(palette.color(QPalette.ColorRole.Base), palette.color(QPalette.ColorRole.Text), 0.3).name()
+        self._view.setStyleSheet(f"""
+            QTableView, QTreeView {{ background: palette(Base); gridline-color: {grid}; }}
+            QTableView::viewport, QTreeView::viewport {{ background: palette(Base); }}
+            QTableView::item, QTreeView::item {{ color: palette(Text); }}
+            QTableView::item:selected, QTreeView::item:selected {{
+                background: palette(Highlight); color: palette(HighlightedText); }}
+            QHeaderView::section {{ background: palette(Window); color: palette(WindowText); border: 0; padding: 0.25em 0.5em; }}
+            QTableCornerButton::section {{ background: palette(Window); border: 0; }}
+        """)
 
     def view(self) -> QAbstractItemView:
         return self._view
@@ -134,6 +141,5 @@ class MTSignalItemView(QWidget):
                         QEvent.Type.PaletteChange,
                         QEvent.Type.StyleChange,
                         QEvent.Type.ThemeChange) or (cs and e.type() == cs):
-            ss = self._view.styleSheet()
             self._view.setStyleSheet("")
-            self._view.setStyleSheet(ss)
+            self._set_style_sheet()
