@@ -116,6 +116,8 @@ In the variable search window, the *Synoptic variables* check box lists the vari
 
 <p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
+In the variable search window, with *Synoptic variables* checked, several words find the variables that have them all, in the name or the description, in any order: `magnet temperature [K]`. A word in capitals is matched as written: `mass flow VAC` finds the mass flows of the VAC variables, not those that only mention a vacuum.
+
 #### 2.4.2 Columns definition
 
 | Column | Meaning |
@@ -143,6 +145,8 @@ Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*.
 ### 2.5 Draw, Stream {#draw-stream}
 
 Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
+
+Draw and workspace import lay the plots out at once, each saying how many of its data are read (*Retrieving data (2/5) ..*), and draw each plot as soon as they all are; the window keeps answering meanwhile, and the status bar shows how many reads are done (*Retrieving data (3/8)*). Rows whose alias another row uses in x, y or z are read first, and clicks wait until those reads finish, as they do while the relative-time refresh reads. Zoom, pan, undo, redo and Stream also read in the background, and the plots keep showing the data they have until the new ones arrive, while the status bar says *Retrieving data...*. *Ready.* shows once the plots are drawn. UDA reads run two at a time; set the `MINT_DATA_ACCESS_WORKERS` environment variable to change that (up to 8; 0 turns the background reading off, and the window then reads the data itself, freezing while it does).
 
 <p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
