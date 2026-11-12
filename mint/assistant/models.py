@@ -7,6 +7,9 @@ KNOWN_MODELS = {
         "name": "Qwen3-4B-Instruct-2507 Q4_K_M", "format": "chatml"},
     "364de16769a552bd4d35b755adaa76ec60188594e84beecd60ccf22970cbd3d8": {
         "name": "MINT assistant (Qwen3-1.7B trained for MINT) Q4_K_M", "format": "qwen3-nothink", "few_shot": False},
+    "a5fc9c66a5aa463cefe6ccd3f117844c8e3b343db56668124d1f031314002c29": {
+        "name": "MINT assistant (Qwen3-1.7B trained for MINT) Q4_K_M v12", "format": "qwen3-nothink", "few_shot": False,
+        "files": True},
 }
 
 
