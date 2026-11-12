@@ -26,10 +26,10 @@ def default_canvas_impl() -> str:
 
 
 def data_access_workers() -> int:
-    """Processes reading data in the background: MINT_DATA_ACCESS_WORKERS, kept between 0 and 8, or 2 when it is
+    """Threads reading data in the background: MINT_DATA_ACCESS_WORKERS, kept between 0 and 8, or 2 when it is
     not a number.
 
-    0 reads the data in the GUI thread, without worker processes.
+    0 reads the data in the GUI thread, without worker threads.
     """
     value = os.environ.get('MINT_DATA_ACCESS_WORKERS')
     if value is None:
@@ -38,12 +38,12 @@ def data_access_workers() -> int:
         workers = int(value)
     except ValueError:
         logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is not a number, "
-                       f"{DEFAULT_DATA_ACCESS_WORKERS} worker processes read the data")
+                       f"{DEFAULT_DATA_ACCESS_WORKERS} worker threads read the data")
         return DEFAULT_DATA_ACCESS_WORKERS
     if not 0 <= workers <= MAX_DATA_ACCESS_WORKERS:
         workers = min(max(workers, 0), MAX_DATA_ACCESS_WORKERS)
         logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is out of 0-{MAX_DATA_ACCESS_WORKERS}, "
-                       f"{workers} worker processes read the data")
+                       f"{workers} worker threads read the data")
     return workers
 
 
