@@ -1,10 +1,10 @@
-"""The export of the data to parquet or hdf5 runs in a worker process of its own while MINT goes on drawing. It
+"""The export of the data to parquet or hdf5 runs in a worker thread of its own while MINT goes on drawing. It
 exports the table as it was when it started, reports its progress apart from the other tasks, and ends with the
-same message as before; one runs at a time, and quitting MINT meanwhile asks first. Without worker processes it
+same message as before; one runs at a time, and quitting MINT meanwhile asks first. Without worker threads it
 runs in the GUI thread, as before.
 
-The export script of iplotDataAccess reads from UDA: a stand-in takes its place, in the worker process that exports
-too, except in ExportInAWorkerProcessTest."""
+The export script of iplotDataAccess reads from UDA: a stand-in takes its place, in the worker thread that exports
+too, except in ExportInAWorkerThreadTest."""
 
 import importlib.util
 import os
@@ -104,8 +104,8 @@ def _put_back(name: str, module):
         sys.modules[name] = module
 
 
-class _ExportProcess:
-    """Stands in for the worker process that exports: makes the calls of call_later() in this process when the
+class _ExportThread:
+    """Stands in for the worker thread that exports: makes the calls of call_later() in this thread when the
     test lets it, as the worker would have meanwhile."""
 
     def __init__(self, data_access):
@@ -128,7 +128,7 @@ class _ExportProcess:
         return call
 
     def make_calls(self, outcome=None):
-        """Make the calls waiting; `outcome`, if given, is what they end in, as when the process stops."""
+        """Make the calls waiting; `outcome`, if given, is what they end in, as when the thread stops."""
         while self.waiting:
             call, method, data_s_name, on_done, progress, kwargs = self.waiting.pop(0)
             if call.cancelled:
@@ -157,7 +157,7 @@ class _ExportTestCase(unittest.TestCase):
 
     def setUp(self):
         # The data of the plots are read in this thread, also with the iplotlib releases that read them in
-        # worker processes.
+        # worker threads.
         if hasattr(AccessHelper, 'pool'):
             self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
             AccessHelper.pool = None
@@ -172,9 +172,9 @@ class _ExportTestCase(unittest.TestCase):
 
 class _ExportInWindowTestCase(_ExportTestCase):
 
-    def _window(self, table: pd.DataFrame, process: bool = True) -> MTMainWindow:
-        """A main window with the table, in pulse mode, and with an export process that waits for the test unless
-        not `process`. Its popups are kept in self.popups."""
+    def _window(self, table: pd.DataFrame, thread: bool = True) -> MTMainWindow:
+        """A main window with the table, in pulse mode, and with an export thread that waits for the test unless
+        not `thread`. Its popups are kept in self.popups."""
         win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {}}, app_version='test',
                            data_sources=AccessHelper.da.get_connected_data_source_names(),
                            blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl='matplotlib')
@@ -188,8 +188,8 @@ class _ExportInWindowTestCase(_ExportTestCase):
         uda = patch.dict(win.da.ds_list, {UDA: _uda_source()})
         uda.start()
         self.addCleanup(uda.stop)
-        if process:
-            win._exportPool = self.process = _ExportProcess(win.da)
+        if thread:
+            win._exportPool = self.thread = _ExportThread(win.da)
         self.popups = []
         popup = patch.object(win, 'show_popup_msg', side_effect=lambda *args: self.popups.append(args))
         popup.start()
@@ -229,17 +229,17 @@ class _ExportInWindowTestCase(_ExportTestCase):
 
 class ExportInBackgroundTest(_ExportInWindowTestCase):
 
-    def test_the_export_runs_in_its_process_and_ends_with_the_same_message(self):
+    def test_the_export_runs_in_its_thread_and_ends_with_the_same_message(self):
         win = self._window(_rows((UDA, VAR1), (UDA, VAR2)))
 
         self._export(win)
 
-        # Nothing is exported yet: the export runs in its process while MINT goes on.
+        # Nothing is exported yet: the export runs in its thread while MINT goes on.
         self.assertEqual(self.script.calls, [])
         self.assertEqual(self._shown(win), self.EXPORTING)
         self.assertEqual(self.popups, [])
 
-        self.process.make_calls()
+        self.thread.make_calls()
 
         call, = self.script.calls
         self.assertEqual(call['variables'], [f'{VAR1},about {VAR1}', f'{VAR2},about {VAR2}'])
@@ -265,7 +265,7 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
         # The Draw leaves the progress of the export alone.
         self.assertEqual(self._shown(win), self.EXPORTING)
 
-        self.process.make_calls()
+        self.thread.make_calls()
 
         self.assertEqual(self.script.calls[0]['variables'], [f'{VAR1},about {VAR1}', f'{VAR2},about {VAR2}'])
         self.assertEqual(self.popups[0][0], "Export completed")
@@ -276,44 +276,44 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
         self._export(win)
         self._export(win, output_path=os.path.join(self.folder, 'other.parquet'))
 
-        self.assertEqual(len(self.process.waiting), 1)
-        self.process.make_calls()
+        self.assertEqual(len(self.thread.waiting), 1)
+        self.thread.make_calls()
         self.assertEqual(len(self.script.calls), 1)
         self.assertEqual(len(self.popups), 1)
         self.assertEqual(self._shown(win), self.IDLE)
 
-    def test_the_process_that_exports_starts_when_the_export_dialog_opens(self):
+    def test_the_thread_that_exports_starts_when_the_export_dialog_opens(self):
         win = self._window(_rows((UDA, VAR1)))
 
         win.export_clicked()
         win.exportCfgWidget.hide()
 
-        self.assertEqual(self.process.prepared, [UDA])
+        self.assertEqual(self.thread.prepared, [UDA])
 
-    def test_a_process_that_exports_that_cannot_start_leaves_the_export_to_the_gui_thread(self):
+    def test_a_thread_that_exports_that_cannot_start_leaves_the_export_to_the_gui_thread(self):
         win = self._window(_rows((UDA, VAR1)))
         cannot_start = OSError(12, 'Cannot allocate memory')
 
-        with patch.object(self.process, 'prepare', side_effect=cannot_start):
+        with patch.object(self.thread, 'prepare', side_effect=cannot_start):
             win.export_clicked()
         win.exportCfgWidget.hide()
-        with patch.object(self.process, 'call_later', side_effect=cannot_start):
+        with patch.object(self.thread, 'call_later', side_effect=cannot_start):
             self._export(win)
 
         self.assertEqual(len(self.script.calls), 1)
         self.assertEqual(self.popups[0][0], "Export completed")
         self.assertEqual(self._shown(win), self.IDLE)
 
-    def test_clearing_the_cache_clears_that_of_the_process_that_exports_too(self):
+    def test_clearing_the_cache_clears_that_of_the_thread_that_exports_too(self):
         win = self._window(_rows((UDA, VAR1)))
 
         with patch.object(win.da, 'clear_cache'):
             win.clear_cache()
 
-        self.assertEqual(self.process.cache_clears, 1)
+        self.assertEqual(self.thread.cache_clears, 1)
 
-    def test_without_worker_processes_the_export_runs_in_the_gui_thread_as_before(self):
-        win = self._window(_rows((UDA, VAR1)), process=False)
+    def test_without_worker_threads_the_export_runs_in_the_gui_thread_as_before(self):
+        win = self._window(_rows((UDA, VAR1)), thread=False)
 
         self._export(win)
 
@@ -321,8 +321,8 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
         self.assertEqual(self.popups[0][0], "Export completed")
         self.assertEqual(self._shown(win), self.IDLE)
 
-    def test_without_worker_processes_mint_shows_the_export_before_it_starts(self):
-        win = self._window(_rows((UDA, VAR1)), process=False)
+    def test_without_worker_threads_mint_shows_the_export_before_it_starts(self):
+        win = self._window(_rows((UDA, VAR1)), thread=False)
         handled = []
         # Stands for the events that paint what shows the export.
         QTimer.singleShot(0, lambda: handled.append('painted'))
@@ -332,8 +332,8 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
 
         self.assertEqual(handled, ['painted', 'export started'])
 
-    def test_without_worker_processes_quitting_during_the_export_lets_it_end_first_as_before(self):
-        win = self._window(_rows((UDA, VAR1)), process=False)
+    def test_without_worker_threads_quitting_during_the_export_lets_it_end_first_as_before(self):
+        win = self._window(_rows((UDA, VAR1)), thread=False)
         # The GUI thread that runs the export cannot stop it.
         QTimer.singleShot(0, win.close)
 
@@ -349,27 +349,27 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
         win = self._window(_rows((UDA, VAR1)))
 
         self._export(win)
-        self.process.make_calls()
+        self.thread.make_calls()
 
         title, message, icon = self.popups[0]
         self.assertEqual((title, icon), ("Export failed", QMessageBox.Icon.Critical))
         self.assertIn("Permission denied: out.parquet", message)
         self.assertEqual(self._shown(win), self.IDLE)
 
-    def test_an_export_whose_process_stops_says_so(self):
+    def test_an_export_whose_thread_stops_says_so(self):
         win = self._window(_rows((UDA, VAR1)))
 
         self._export(win)
-        self.process.make_calls(RuntimeError("The data access process stopped while reading the data"))
+        self.thread.make_calls(RuntimeError("The data access stopped while reading the data"))
 
         title, message, _ = self.popups[0]
         self.assertEqual(title, "Export failed")
-        self.assertIn(f"Export failed for data source '{UDA}': The data access process stopped", message)
+        self.assertIn(f"Export failed for data source '{UDA}': The data access stopped", message)
 
     def test_an_export_script_that_cannot_be_loaded_says_so_and_frees_the_export_button(self):
         # As without the UDA client: the export fails, and the next one can start.
         sys.modules[EXPORT_SCRIPT] = None
-        win = self._window(_rows((UDA, VAR1)), process=False)
+        win = self._window(_rows((UDA, VAR1)), thread=False)
 
         self._export(win)
 
@@ -382,7 +382,7 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
         win = self._window(_rows((UDA, VAR1), ('csv', DRAWN)))
 
         self._export(win)
-        self.process.make_calls()
+        self.thread.make_calls()
 
         self.assertEqual(self.script.calls[0]['variables'], [f'{VAR1},about {VAR1}'])
         title, message, _ = self.popups[0]
@@ -397,11 +397,11 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
             stayed = not win.close()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
             closed = win.close()
-        self.process.make_calls()
+        self.thread.make_calls()
 
         self.assertTrue(stayed)
         self.assertTrue(closed)
-        self.assertTrue(self.process.shut_down)
+        self.assertTrue(self.thread.shut_down)
         self.assertEqual(self.script.calls, [])
         self.assertEqual(self.popups, [])
 
@@ -411,19 +411,19 @@ class ExportInBackgroundTest(_ExportInWindowTestCase):
 
         def answer(*args):
             # The export ends while the question waits for the answer.
-            self.process.make_calls()
+            self.thread.make_calls()
             return QMessageBox.StandardButton.Yes
 
         with patch.object(QMessageBox, 'question', side_effect=answer):
             closed = win.close()
 
         self.assertTrue(closed)
-        self.assertTrue(self.process.shut_down)
+        self.assertTrue(self.thread.shut_down)
         self.assertEqual(self.popups[0][0], "Export completed")
 
 
 class ExportDataSourceTest(_ExportTestCase):
-    """What the export makes of the data of a data source, in the process that runs it."""
+    """What the export makes of the data of a data source, in the thread that runs it."""
 
     def _export(self, source, **kwargs) -> dict:
         settings = dict(variables=[(VAR1, 'first')], export_format='hdf5', chunks=10,
@@ -473,19 +473,19 @@ class ExportDataSourceTest(_ExportTestCase):
 
 
 def _worker_with_the_script(hold: float = 0.0):
-    """The data access of the worker process that exports, with the stand-in of the export script in it, which
+    """The data access of the worker thread that exports, with the stand-in of the export script in it, which
     takes `hold` seconds for each variable."""
     sys.modules[EXPORT_SCRIPT] = _ExportScript(hold).module
     return SimpleNamespace(ds_list={UDA: _uda_source()}, get_connected_data_source_names=lambda: [UDA])
 
 
 @unittest.skipUnless(hasattr(getattr(iplot_data_access, 'AccessPool', None), 'call_later'),
-                     "the installed iplotlib cannot make calls in its worker processes in the background")
-class ExportInAProcessOfItsOwnTest(_ExportInWindowTestCase):
-    """The export as the window runs it, in a worker process of its own (see ExportInBackgroundTest)."""
+                     "the installed iplotlib cannot make calls in its worker threads in the background")
+class ExportInAThreadOfItsOwnTest(_ExportInWindowTestCase):
+    """The export as the window runs it, in a worker thread of its own (see ExportInBackgroundTest)."""
 
-    def _window_and_process(self, table: pd.DataFrame, hold: float = 0.0) -> MTMainWindow:
-        # The window starts the process that exports while the data of the plots are read in worker processes,
+    def _window_and_thread(self, table: pd.DataFrame, hold: float = 0.0) -> MTMainWindow:
+        # The window starts the thread that exports while the data of the plots are read in worker threads,
         # which these tests leave alone.
         AccessHelper.pool = SimpleNamespace(prepare=lambda names: None, clear_cache=lambda: None)
         factory = partial(_worker_with_the_script, hold)
@@ -497,12 +497,12 @@ class ExportInAProcessOfItsOwnTest(_ExportInWindowTestCase):
         pool_class = patch.object(iplot_data_access, 'AccessPool', ExportPool)
         pool_class.start()
         self.addCleanup(pool_class.stop)
-        win = self._window(table, process=False)
+        win = self._window(table, thread=False)
         self.addCleanup(lambda: win._exportPool is not None and win._exportPool.shutdown())
         return win
 
-    def test_the_export_runs_in_a_process_of_its_own_and_ends_with_the_same_message(self):
-        win = self._window_and_process(_rows((UDA, VAR1), (UDA, VAR2)))
+    def test_the_export_runs_in_a_thread_of_its_own_and_ends_with_the_same_message(self):
+        win = self._window_and_thread(_rows((UDA, VAR1), (UDA, VAR2)))
 
         win.export_clicked()
         win.exportCfgWidget.hide()
@@ -517,46 +517,48 @@ class ExportInAProcessOfItsOwnTest(_ExportInWindowTestCase):
             self.assertEqual(f.read().splitlines(), [f'{VAR1},about {VAR1}', f'{VAR2},about {VAR2}'])
         self.assertEqual(self.progress, ["Exporting ..", f"Exporting {VAR1} (1/2) ..", f"Exporting {VAR2} (2/2) .."])
         self.assertEqual(self._shown(win), self.IDLE)
-        # The stand-in of the export script of this process exported nothing.
+        # The stand-in of the export script of the GUI thread exported nothing.
         self.assertEqual(self.script.calls, [])
 
-    def test_quitting_while_the_export_runs_stops_its_process(self):
-        win = self._window_and_process(_rows((UDA, VAR1)), hold=60)
+    def test_quitting_while_the_export_runs_stops_its_thread_without_waiting_for_it(self):
+        win = self._window_and_thread(_rows((UDA, VAR1)), hold=60)
         self._export(win)
-        # The process exports the variable.
+        # The thread exports the variable.
         self._run_events(until=lambda: len(self.progress) > 1)
-        worker, = [process for executor in win._exportPool._executors.values()
-                   for process in executor._processes.values()]
+        pool = win._exportPool
 
+        start = time.monotonic()
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
             closed = win.close()
-        worker.join(30)
+        took = time.monotonic() - start
         self._run_events(timeout=1)
 
         self.assertTrue(closed)
-        self.assertFalse(worker.is_alive())
+        self.assertTrue(pool.closed)
+        # The variable takes a minute to export.
+        self.assertLess(took, 5)
         self.assertEqual(self.popups, [])
 
 
 def _worker_data_access():
-    """The data access of the worker process that exports: a UDA data source whose client fails to read."""
+    """The data access of the worker thread that exports: a UDA data source whose client fails to read."""
     source = _uda_source()
     source.UCR = SimpleNamespace()
     return SimpleNamespace(ds_list={UDA: source}, get_connected_data_source_names=lambda: [UDA])
 
 
 @unittest.skipUnless(hasattr(getattr(iplot_data_access, 'AccessPool', None), 'call_later'),
-                     "the installed iplotlib cannot make calls in its worker processes in the background")
+                     "the installed iplotlib cannot make calls in its worker threads in the background")
 @unittest.skipUnless(importlib.util.find_spec('uda_client_reader') is not None,
                      "the export script of iplotDataAccess needs the UDA client")
-class ExportInAWorkerProcessTest(unittest.TestCase):
-    """The export as MINT runs it, in a worker process of its own, with the export script of iplotDataAccess."""
+class ExportInAWorkerThreadTest(unittest.TestCase):
+    """The export as MINT runs it, in a worker thread of its own, with the export script of iplotDataAccess."""
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = ensure_qapp()
 
-    def test_the_export_runs_in_a_worker_process_and_reports_its_progress_there(self):
+    def test_the_export_runs_in_a_worker_thread_and_reports_its_progress_there(self):
         folder = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
         # The worker keeps the file it began to write open until it stops.

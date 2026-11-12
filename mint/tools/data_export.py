@@ -1,7 +1,7 @@
 """Export of the data of a data source to files, parquet or hdf5, with the export script of iplotDataAccess.
 
-This is the part of an export that reads the data and writes the files. MINT runs it in a worker process, so that
-it can go on drawing meanwhile, or, without worker processes, in the GUI thread (see MTMainWindow.on_export_started).
+This is the part of an export that reads the data and writes the files. MINT runs it in a worker thread, so that
+it can go on drawing meanwhile, or, without worker threads, in the GUI thread (see MTMainWindow.on_export_started).
 It does not use Qt.
 """
 

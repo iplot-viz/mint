@@ -66,7 +66,7 @@ class _Export:
     # The variables to export, as many times as pulses, and those whose export started.
     total: int
     started: int = 0
-    # The data sources whose export has not ended, and the calls that export them in the export process.
+    # The data sources whose export has not ended, and the calls that export them in the export thread.
     left: int = 0
     calls: list = field(default_factory=list)
     # The files that the export tried to write, those it wrote and the reasons why the others failed.
@@ -1719,18 +1719,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         """This function shows the export dialog and then creates a file with the correspondence format that contains
         info of the whole canvas"""
         self.exportCfgWidget.show()
-        # The process that exports starts while the export is set up: it can take a while to.
+        # The thread that exports sets its data access up while the export is set up: it can take a while to.
         pool = self._export_pool()
         if pool is not None:
             try:
                 pool.prepare(name for name, data_source in self.da.ds_list.items()
                              if getattr(data_source, 'source_type', None) == EXPORTED_SOURCE_TYPE)
             except Exception:
-                logger.exception("Cannot start the export process ahead of the export")
+                logger.exception("Cannot start the export thread ahead of the export")
 
     def _export_pool(self):
-        """The worker process that exports, apart from those that read the data of the plots, which an export would
-        keep busy for as long as it takes; None without worker processes (see AccessHelper.pool), when the export
+        """The worker thread that exports, apart from those that read the data of the plots, which an export would
+        keep busy for as long as it takes; None without worker threads (see AccessHelper.pool), when the export
         runs in the GUI thread."""
         if self._exportPool is None and getattr(AccessHelper, 'pool', None) is not None:
             pool_class = getattr(iplot_data_access, 'AccessPool', None)
@@ -1738,7 +1738,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 try:
                     self._exportPool = pool_class(1)
                 except Exception:
-                    logger.exception("Cannot start the export process, the data are exported in the GUI thread")
+                    logger.exception("Cannot start the export thread, the data are exported in the GUI thread")
                     return None
                 QCoreApplication.instance().aboutToQuit.connect(self._exportPool.shutdown)
         return self._exportPool
@@ -1866,14 +1866,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                                         progress=self._export_progressed, **job))
                     continue
                 except Exception:
-                    logger.exception("Cannot export in the export process, the data are exported in the GUI thread")
+                    logger.exception("Cannot export in the export thread, the data are exported in the GUI thread")
                     pool = None
             # It runs in this thread: what shows that it runs is painted first, as indicate_busy() did.
             QCoreApplication.processEvents()
             try:
                 outcome = export_data_source(self.da, ds_name, progress=self._export_progressed_here, **job)
             except Exception as e:
-                # As the export process gives it.
+                # As the export thread gives it.
                 logger.exception(f"Cannot export the data of {ds_name}")
                 outcome = e
             self._exported(ds_name, outcome)
@@ -1959,7 +1959,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 "The data export process finished successfully", QMessageBox.Icon.Information)
 
     def _stop_export(self) -> bool:
-        """Ask whether to stop the export that runs in the export process, before MINT quits; whether to."""
+        """Ask whether to stop the export that runs in the export thread, before MINT quits; whether to."""
         answer = QMessageBox.question(self, "Export in progress",
                                       "An export is still running. Quit MINT and stop it?\n"
                                       "The files it is writing are left incomplete.",
