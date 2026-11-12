@@ -501,6 +501,8 @@ class MTSignalsModel(QAbstractItemModel):
 
         for i, parsed_row in enumerate(
                 self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
+            # With copy-on-write (pandas 3) the row of fails the parse marks is a copy of the one in the table.
+            self._table_fails.loc[row_idx] = parsed_row[1]
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)
