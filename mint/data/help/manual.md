@@ -30,7 +30,7 @@
 
 ### 1.1 Purpose and scope {#purpose-scope}
 
-This is a how-to guide for MINT - Make Informative and Nice Trends, the visualization tool developed alongside Science Division and used in the ITER control room. It retrieves both CODAC and IMAS data and is implemented in Python 3, PySide6, Matplotlib and VTK.
+This is a how-to guide for MINT - Make Informative and Nice Trends, the visualization tool developed alongside Science Division and used in the ITER control room. It plots CODAC plant data and IMAS data.
 
 The current version is limited to 1-D traces. More complex plots are planned for upcoming releases.
 
@@ -74,15 +74,15 @@ To start the tool:
 $ mint
 ```
 
-Plots use matplotlib by default; `mint --impl pyqt` switches to PyQtGraph, and the `MINT_IMPL` environment variable does the same when the tool is started without a command line.
+Plots use matplotlib by default. To use PyQtGraph instead, start MINT with `mint --impl pyqt`, or set `MINT_IMPL=pyqt` when it is started from a menu or an icon.
 
 <div class="note">If MINT exits with <em>"no data sources found, exiting"</em>, it could not find a valid UDA or IMAS server. See <a href="#errors-no-data-sources">Error reference - No data sources</a> and <a href="#data-sources">section 2.10</a>.</div>
 
 ### 2.2 Logging {#logging}
 
-Log files live under `~/.local/1Dtool/logs/`; the log file is `mint.log`.
+Logs are written to `~/.local/1Dtool/logs/`, one `mint_*.log` file per MINT session.
 
-Severity is controlled with the `IPLOT_LOG_LEVEL` environment variable, set *before* starting the tool. Allowed values: `DEBUG`, `WARNING`, `CRITICAL`, `ERROR`.
+To change how much is logged, set `IPLOT_LOG_LEVEL` before starting MINT: `DEBUG`, `INFO` (default), `WARNING`, `ERROR` or `CRITICAL`, from most to least detail.
 
 ```
 $ export IPLOT_LOG_LEVEL=DEBUG
@@ -91,7 +91,7 @@ $ mint
 
 ### 2.3 Time configuration {#time-configuration}
 
-MINT always assumes UTC time, regardless of the host time zone. Timestamps follow ISO 8601. On the time axis the part of the timestamp shared by the whole view sits in the corner (`UTC:2026-08-13T05:52:`) and each tick shows only what changes; a tick reduced to a bare number carries its unit, e.g. `06s`, `20min`, `500ms`.
+All times are UTC, whatever the time zone of the computer, and written in ISO 8601 (`2026-08-13T05:52:06`). On the time axis, the part common to the whole view is shown once in the corner (`UTC:2026-08-13T05:52:`) and each tick shows only the rest, with its unit when it is a single number: `06s`, `20min`, `500ms`.
 
 Data can be queried by:
 
@@ -99,25 +99,23 @@ Data can be queried by:
 - Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. `ITER:CWS-SCSU-BASIN-FILL-TESTS/130125`. On SDCC, IMAS pulses use `pulse/run`, e.g. `135011/7`, or an Access Layer URI such as `imas:hdf5?path=/home/ITER/.../3/105027/32`.
 - Relative time range, with an optional refresh interval (minimum 5 minutes).
 
-<p style="text-align:center;margin:14px 0;"><img src="image_01.png" alt="Querying by absolute time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 1. Querying by absolute time range.</i></p>
-<p style="text-align:center;margin:14px 0;"><img src="image_02.png" alt="Querying by pulse id on CCS" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 2. Querying by pulse id on CCS.</i></p>
-<p style="text-align:center;margin:14px 0;"><img src="image_03.png" alt="Querying IMAS data by pulse id on SDCC" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 3. Querying IMAS data by pulse id on SDCC: pulse/run.</i></p>
-<p style="text-align:center;margin:14px 0;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
-<p style="text-align:center;margin:14px 0;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_01.png" alt="Querying by absolute time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 1. Querying by absolute time range.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_02.png" alt="Querying by pulse id on CCS" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 2. Querying by pulse id on CCS.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_03.png" alt="Querying IMAS data by pulse id on SDCC" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 3. Querying IMAS data by pulse id on SDCC: pulse/run.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_04.png" alt="Querying by pulse id on SDCC using URI" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 4. Querying by pulse id on SDCC: using URI.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_05.png" alt="Querying by relative time range" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 5. Querying by relative time range.</i></p>
 
-Multiple pulse IDs can be overlaid by separating them with commas. Use the *Search* button next to the Pulse ID field to browse pulses; the *Selected* column marks the pulses the canvas uses (this field, the pulse a time range was taken from, and any *PulseId* typed in the signals table), it follows those while the search stays open, and sorting by it brings them to the top. The page numbers next to the `<` `>` arrows jump straight to a page. *Started between* keeps the pulses that started between two times, given in UTC as the table shows them, with or without a search pattern; it is greyed out for data sources whose pulses have no times.
+To overlay several pulses, separate their IDs with commas. *Search*, next to the Pulse ID field, browses the pulses. Its *Selected* column marks the pulses the plots use (this field, the pulse the time range was taken from, and the *PulseId* column of the table), and stays up to date while the window is open; sort by it to bring them to the top. Click a page number next to the `<` `>` arrows to jump to that page. *Started between* keeps only the pulses that started between two UTC times, alone or with a search pattern; it is greyed out when the pulses of the data source have no times.
 
 ### 2.4 Table {#table}
 
 #### 2.4.1 Icons and buttons
 
-The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
+Above the variable table: *Open*, *Append* and *Save Signal Sets* (the table as a file); *Hide/Show columns*; *Search Vars* to browse the variables of each data source; *Load new module* to add a Python module for use in expressions.
 
-In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file).
+In the variable search window, the number of variables found is shown next to the search bar; double-click a node to expand all its children, or to collapse it again. For data sources with a controls metadata server (`controlsmetadata` key in the data sources file), the *Synoptic variables* check box lists the variables shown on the HMI, each with its unit in square brackets, data type and description. With it checked, the search also looks in the description and the unit: several words find the variables that have them all, in any order (`magnet temperature [K]`); a unit in square brackets (`[K]`) keeps only the variables in that unit, alone or with more words (`[K] temperature`); a word in capitals is matched as written, so `mass flow VAC` finds the mass flows of the VAC variables, not those that only mention a vacuum.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
-
-In the variable search window, with *Synoptic variables* checked, several words find the variables that have them all, in the name or the description, in any order: `magnet temperature [K]`. A word in capitals is matched as written: `mass flow VAC` finds the mass flows of the VAC variables, not those that only mention a vacuum.
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
 #### 2.4.2 Columns definition
 
@@ -130,8 +128,8 @@ In the variable search window, with *Synoptic variables* checked, several words 
 | Col span | Columns the plot occupies (default 1). |
 | Envelope | Empty disables envelope. Set to 1 to compute min/max/avg envelope. |
 | Alias | Shortcut name used in legends and expressions. |
-| Pulse ID | Per-row pulse override. Use `+(pulseID)` to add, `-(pulseID)` to exclude, comma-separated. |
-| Start Time / End Time | Per-row time override (ISO 8601, or relative seconds for pulse mode; negative values allowed). |
+| PulseId | Pulses for this row instead of the global ones: `+(pulseID)` adds one, `-(pulseID)` excludes one; comma-separated. |
+| StartTime / EndTime | Time range for this row only (ISO 8601, or seconds relative to the pulse in pulse mode; negative values allowed). |
 | X / Y / Z | Redefine the X, Y, Z vectors used for plotting (Z for contour and slider plots). |
 | Extremities | Set to 1 to retrieve the last point before the start time (useful for PON data). |
 | Plot type | Default `PlotXY`. |
@@ -141,32 +139,32 @@ In the variable search window, with *Synoptic variables* checked, several words 
 
 Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*. The example workspace `ExampleOfComplexLayout.json` reproduces a multi-plot layout combining stacks and column spans.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_07.png" alt="Example of a complex layout" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 7. Example of complex layout.</i></p>
 
 ### 2.5 Draw, Stream {#draw-stream}
 
-Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
+Click **Draw** to plot, or **Stream** to follow live data. Streaming needs a time window, in seconds, minutes, hours or days (up to 7 days). The window is first filled from the archive, then live samples are added. Each signal keeps up to 10000 samples (`MINT_MAX_STREAMING_POINTS` changes it); beyond that, older samples are thinned out keeping their minima and maxima, and the last two minutes stay at full resolution. If the connection drops, MINT reconnects by itself and fills the gap from the archive; a stream silent for more than 60 s counts as dropped (`IPLOT_STREAM_READ_TIMEOUT`, in seconds, changes it).
 
-Draw and workspace import lay the plots out at once, each saying how many of its data are read (*Retrieving data (2/5) ..*), and draw each plot as soon as they all are; the window keeps answering meanwhile, and the status bar shows how many reads are done (*Retrieving data (3/8)*). Rows whose alias another row uses in x, y or z are read first, and clicks wait until those reads finish, as they do while the relative-time refresh reads. Zoom, pan, undo, redo and Stream also read in the background, and the plots keep showing the data they have until the new ones arrive, while the status bar says *Retrieving data...*. *Ready.* shows once the plots are drawn. UDA reads run two at a time; set the `MINT_DATA_ACCESS_WORKERS` environment variable to change that (up to 8; 0 turns the background reading off, and the window then reads the data itself, freezing while it does).
+Data is read in the background, so the window keeps responding. After *Draw* or a workspace import, all plots appear at once, each showing its progress (*Retrieving data (2/5) ..*), and each is drawn as soon as its data is in; the status bar shows the overall count (*Retrieving data (3/8)*), then *Ready.* once the plots are drawn. Zoom, pan, undo, redo and *Stream* also read in the background: the plots keep their current data, and the status bar says *Retrieving data...*, until the new data arrives. Signals used in another row's x, y or z are read first, and clicks wait until they are in, as during a relative-time refresh. UDA reads run two at a time; `MINT_DATA_ACCESS_WORKERS` changes that (up to 8; 0 turns background reading off, and the window freezes while it reads).
 
-<p style="text-align:center;margin:14px 0;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
-<p style="text-align:center;margin:14px 0;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
 
-<div class="note">Preferences are unavailable while streaming. Apply preferences via <em>Draw</em> first, then start the stream. The <em>Draw</em> button is disabled while a stream is running; stop the stream to draw again.</div>
+<div class="note">Preferences cannot be changed while streaming: set them and press <em>Draw</em> before starting the stream. <em>Draw</em> stays disabled until the stream is stopped.</div>
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 
-Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON files.
+A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. Use *File > Import Workspace* or *File > Export Workspace*.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
 ### 2.7 Export data {#export-data}
 
-The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The *Sampling* box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a `.resampling.log` file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. *Native* keeps the original samples.
+The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid *Stack* are exported; signals computed from expressions are left out. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The *Sampling* box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a `.resampling.log` file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. *Native* keeps the original samples.
 
-While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.
+While the export runs, a progress bar in the status bar shows the variable being written.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
 <div class="err-block">If the export fails or completes only partially, MINT shows a popup with the underlying reason. Common causes are listed under <a href="#errors">Error reference</a>: <a href="#errors-permission-denied">Permission denied</a>, <a href="#errors-export-expression">Expressions in Variable column</a>, <a href="#errors-export-custom-time">Per-signal time overrides</a>, <a href="#errors-export-xyz">Custom x/y/z processing</a>.</div>
 
@@ -174,34 +172,35 @@ While the export runs, a progress bar in the status bar reports the variable cur
 
 Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 
-<p style="text-align:center;margin:14px 0;"><img src="image_12.png" alt="Canvas toolbar" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_12.png" alt="Canvas toolbar" width="704" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 12. Canvas toolbar.</i></p>
 
 - **SELECT**: left double-click to put a plot in full-screen; right double-click to go back.
 - **CROSSHAIR**: shows X/Y coordinates and the closest signal value. SELECT disables it.
 - **PAN**: drag to pan; left double-click to reset.
-- **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
-- **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y or X, in seconds along a time axis, or with *Duplicate signal* adds a shifted copy of it next to the original; in SELECT mode, dragging a signal shifts it too.
+- **ZOOM**: drag a box to zoom into it, in X and Y; left double-click to reset.
+- **DIST**: click two points to measure the distance between them; the window that opens can also shift a signal by that distance in X (in seconds on a time axis) or Y, or add a shifted copy with *Duplicate signal*. In SELECT mode, dragging a signal shifts it too.
 - **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
-- **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
-- <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
+- **RULER**: double-click to drop a ruler (A, B, C…) on a data point. It stays on that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it; right-click it → *Remove ruler* to delete it. With shared time on, it appears on every plot and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
+- <img src="image_13.png" class="inline-icon" alt="Stats icon" /> **Statistics**: min/avg/max, first and last value and time, and sample count of each signal; *Hide/Show columns* hides the ones you don't need.
 - Undo / Redo: roll back or replay the last pan, zoom or shift. *Draw*, and each auto-refresh in relative time, clear this history.
-- **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
-- Folder / Floppy: open / save preferences.
-- Square-with-arrow: export the points of each signal currently rendered.
+- **HOME**: reset all plots to the original view. In relative time it also stops the auto-refresh; press *Draw* to resume it.
+- Folder / Floppy: import / export a workspace (see [2.6](#export-import-workspace)).
+- Square-with-arrow: save the points drawn for each signal to a CSV file.
+- Camera: save the canvas as an image (PNG, SVG or JPEG).
 - <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range — set category, status and a one-line description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
-- **MINI-MAP**: toggle a small overview of the current plot below the canvas. Enabled only when a single PlotXY is visible — either a single-plot canvas or focus mode — and never while streaming; it stays greyed out otherwise. The mini-map shows the same signal over the original time window captured at *Draw* time, with an orange overlay that tracks the zoomed / panned region of the main plot in real time. The toggle is persisted with the workspace (`show_minimap` flag).
+- **MINI-MAP**: show or hide, below the canvas, the plot over its whole *Draw* time range, with an orange box marking the part you are looking at. Available only when a single PlotXY is shown (alone on the canvas or in full screen) and not while streaming. Saved with the workspace.
 - **DETACH** / **REATTACH**: float the canvas in its own window.
 
 Right-click a plot for per-plot actions:
 
-- **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
-- **Set as time window** — copies the plot's visible range into the query time range (switching to the *Time Range* tab, or keeping relative seconds in pulse mode), so the next *Draw* fetches exactly what you zoomed into.
+- **Reset zoom/pan**: like *Home*, but only for that plot (useful with *shared time* off).
+- **Set as time window**: copy the visible range of the plot into the time range (as seconds relative to the pulse, in pulse mode), so the next *Draw* reads exactly what you zoomed into.
 
 #### Legend
 
-Click a signal's line or name to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and what you did to the legend are kept by *Draw* and saved with the workspace.
+Click a signal's line or name in the legend to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and legend changes are kept by *Draw* and saved with the workspace.
 
 #### Reading tick labels with very large values
 
@@ -212,16 +211,16 @@ When the plotted values are too large for plain tick labels — e.g. a signal wh
 
 So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000,000`. Either part may appear alone: a corner label with only a power of ten (e.g. `1e18`) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_19.png" alt="Axis with offset + scale corner label" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Offset + scale tick notation: each tick is multiplied by 1e9, then 1.121e15 is added.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_19.png" alt="Axis with offset + scale corner label" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Offset + scale tick notation: each tick is multiplied by 1e9, then 1.121e15 is added.</i></p>
 
 #### Rulers window
 
 Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
 
-- **Rows**: one row per ruler and per plot it is drawn on — with shared time on, a ruler placed on one plot appears on all of them and gets a row for each, so the *Plot* column tells them apart. Every row carries the ruler's X value and one column per crossed signal with its value at the ruler (blank where the ruler sits off a signal, or where the signal belongs to another plot). The Y value only appears on the plot you placed the ruler on, the one whose scale it was read against. The row also holds the controls *Visible* (show or hide the ruler), *Labels* (show the ruler's own tags — name, X and Y values — the signal-value tags, both or neither; this one applies only to that row's plot), *Color* (the ruler's lines and label boxes) and *Font color* (the label text; adapts to stay readable by default). Rows are listed by plot; click a header to sort by another column. Select several rows (Ctrl or Shift click, Ctrl+A for all of them) and change a control on any of them to apply it to the whole selection. Long signal names wrap over several header lines, and hovering a header shows the full name.
+- **Rows**: one row per ruler and per plot it is on; with shared time on, a ruler is on every plot, and the *Plot* column tells the rows apart. Each row shows the ruler's X value and, for each signal it crosses, the signal value at the ruler (blank where the ruler is off the signal or the signal is on another plot); the Y value appears only on the plot the ruler was placed on. Controls: *Visible* shows or hides the ruler; *Labels* shows the ruler's own tags (name, X and Y), the signal-value tags, both or neither, on that row's plot only; *Color* sets the ruler's lines and label boxes; *Font color* sets the label text (by default it adapts to stay readable). Rows are listed by plot; click a header to sort by another column, or hover it to see a long signal name in full. Select several rows (Ctrl or Shift click, Ctrl+A for all) and change a control on any of them to apply it to all.
 - **Columns**: a read-only view with one section per plot — rulers ordered by X value as columns, one row per signal below the X row (plus a Y row on the plot the ruler was placed on), and a Δ column showing the gap between neighbours for each of them.
 
-*Hide/Show signals* picks which signal columns (or rows, in the Columns layout) are displayed, and *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once, new rulers included; both menus start with a *Select all* / *Deselect all* entry. Columns can be resized, and you can copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table* button) to paste into a spreadsheet. *Export to CSV* writes the whole table (every ruler and every column) to a semicolon-separated `.scsv` file — the same convention as the signal-set export, so it opens cleanly in a spreadsheet — or a plain comma `.csv`. *Remove ruler* deletes the selected rulers; *Compute distance* opens a table with the ΔX, ΔY and per-signal deltas between two or more of them — even across plots — with its own *Copy* button; ΔX is the time distance, while ΔY and the signal deltas are signed (later ruler minus earlier one), and on time axes the ΔX also shows the duration in the statistics-table format, e.g. `9.5 s (9s500ms)`.
+*Hide/Show signals* picks which signal columns (rows, in the Columns layout) are shown; *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once, new rulers included. Copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table*) to paste it into a spreadsheet. *Export to CSV* saves the whole table as `.scsv` (semicolon-separated, like the signal sets) or `.csv`. *Remove ruler* deletes the selected rulers. *Compute distance* shows ΔX, ΔY and the difference of each signal between two or more selected rulers, also across plots, with its own *Copy* button; ΔY and the signal differences are signed (later ruler minus earlier), and on a time axis ΔX also shows as a duration, e.g. `9.5 s (9s500ms)`.
 
 #### Canvas-level preferences
 
@@ -229,9 +228,9 @@ Title, font size, shared time, time-range difference, round hours, auto scale, Y
 
 Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.
 
-Most preference changes survive subsequent *Draw* calls; axis-limit changes do not. Click *Apply* to commit and close the panel.
+*Draw* keeps most preference changes, but not axis limits. Click *Apply* to apply them and close the panel.
 
-To persist preferences, save them: they are written to `~/.local/1DPreferences/default_properties.json` and read back on the next start. To share one file across users, point `IPLOT_CANVAS_CONFIG` at it; it takes precedence over the saved preferences.
+To keep preferences for the next sessions, click *Save preferences* in the canvas preferences: they are written to `~/.local/1DPreferences/default_properties.json` and loaded at start. To share one file among users, set `IPLOT_CANVAS_CONFIG` to its path; it takes precedence over the saved preferences.
 
 ### 2.9 Expressions {#expressions}
 
@@ -245,7 +244,7 @@ Example: multiply `UTIL-HV-S22-BUS1:TOTAL_POWER` by `-2` and add an offset of `1
 ${UTIL-HV-S22-BUS1:TOTAL_POWER}*(-2)+10
 ```
 
-Aliases can be reused in expressions. If the Stack column is empty, the signal is not drawn (it can still feed an expression).
+A row's alias can replace its variable name in expressions, e.g. `${Bus1}`. A row with an empty *Stack* is not drawn, but can still be used in expressions.
 
 #### 2.9.2 Complex processing
 
@@ -255,13 +254,13 @@ Combine several variables with aliases:
 ${Bus1} + ${Bus2} + ${Bus4}
 ```
 
-The processing module aligns the time vectors when they differ (union of the time vectors, interpolated using the previous-value mode).
+When the signals have different time stamps, MINT combines them over the union of their time stamps, each signal holding its previous value where it has no sample.
 
 <div class="err-block">If the result of an expression has incompatible shapes, MINT will report it - see <a href="#errors-shape-mismatch">Signal arrays have incompatible shapes</a>.</div>
 
 #### 2.9.3 Use of x and y columns
 
-The *x* column rewrites the time vector; *y* rewrites the data vector. Example - plot a signal as the maximum value over a relative-time window:
+The *x* column replaces the time values; *y* replaces the data values. Example: X in days from the first sample, Y a flat line at the maximum of the signal:
 
 | Column | Value |
 |--------|-------|
@@ -272,7 +271,7 @@ NumPy is available via the `np.` prefix. The X/Y columns can also be used to plo
 
 In the *x*, *y* and *z* columns, `${self}` is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. `${Bus1}.data - ${self}.data`.
 
-<p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
+<p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 ### 2.10 Data Sources {#data-sources}
 
@@ -299,7 +298,7 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 }
 ```
 
-Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first `-` or `.` of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on `-`, `.` and `_` until none holds more. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
+Override the default file with `IPLOT_SOURCES_CONFIG`. For UDA, *host* and *port* give the server. *rturl* is optional: the address for live streaming. *rtheaders* holds the headers it expects, and *rtauth* the authentication method (`null` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional: a folder of the variable tree holding more variables than this number is split into sub-folders on `-`, `.` and `_` until none holds more; unset, the tree has one level of folders, split on the first `-` or `.` of the names. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
@@ -354,7 +353,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 
 ## 4. Reference {#reference}
 
-This section is auto-generated from the code at build time. Do not edit by hand — edits are overwritten.
+<!-- The tables below are generated from the code by mint/tools/build_manual.py; do not edit them by hand. -->
 
 ### 4.1 Keyboard shortcuts {#keyboard-shortcuts}
 
@@ -371,21 +370,21 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 ## 5. FAQ {#faq}
 
 1. **Font is too small.** *View > Appearance > UI scale* enlarges the whole interface (125% to 200%); *Auto*, the default, only adapts the plot text to the screen. For the plots alone, open the canvas preferences (gear icon in the canvas toolbar) and raise *Font size*.
-2. **The tool crashed - did I lose my table?** Every *Draw* dumps the table; copies live in `~/.local/1Dtool/dumps`.
+2. **The tool crashed - did I lose my table?** No: every *Draw* saves a copy of the table in `~/.local/1Dtool/dumps`.
 3. **Can I run two instances?** Yes.
-4. **PON data:** set *Extremities* to 1 to retrieve the first point of the interval.
-5. **An expression fails because one signal has no data.** Currently a missing input signal aborts the expression. This will improve in a future release.
-6. **I loaded a workspace and the canvas is blank.** Click *Draw* - it usually helps.
-7. **A preference change is not visible.** Close the preferences panel - it usually helps.
-8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p>
+4. **PON data:** set *Extremities* to 1 to also get the last value before the start time.
+5. **An expression fails because one signal has no data.** An expression is only computed when all its signals have data.
+6. **I loaded a workspace and the canvas is blank.** Click *Draw*.
+7. **A preference change is not visible.** Click *Apply*, or close the preferences panel.
+8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p>
 9. **Overlay pulses on all plots?** Comma-separate pulse IDs. See `OverlayPulsesID.json`.
 10. **Overlay or append a pulse on a single plot?** See `CustomizedPulsesPlots.json`.
-11. **Specify a start/end time for pulse IDs?** Use Start/End Time with shared X axis off. See `CustomizedPulsesPlotsWithStartEnd.json`.
-12. **Compare signals with two different time ranges?** Yes (untick shared X). See `WeekComparison.json`.
+11. **Specify a start/end time for pulse IDs?** Use *StartTime*/*EndTime* with *Shared time* off. See `CustomizedPulsesPlotsWithStartEnd.json`.
+12. **Compare signals with two different time ranges?** Yes, with *Shared time* off. See `WeekComparison.json`.
 13. **Different time ranges on the same plot, no pulses?** See `WeekComparisonSamePlot.json`.
 14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`.
-15. **Examples of self-written modules?** See Advanced Exercises [RD5].
-16. **Add my own data source?** See Advanced Exercises [RD6].
+15. **Examples of self-written modules?** See [RD5].
+16. **Add my own data source?** See [RD6].
 17. **Where are the workspaces?**
 
     ```
@@ -396,12 +395,12 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
-21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode — and not while streaming.
+21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is shown (alone on the canvas or in full screen) and not while streaming.
 22. **A dark interface?** *View > Appearance > Theme > Dark* draws MINT, its plots and this manual in dark colours; *Auto* follows the light or dark mode of the system, and *None*, the default, keeps the light look. The colours set in the canvas preferences are kept, and MINT starts with the theme chosen last.
 
 ## 6. Error reference {#errors}
 
-MINT reports two kinds of feedback. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) appear in the Status cell of the row when you Draw, and in the log; they are self-explanatory and not duplicated here. *Conceptual errors* (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.
+MINT reports two kinds of feedback. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) appear in the Status cell of the row when you Draw, and in the log; they are self-explanatory and not duplicated here. Other errors (network problems, mismatched signal shapes, permission issues) need more context: they are explained below, and popups, the Status cell tooltip and the Help menu link here.
 
 ### Error categories {#error-categories}
 
@@ -413,7 +412,7 @@ Raised when MINT asks a data source for a signal and either cannot reach the ser
 
 #### Processing {#cat-processing}
 
-Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
+Raised while MINT evaluates an expression or aligns signals before plotting. The most common: signals with different numbers of samples that cannot be combined, and expressions that return a single number instead of a signal. Mixing envelope and non-envelope signals also fails here. The Status cell shows the raw message; hover it for an explanation.
 
 #### Export {#cat-export}
 
@@ -429,7 +428,7 @@ Raised when MINT rejects a value typed in the signals table — invalid date for
 
 #### Streaming {#cat-streaming}
 
-Raised by the streaming pipeline. Symptoms include occasional *operands could not be broadcast together* warnings while the X and Y buffers of a signal are being updated, and `PlotItem not found` followed by an `IndexError` in the date axis formatter when a workspace is imported with a stream still active. The first one is transient and recovers on the next frame; the second one is a known race for which the workaround is to stop the stream before importing.
+Two known messages while streaming. *operands could not be broadcast together* appears now and then while a signal is updated and clears by itself on the next update. `PlotItem not found` followed by an `IndexError` appears when a workspace is imported while a stream is running; stop the stream before importing.
 
 ### Catalogued errors
 
