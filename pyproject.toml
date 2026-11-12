@@ -49,7 +49,7 @@ where = ["."]
 include = ["mint*"]
 
 [tool.setuptools.package-data]
-"mint.data" = ["scsv/*", "workspaces/*", "data_signals/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*", "assistant/*.json"]
+"mint.data" = ["scsv/*", "workspaces/*", "datasources/*", "data_signals/*", "blueprint.json", "help/*.json", "help/*.html", "help/*.md", "help/images/*", "assistant/*.json"]
 "mint.gui" = ["icons/*.png", "icons/*.svg", "res/*.ui", "themes/*.qss"]
 "mint" = ["mydatasources.cfg"]
 

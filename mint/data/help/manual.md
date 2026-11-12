@@ -300,6 +300,27 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 
 Override the default file with `IPLOT_SOURCES_CONFIG`. For UDA, *host* and *port* give the server. *rturl* is optional: the address for live streaming. *rtheaders* holds the headers it expects, and *rtauth* the authentication method (`null` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional: a folder of the variable tree holding more variables than this number is split into sub-folders on `-`, `.` and `_` until none holds more; unset, the tree has one level of folders, split on the first `-` or `.` of the names. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
 
+#### PYUDA data sources (MAST, MAST-U)
+
+A `PYUDA` data source reads signals from a UKAEA UDA server through `pyuda`. To use it, install the `pyuda` extra of iplotDataAccess (`pip install "iplotDataAccess[pyuda]"`). Example (`mint/data/datasources/mast_pyuda.cfg`):
+
+```
+{
+  "mast": {
+    "type": "PYUDA",
+    "host": "uda2.mast.l",
+    "port": 56565,
+    "default": true,
+    "pulse_list_size": 200,
+    "list_shot": 30420
+  }
+}
+```
+
+*host* and *port* are optional. When you do not set them, pyuda uses its own settings (for example `UDA_HOST`). *pulse_list_size* is optional (default 200): the number of recent shots that the pulse browser shows. *list_shot* is optional: the shot that gives the signal list for the variable browser. When you do not set it, MINT uses the latest shot. *cache_size* is optional (default 100): the number of signals that the source keeps in memory.
+
+Use the **Pulse Id** access mode. Type the shot number in the pulse field (for example `30420`). `0` is the latest shot and `-N` is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the *Variable* column. You can use a generic name (`ip`), a MAST name (`ANE_DENSITY`) or a MAST-U name (`/AMC/PLASMA_CURRENT`). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.
+
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
 ### 2.11 Assistant {#assistant}
