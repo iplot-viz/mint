@@ -366,6 +366,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
 21. **Why is the mini-map button greyed out?** It is only available when a single PlotXY is visible — a single-plot canvas or focus mode — and not while streaming.
+22. **A dark interface?** *View > Appearance > Theme > Dark* draws MINT, its plots and this manual in dark colours; *Auto* follows the light or dark mode of the system, and *None*, the default, keeps the light look. The colours set in the canvas preferences are kept, and MINT starts with the theme chosen last.
 
 ## 6. Error reference {#errors}
 
