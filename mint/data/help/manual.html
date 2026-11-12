@@ -345,6 +345,21 @@ $ mint
 }
 </code></pre>
 <p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. For UDA, <em>host</em> and <em>port</em> give the server. <em>rturl</em> is optional: the address for live streaming. <em>rtheaders</em> holds the headers it expects, and <em>rtauth</em> the authentication method (<code>null</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used. <em>variable_group_limit</em> is optional: a folder of the variable tree holding more variables than this number is split into sub-folders on <code>-</code>, <code>.</code> and <code>_</code> until none holds more; unset, the tree has one level of folders, split on the first <code>-</code> or <code>.</code> of the names. <em>cache_size</em> is optional (default 300): the number of data queries a UDA source keeps in memory.</p>
+<h4>PYUDA data sources (MAST, MAST-U)</h4>
+<p>A <code>PYUDA</code> data source reads signals from a UKAEA UDA server through <code>pyuda</code>. To use it, install the <code>pyuda</code> extra of iplotDataAccess (<code>pip install "iplotDataAccess[pyuda]"</code>). Example (<code>mint/data/datasources/mast_pyuda.cfg</code>):</p>
+<pre><code>{
+  &quot;mast&quot;: {
+    &quot;type&quot;: &quot;PYUDA&quot;,
+    &quot;host&quot;: &quot;uda2.mast.l&quot;,
+    &quot;port&quot;: 56565,
+    &quot;default&quot;: true,
+    &quot;pulse_list_size&quot;: 200,
+    &quot;list_shot&quot;: 30420
+  }
+}
+</code></pre>
+<p><em>host</em> and <em>port</em> are optional. When you do not set them, pyuda uses its own settings (for example <code>UDA_HOST</code>). <em>pulse_list_size</em> is optional (default 200): the number of recent shots that the pulse browser shows. <em>list_shot</em> is optional: the shot that gives the signal list for the variable browser. When you do not set it, MINT uses the latest shot. <em>cache_size</em> is optional (default 100): the number of signals that the source keeps in memory.</p>
+<p>Use the <strong>Pulse Id</strong> access mode. Type the shot number in the pulse field (for example <code>30420</code>). <code>0</code> is the latest shot and <code>-N</code> is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the <em>Variable</em> column. You can use a generic name (<code>ip</code>), a MAST name (<code>ANE_DENSITY</code>) or a MAST-U name (<code>/AMC/PLASMA_CURRENT</code>). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h3 id="assistant">2.11 Assistant</h3>
 <p>Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
