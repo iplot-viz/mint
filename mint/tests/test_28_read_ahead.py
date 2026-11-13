@@ -739,8 +739,9 @@ class ReadAheadContractTest(_MainWindowTestCase):
                                       'Stack': ['', '1.1']},
     }
 
-    # Tables whose only plot fails on purpose.
-    NOT_DRAWN = {'an expression of a variable that does not exist', 'y on an alias that failed'}
+    # Tables whose only plot is left out on purpose: a row whose y uses an alias that failed draws nothing, while one
+    # whose data cannot be read draws its plot empty.
+    NOT_DRAWN = {'y on an alias that failed'}
 
     @classmethod
     def setUpClass(cls) -> None:

@@ -12,7 +12,7 @@ import typing
 import re
 import uuid
 
-from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
+from PySide6.QtCore import QAbstractItemModel, QMimeData, QModelIndex, Qt
 from PySide6.QtGui import QBrush, QColor
 
 from iplotProcessing.common import InvalidExpression
@@ -51,6 +51,9 @@ class Waypoint:
 
 
 exp_stack = re.compile(r'(\d+)(?:[.](\d+))?(?:[.](\d+))?$')
+
+# The most rows or columns a plot spans: the largest Row span or Col span the table accepts.
+MAX_SPAN = 10
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -228,9 +231,20 @@ class MTSignalsModel(QAbstractItemModel):
         if index.isValid():
             if self._table.columns[index.column()] != 'Status' and self._table.columns[
                 index.column()] != 'Output Datatype':
-                return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
+                return Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | \
+                    Qt.ItemFlag.ItemIsDragEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
+
+    def mimeTypes(self) -> typing.List[str]:
+        return ['text/plain']
+
+    def mimeData(self, indexes: typing.List[QModelIndex]) -> QMimeData:
+        """The variables of the rows dragged, one per line: the canvas takes the rows the view selects."""
+        mime = QMimeData()
+        rows = sorted({index.row() for index in indexes if index.isValid()})
+        mime.setText('\n'.join(str(self._table['Variable'].iloc[row]) for row in rows))
+        return mime
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
         self.beginInsertRows(parent, row, row + count)
@@ -833,11 +847,11 @@ class MTSignalsModel(QAbstractItemModel):
                                     fls[column_name] = 1
                                     logger.warning(f"Invalid value for '{column_name}': the value must be numeric in "
                                                    f"the table row [{table_row}]")
-                            elif value > 10:
+                            elif value > MAX_SPAN:
                                 fls[column_name] = 1
                                 value = 1
                                 logger.warning(f"Invalid value for '{column_name}': the value exceeds the maximum limit"
-                                               f" of 10 in the table row [{table_row}]")
+                                               f" of {MAX_SPAN} in the table row [{table_row}]")
                             else:
                                 # Keep value
                                 fls[column_name] = 0
