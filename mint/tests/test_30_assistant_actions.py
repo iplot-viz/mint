@@ -632,7 +632,9 @@ class FileReadingTest(unittest.TestCase):
         broken = self.path("broken.pdf")
         with open(broken, "wb") as f:
             f.write(b"not a pdf")
-        with self.assertRaisesRegex(files.FileError, "can't read broken.pdf as a PDF"):
+        # pypdf comes with the assistant's extra, which not every environment has: then that is what it says.
+        said = "can't read broken.pdf as a PDF" if importlib.util.find_spec("pypdf") else "needs pypdf"
+        with self.assertRaisesRegex(files.FileError, said):
             files.read(broken)
         open(self.path("sheet.xlsx"), "wb").close()
         with mock.patch.dict("sys.modules", {"openpyxl": None}), \
