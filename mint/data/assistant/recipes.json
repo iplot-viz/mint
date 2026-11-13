@@ -1,0 +1,159 @@
+{
+  "_doc": "Processing recipes of the assistant. {x} is the input data, {t} the time in seconds from the first sample, {dt} the median sample period in seconds. They hold in absolute time (ns) and in pulse time (s), and the windows stay in seconds when a zoom fetches the data with another decimation. \"describe\" goes to the Comment column; \"title\" and \"plain\" are what the card shows, in everyday words.",
+  "moving_average": {
+    "label": "Moving average",
+    "params": {
+      "seconds": {
+        "min": 1e-06,
+        "max": 100000000.0,
+        "auto": "window",
+        "ask": "Sure. Over how long should I smooth it, for example 10 s?"
+      }
+    },
+    "axis": "y",
+    "expr": "scipy.ndimage.uniform_filter1d({x}, size=np.maximum(1, np.int64(np.round({seconds} / {dt}))), mode='nearest')",
+    "alias": "avg_{seconds}s",
+    "describe": "moving average over {seconds} s",
+    "title": "Smoothing",
+    "plain": "smoothed with a {duration} average"
+  },
+  "gaussian": {
+    "label": "Gaussian smoothing",
+    "params": {
+      "seconds": {
+        "min": 1e-06,
+        "max": 100000000.0,
+        "auto": "window",
+        "ask": "Sure. Over how long should I smooth it, for example 10 s?"
+      }
+    },
+    "axis": "y",
+    "expr": "scipy.ndimage.gaussian_filter1d({x}, sigma=np.maximum(0.5, {seconds} / {dt}), mode='nearest')",
+    "alias": "gauss_{seconds}s",
+    "describe": "Gaussian smoothing, sigma {seconds} s",
+    "title": "Smoothing",
+    "plain": "smoothed gently over {duration}"
+  },
+  "savgol": {
+    "label": "Savitzky-Golay",
+    "params": {
+      "seconds": {
+        "min": 1e-06,
+        "max": 100000000.0,
+        "auto": "window",
+        "ask": "Sure. Over how long should I smooth it, for example 10 s?"
+      }
+    },
+    "axis": "y",
+    "expr": "scipy.signal.savgol_filter({x}, window_length=2 * np.int64(np.maximum(2, np.round({seconds} / {dt} / 2))) + 1, polyorder=2, mode='nearest')",
+    "alias": "savgol_{seconds}s",
+    "describe": "Savitzky-Golay smoothing over {seconds} s (order 2)",
+    "title": "Smoothing",
+    "plain": "smoothed over {duration}, keeping the peaks sharp"
+  },
+  "median": {
+    "label": "Median filter",
+    "params": {
+      "seconds": {
+        "min": 1e-06,
+        "max": 100000000.0,
+        "auto": "window",
+        "ask": "Sure. Over how long should I look for spikes, for example 10 s?"
+      }
+    },
+    "axis": "y",
+    "expr": "scipy.ndimage.median_filter({x}, size=np.maximum(1, np.int64(np.round({seconds} / {dt}))), mode='nearest')",
+    "alias": "median_{seconds}s",
+    "describe": "median filter over {seconds} s (removes spikes)",
+    "title": "Spike removal",
+    "plain": "spikes removed, comparing each point with the {duration} around it"
+  },
+  "lowpass": {
+    "label": "Low-pass filter",
+    "params": {
+      "hz": {
+        "min": 1e-09,
+        "max": 1000000000.0,
+        "ask": "Sure. Which frequency should I keep up to, for example 1 Hz for changes slower than about once a second?"
+      }
+    },
+    "axis": "y",
+    "expr": "scipy.signal.sosfiltfilt(scipy.signal.butter(4, np.minimum({hz}, 0.45 / {dt}), fs=1 / {dt}, output='sos'), {x})",
+    "alias": "lowpass_{hz}Hz",
+    "describe": "low-pass filter at {hz} Hz (Butterworth, order 4, no phase shift)",
+    "title": "Noise filter",
+    "plain": "fast noise removed, keeping changes slower than {hz} Hz"
+  },
+  "derivative": {
+    "label": "Derivative",
+    "params": {},
+    "axis": "y",
+    "expr": "np.gradient({x}, {t})",
+    "alias": "ddt",
+    "describe": "derivative per second",
+    "title": "Rate of change",
+    "plain": "how fast it changes, per second"
+  },
+  "integral": {
+    "label": "Integral",
+    "params": {},
+    "axis": "y",
+    "expr": "scipy.integrate.cumulative_trapezoid({x}, {t}, initial=0)",
+    "alias": "integral",
+    "describe": "cumulative integral over time (seconds)",
+    "title": "Running total",
+    "plain": "running total over time"
+  },
+  "abs": {
+    "label": "Absolute value",
+    "params": {},
+    "axis": "y",
+    "expr": "np.abs({x})",
+    "alias": "abs",
+    "describe": "absolute value",
+    "title": "Absolute value",
+    "plain": "negative values turned positive"
+  },
+  "log10": {
+    "label": "Log10",
+    "params": {},
+    "axis": "y",
+    "expr": "np.log10(np.where({x} > 0, {x}, np.nan))",
+    "alias": "log10",
+    "describe": "base-10 logarithm of the values, leaving out zero and below (for a log axis, ask for log scale instead)",
+    "title": "Logarithm",
+    "plain": "base-10 logarithm of the values; zero and below are left out"
+  },
+  "scale": {
+    "label": "Scale and offset",
+    "params": {
+      "factor": {
+        "min": -1000000000000000.0,
+        "max": 1000000000000000.0,
+        "default": 1,
+        "ask": "Sure. What should I multiply it by?"
+      },
+      "offset": {
+        "min": -1000000000000000.0,
+        "max": 1000000000000000.0,
+        "default": 0
+      }
+    },
+    "axis": "y",
+    "expr": "{x} * {factor} + {offset}",
+    "alias": "x{factor}",
+    "describe": "values × {factor} + {offset}",
+    "title": "Scaling",
+    "plain": "values × {factor} + {offset}"
+  },
+  "relative_time": {
+    "label": "Relative time",
+    "params": {},
+    "axis": "x",
+    "expr": "{t}",
+    "alias": "",
+    "describe": "time axis in seconds from the first sample",
+    "title": "Time from zero",
+    "plain": "time counted in seconds from the first point"
+  }
+}

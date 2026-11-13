@@ -396,6 +396,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._install_update_pulse()
         self._install_set_time_window()
         self._install_help_anchors()
+        self._install_assistant(view_menu)
         # 1920x1080 is the whole panel on a FullHD screen and the whole logical
         # desktop on a 4K screen at 200%.
         clamp_to_screen(self, 1920, 1080, share=0.95)
@@ -414,6 +415,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             widget.set_canvas(self.canvas)
         except Exception as e:
             logger.warning(f"Could not refresh the canvas after a UI scale change: {e}")
+
+    def _install_assistant(self, view_menu):
+        self.assistant = None
+        from mint.assistant.config import AssistantConfig
+        if not AssistantConfig.from_environment().enabled:
+            return
+        # Optional feature: whatever goes wrong here must not stop MINT from starting.
+        try:
+            from mint.assistant.controller import install
+            self.assistant = install(self, self._centralWidget, self.sigCfgWidget.tool_bar(), view_menu)
+        except Exception as e:
+            logger.warning(f"The assistant could not be installed: {e}")
 
     def _install_help_anchors(self):
         # F1 over any of these widgets jumps to the matching manual

@@ -34,8 +34,8 @@ class MTGenericAccessMode(QObject):
              "Select data by time range"),
             (MTGenericAccessMode.PULSE_NUMBER, "Pulse Id",
              "Select data by pulse/run (ITER:PCS/123) or IMAS URI "
-             "(imas:hdf5?path=/path/to/data/entry). In case of multiple "
-             "pulse id, the separator used is coma"),
+             "(imas:hdf5?path=/path/to/data/entry). Separate several pulses "
+             "with commas"),
             (MTGenericAccessMode.RELATIVE_TIME, "Relative",
              "Select data by relative time to now"),
         ]
@@ -57,8 +57,8 @@ class MTGenericAccessMode(QObject):
 
     def tooltip(self) -> str:
         if self.mode == MTGenericAccessMode.PULSE_NUMBER:
-            return "Select data by pulse/run (ITER:PCS/123) or IMAS URI (imas:hdf5?path=/path/to/data/entry). In " \
-                   "case of multiple pulse id, the separator used is coma"
+            return "Select data by pulse/run (ITER:PCS/123) or IMAS URI (imas:hdf5?path=/path/to/data/entry). " \
+                   "Separate several pulses with commas"
         elif self.mode == MTGenericAccessMode.RELATIVE_TIME:
             return "Select data by relative time to now"
         elif self.mode == MTGenericAccessMode.TIME_RANGE:

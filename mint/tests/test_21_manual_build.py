@@ -67,6 +67,13 @@ class ManualAnchorsTest(unittest.TestCase):
 
 
 class BuildManualTest(unittest.TestCase):
+    def test_every_image_of_the_manual_is_staged_for_the_help_window(self):
+        from mint.gui.mtHelp import MTHelp
+        used = set(re.findall(r'src="(image_\d+\.png)"', (HELP_DIR / "manual.md").read_text(encoding="utf-8")))
+        self.assertTrue(used)
+        self.assertEqual(used - set(MTHelp._packaged_image_names()), set())
+        self.assertEqual({name for name in used if not (HELP_DIR / "images" / name).exists()}, set())
+
     def test_build_is_idempotent(self):
         first = build_manual.build()
         second = build_manual.build()
