@@ -187,7 +187,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - Folder / Floppy: import / export a workspace (see [2.6](#export-import-workspace)).
 - Square-with-arrow: save the points drawn for each signal to a CSV file.
 - Camera: save the canvas as an image (PNG, SVG or JPEG).
-- <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range — set category, status and a one-line description; leave the number empty for automatic numbering. Shown only with a write-capable UDA server.
+- <img src="image_14.png" class="inline-icon" alt="Create Pulse icon" /> **Create Pulse**: create a UDA pulse from the visible time range, with its category, status and a one-line description; leave the number empty to number it automatically. Shown only with a write-capable UDA server.
 - <img src="image_15.png" class="inline-icon" alt="Update Pulse icon" /> **Update Pulse**: search for an existing pulse and update its time range, status or description.
 - Gears: open the preferences panel (canvas, plot, signal, axis levels).
 - **MINI-MAP**: show or hide, below the canvas, the plot over its whole *Draw* time range, with an orange box marking the part you are looking at. Available only when a single PlotXY is shown (alone on the canvas or in full screen) and not while streaming. Saved with the workspace.
@@ -204,12 +204,12 @@ Click a signal's line or name in the legend to hide the signal; click again to s
 
 #### Reading tick labels with very large values
 
-When the plotted values are too large for plain tick labels — e.g. a signal whose values are raw nanosecond timestamps — the axis compacts them in *offset + scale* form, shown in the corner of the axis. A corner label like `1e9+1.121e15` is interpreted as follows:
+When the values are too large for plain tick labels, such as raw nanosecond timestamps, the axis shortens them and writes the *offset + scale* in its corner. A corner label like `1e9+1.121e15` reads:
 
 - `1e9` is the multiplier applied to each tick label;
 - `+1.121e15` is the offset added afterwards.
 
-So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000,000`. Either part may appear alone: a corner label with only a power of ten (e.g. `1e18`) is just the multiplier, with no offset added. The statistics table always shows the full, uncompacted values.
+So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000,000`. Either part may appear alone: a corner label with only a power of ten (e.g. `1e18`) is just the multiplier, with no offset added. The statistics table always shows the full values.
 
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_19.png" alt="Axis with offset + scale corner label" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 13. Offset + scale tick notation: each tick is multiplied by 1e9, then 1.121e15 is added.</i></p>
 
@@ -218,7 +218,7 @@ So a tick labelled `824` really means `824 × 1e9 + 1.121e15 = 1,121,824,000,000
 Opens behind the canvas when you activate the RULER tool; click the RULER button again to bring it to the front. Two layouts:
 
 - **Rows**: one row per ruler and per plot it is on; with shared time on, a ruler is on every plot, and the *Plot* column tells the rows apart. Each row shows the ruler's X value and, for each signal it crosses, the signal value at the ruler (blank where the ruler is off the signal or the signal is on another plot); the Y value appears only on the plot the ruler was placed on. Controls: *Visible* shows or hides the ruler; *Labels* shows the ruler's own tags (name, X and Y), the signal-value tags, both or neither, on that row's plot only; *Color* sets the ruler's lines and label boxes; *Font color* sets the label text (by default it adapts to stay readable). Rows are listed by plot; click a header to sort by another column, or hover it to see a long signal name in full. Select several rows (Ctrl or Shift click, Ctrl+A for all) and change a control on any of them to apply it to all.
-- **Columns**: a read-only view with one section per plot — rulers ordered by X value as columns, one row per signal below the X row (plus a Y row on the plot the ruler was placed on), and a Δ column showing the gap between neighbours for each of them.
+- **Columns**: a read-only view with one section per plot: the rulers as columns, ordered by X value, one row per signal below the X row (plus a Y row on the plot the ruler was placed on), and a Δ column showing the gap between neighbours for each of them.
 
 *Hide/Show signals* picks which signal columns (rows, in the Columns layout) are shown; *Hide/Show labels* turns the name tags or the value tags of every ruler on or off at once, new rulers included. Copy the selection (Ctrl+C or right-click → *Copy*) or the whole table (*Copy table*) to paste it into a spreadsheet. *Export to CSV* saves the whole table as `.scsv` (semicolon-separated, like the signal sets) or `.csv`. *Remove ruler* deletes the selected rulers. *Compute distance* shows ΔX, ΔY and the difference of each signal between two or more selected rulers, also across plots, with its own *Copy* button; ΔY and the signal differences are signed (later ruler minus earlier), and on a time axis ΔX also shows as a duration, e.g. `9.5 s (9s500ms)`.
 
@@ -397,7 +397,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 5. **An expression fails because one signal has no data.** An expression is only computed when all its signals have data.
 6. **I loaded a workspace and the canvas is blank.** Click *Draw*.
 7. **A preference change is not visible.** Click *Apply*, or close the preferences panel.
-8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge — drag from there to move it. <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_18.png" alt="Toolbar drag handle highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p>
+8. **Can I move the canvas toolbar?** Only when the canvas is detached. Click *Detach* first; the toolbar then shows a small grab handle on its left edge: drag it from there. <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_18.png" alt="Toolbar drag handle highlighted" width="767" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 15. Moving the canvas toolbar (visible after Detach).</i></p>
 9. **Overlay pulses on all plots?** Comma-separate pulse IDs. See `OverlayPulsesID.json`.
 10. **Overlay or append a pulse on a single plot?** See `CustomizedPulsesPlots.json`.
 11. **Specify a start/end time for pulse IDs?** Use *StartTime*/*EndTime* with *Shared time* off. See `CustomizedPulsesPlotsWithStartEnd.json`.
@@ -406,13 +406,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`.
 15. **Examples of self-written modules?** See [RD5].
 16. **Add my own data source?** See [RD6].
-17. **Where are the workspaces?**
-
-    ```
-    $ ls `rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1`     # CODAC
-    $ ls `echo $(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces`              # SDCC
-    ```
-
+17. **Where are the example workspaces?** On CODAC, `ls $(rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1)`; on SDCC, `ls "$(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces"`.
 18. **Cell too small to write an expression?** Right-click and pick *Editor mode*; the resulting window is resizable.
 19. **Hide unused columns?** Use *Hide/Show columns* above the table.
 20. **Drag-and-drop a signal across plots?** Yes - in SELECT mode.
@@ -421,31 +415,29 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 
 ## 6. Error reference {#errors}
 
-MINT reports two kinds of feedback. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) appear in the Status cell of the row when you Draw, and in the log; they are self-explanatory and not duplicated here. Other errors (network problems, mismatched signal shapes, permission issues) need more context: they are explained below, and popups, the Status cell tooltip and the Help menu link here.
+MINT reports two kinds of problems. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) appear in the Status cell of the row when you Draw, and in the log; they say what to fix, so they are not repeated here. Other errors (network problems, signals that don't match, permissions) are explained below; popups, the Status cell tooltip and the Help menu link here.
 
 ### Error categories {#error-categories}
 
-Most issues fall into one of the following families.
-
 #### Data access {#cat-data-access}
 
-Raised when MINT asks a data source for a signal and either cannot reach the server, cannot find the variable, or finds no data in the requested interval. Typical symptoms: the Status cell shows `Data-Access | 0 points` or a network/timeout message, the affected row turns red, and other rows in the same plot may turn orange (downstream errors). Most of the time the fix is to widen the time range, verify the variable name, or check that the data source is reachable.
+MINT can't reach the server, can't find the variable, or finds no data in the time range. The Status cell shows `Data-Access | 0 points` or a network or timeout message, the row turns red, and other rows of the same plot may turn orange. Widen the time range, check the variable name, or check that the data source is reachable.
 
 #### Processing {#cat-processing}
 
-Raised while MINT evaluates an expression or aligns signals before plotting. The most common: signals with different numbers of samples that cannot be combined, and expressions that return a single number instead of a signal. Mixing envelope and non-envelope signals also fails here. The Status cell shows the raw message; hover it for an explanation.
+An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The Status cell shows the message; hover it for an explanation.
 
 #### Export {#cat-export}
 
-Raised by the *Export* dialog. The export only delivers raw data straight from the data source, so per-signal time overrides, custom x/y/z processing and signals defined as expressions in the *Variable* column are skipped (with a warning listing which aliases were skipped). A genuine failure — for example writing to a folder where the user has no permission — produces a red *Export failed* popup with the underlying reason and a Learn more button.
+The export writes the raw data of the data source, so per-signal time overrides, x/y/z processing and expressions in the *Variable* column are left out, and a warning lists the aliases left out. If the export fails, for example in a folder you can't write to, a red *Export failed* popup gives the reason and a *Learn more* button.
 
 #### Configuration {#cat-configuration}
 
-Raised at startup or while loading workspaces. Examples: `no data sources found, exiting` (the data sources file is missing or empty), `Blueprint does not have a DataSource key` (the blueprint JSON is malformed), `Could not load the embedded manual` (a packaged resource is missing). These almost always point at an environment or installation problem rather than user input.
+At startup or while loading a workspace. Examples: `no data sources found, exiting` (the data sources file is missing or empty), `Blueprint does not have a DataSource key` (the blueprint JSON is malformed), `Could not load the embedded manual` (a file of the installation is missing). They nearly always come from the installation or the environment, not from what you typed.
 
 #### Table validation {#cat-validation}
 
-Raised when MINT rejects a value typed in the signals table — invalid date formats, duplicated aliases, non-numeric stack identifiers, out-of-range values. These messages already describe both the problem and the remedy: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all. A data source that isn't available here is catalogued below.
+MINT rejects a value typed in the table: a wrong date format, a repeated alias, a stack that isn't a number, a value out of range. The message says what is wrong and how to fix it: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all. A data source that isn't available here is explained below.
 
 #### Streaming {#cat-streaming}
 

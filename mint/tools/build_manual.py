@@ -63,6 +63,7 @@ HTML_TEMPLATE = """\
   img.inline-icon {{ max-width: none; vertical-align: middle; height: 18px; display: inline; margin: 0; border: 0; }}
   figure {{ text-align: center; margin: 14px auto; }}
   figcaption {{ color: #555; font-size: 90%; font-style: italic; }}
+  @media print {{ pre {{ white-space: pre-wrap; }} h1, h2, h3, h4 {{ break-after: avoid; }} }}
 </style>
 </head>
 <body>
