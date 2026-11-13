@@ -210,7 +210,7 @@ class _ExportInWindowTestCase(_ExportTestCase):
         win.on_export_started(data)
 
     #: What the window shows while an export runs, and once none does (see _shown).
-    EXPORTING = (True, True, False, "Exporting...")
+    EXPORTING = (True, True, True, "Cancel")
     IDLE = (False, False, True, "Export")
 
     @staticmethod
@@ -519,6 +519,22 @@ class ExportInAThreadOfItsOwnTest(_ExportInWindowTestCase):
         self.assertEqual(self._shown(win), self.IDLE)
         # The stand-in of the export script of the GUI thread exported nothing.
         self.assertEqual(self.script.calls, [])
+
+    def test_cancel_stops_the_export_and_says_so(self):
+        win = self._window_and_thread(_rows((UDA, VAR1), (UDA, VAR2)), hold=60)
+        self._export(win)
+        self._run_events(until=lambda: len(self.progress) > 1)
+        stop = win._export.stop
+
+        win.exportBtn.click()
+        self._run_events(timeout=1)
+
+        self.assertTrue(stop.stopped)
+        self.assertEqual(self.popups, [("Export cancelled",
+                                        "The data export was cancelled. The file it was writing is left incomplete.",
+                                        QMessageBox.Icon.Information)])
+        self.assertEqual(self._shown(win), self.IDLE)
+        self.assertIsNone(win._export)
 
     def test_quitting_while_the_export_runs_stops_its_thread_without_waiting_for_it(self):
         win = self._window_and_thread(_rows((UDA, VAR1)), hold=60)

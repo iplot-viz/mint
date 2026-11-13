@@ -451,6 +451,12 @@ class MTSignalsModel(QAbstractItemModel):
         return {alias for _, row in self._table.iterrows()
                 for alias in ParserHelper.get_dependencies([row['x'], row['y'], row['z']])}
 
+    def show_status(self, row_idx: int, status: str):
+        """Show `status` in the Status column of a row, as reading its data shows how that went."""
+        with self.activate_fast_mode():
+            self.setData(self.createIndex(row_idx, self._table.columns.get_loc('Status')), status,
+                         Qt.ItemDataRole.DisplayRole)
+
     def update_signal_data(self, row_idx: int, signal: IplotSignalAdapter, fetch_data=False):
         with self.activate_fast_mode():
             model_idx = self.createIndex(row_idx, self._table.columns.get_loc('Status'))

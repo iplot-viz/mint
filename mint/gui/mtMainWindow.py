@@ -50,7 +50,8 @@ from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
 from mint.models.utils import mtBlueprintParser
-from mint.tools.data_export import EXPORTED_SOURCE_TYPE, accepts_kwarg, export_data_source, reports_progress
+from mint.tools.data_export import (EXPORTED_SOURCE_TYPE, ExportStop, accepts_kwarg, export_data_source,
+                                    reports_progress)
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 from mint.gui.shift_handlers import ShiftHandlerMixin
@@ -58,6 +59,11 @@ from mint.gui.shift_handlers import ShiftHandlerMixin
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
+
+#: What the Draw and Export buttons say while what they started can be cancelled.
+CANCEL_LABEL = "Cancel"
+#: What the Status column says of a row whose data were read no more, and the status bar of the task cancelled.
+CANCELLED = "Cancelled"
 
 
 @dataclass
@@ -73,6 +79,17 @@ class _Export:
     attempts: int = 0
     exported: int = 0
     errors: list = field(default_factory=list)
+    # Cancels the export, in the export thread as in this one.
+    stop: ExportStop = field(default_factory=ExportStop)
+
+
+def _cancel_reading(pending):
+    """Cancel a read in the background, and stop the reads its worker threads started where the data access can:
+    iplotlib releases that predate it only leave them to end."""
+    try:
+        pending.cancel(stop_reading=True)
+    except TypeError:
+        pending.cancel()
 
 
 def _ready_at_the_end(method):
@@ -172,6 +189,8 @@ class _Drawing:
     previous: dict = field(default_factory=dict)
     # Tells why building a row failed, which ends the drawing.
     failed: typing.Optional[typing.Callable[[Exception], None]] = None
+    # The waypoint of a row, whose Status says Cancelled if the drawing is cancelled before the row is built.
+    waypoint: typing.Callable[[typing.Any], typing.Any] = lambda row: row[0]
 
 
 class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
@@ -251,6 +270,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._reading_ahead = False
         # A Draw whose plots wait for their data (see _draw_in_background).
         self._drawing = None  # type: typing.Optional[_Drawing]
+        # A Draw or an import cancelled, and the canvas it drew, until another replaces it (see _drop_drawing).
+        self._cancelled = None  # type: typing.Optional[typing.Tuple[Canvas, _Drawing]]
         # While a Draw or an import runs, the status bar says Ready only at its end (see _ready_at_the_end).
         self._ready_held = False
         self._ready_due = False
@@ -371,6 +392,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.drawBtn = QPushButton("Draw")
         plot_icon = create_icon('plot')
         self.drawBtn.setIcon(plot_icon)
+        # As for the Stream button: the label it shows while a Draw or an import reads its data.
+        self.drawBtn.setText(CANCEL_LABEL)
+        self.drawBtn.setMinimumWidth(self.drawBtn.sizeHint().width())
+        self.drawBtn.setText("Draw")
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(plot_icon)
         # Reserve the size hint of the longest label so toggling never shifts neighbouring buttons.
@@ -380,7 +405,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.exportBtn = QPushButton("Export")
         self.exportBtn.setIcon(plot_icon)
         # As for the Stream button: the label it shows while it exports.
-        self.exportBtn.setText("Exporting...")
+        self.exportBtn.setText(CANCEL_LABEL)
         self.exportBtn.setMinimumWidth(self.exportBtn.sizeHint().width())
         self.exportBtn.setText("Export")
         self.daWidgetButtons = QWidget(self)
@@ -405,9 +430,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.setStatusBar(self._statusBar)
 
         # Setup connections
-        self.drawBtn.clicked.connect(self.draw_clicked)
+        self.drawBtn.clicked.connect(self._draw_button_clicked)
         self.streamBtn.clicked.connect(self.stream_clicked)
-        self.exportBtn.clicked.connect(self.export_clicked)
+        self.exportBtn.clicked.connect(self._export_button_clicked)
         self.streamerCfgWidget.streamStarted.connect(self.on_stream_started)
         self.streamerCfgWidget.streamStopped.connect(self.on_stream_stopped)
         self.exportCfgWidget.exportStarted.connect(self.on_export_started)
@@ -1238,7 +1263,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._read_and_draw(_Drawing(rows, imported.rows, functools.partial(self._import_row, imported),
                                      lambda place: self._draw_imported_plot(imported, *place),
                                      functools.partial(self._finish_import, imported, places),
-                                     failed=functools.partial(self._import_failed, imported)), requests)
+                                     failed=functools.partial(self._import_failed, imported),
+                                     waypoint=lambda i: imported.path[i]), requests)
 
     def _imported_place(self, waypt) -> typing.Optional[tuple]:
         """The place, (column, row) from 1, of the plot of the imported canvas the waypoint puts its signal in."""
@@ -1543,6 +1569,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 self._read_arrived(drawing, read, {})
         if not drawing.rows and self._drawing is drawing:
             self._end_drawing(drawing)
+        self._show_draw_button()
 
     def _created_rows(self, build: _Build) -> typing.Optional[list]:
         """The waypoints of the table and their signals, as build() makes them, with the data still to read. The rows
@@ -1583,7 +1610,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # The table can change while the data are read: each row shows its status where it is now.
         drawing.table.now = self._table_rows()
         try:
-            while drawing.rows and drawing.rows[0][1] in drawing.arrived:
+            # Drawing a plot runs events, in which the drawing can be cancelled or replaced.
+            while drawing.rows and drawing.rows[0][1] in drawing.arrived and drawing is self._drawing:
                 row, row_read, place = drawing.rows.popleft()
                 with self._prefetched(drawing.arrived[row_read]):
                     drawing.build_row(row)
@@ -1602,6 +1630,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 drawing.failed(error)
             self.indicate_ready()
             return
+        if drawing is not self._drawing:
+            return
         if drawing.rows:
             self._report_drawing(drawing)
         else:
@@ -1609,10 +1639,48 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def _end_drawing(self, drawing: _Drawing):
         self._drawing = None
+        self._show_draw_button()
         try:
             drawing.finish()
         finally:
             self.drawn.emit()
+
+    def _show_draw_button(self):
+        """The Draw button says Cancel while the data of a Draw or an import are read in the background."""
+        self.drawBtn.setText(CANCEL_LABEL if self._drawing is not None else "Draw")
+
+    def _draw_button_clicked(self):
+        if self._drawing is not None:
+            self._cancel_drawing()
+        else:
+            self.draw_clicked()
+
+    def _cancel_drawing(self):
+        """Read no more the data of the plots of the Draw or the import in progress: the reads in progress stop where
+        the data access can, the plots drawn stay as they are, and the places of the others and the Status of their
+        rows say Cancelled."""
+        drawing, self._drawing = self._drawing, None
+        if drawing is None:
+            return
+        for pending in drawing.pending.values():
+            if pending is not None:
+                _cancel_reading(pending)
+        model = self.sigCfgWidget.model
+        drawing.table.now = self._table_rows()
+        for row, _, _ in drawing.rows:
+            idx = drawing.table.index(drawing.waypoint(row))
+            if idx is not None and model.fetches_row(idx):
+                model.show_status(idx, CANCELLED)
+        canvas_widget = self.canvasStack.currentWidget()
+        if hasattr(canvas_widget, 'cancel_pending_places'):
+            canvas_widget.cancel_pending_places()
+        else:
+            canvas_widget.drop_pending_places()
+        self._cancelled = (self.canvas, drawing)
+        self._show_draw_button()
+        self.drawn.emit()
+        self.indicate_ready()
+        self.statusBar().showMessage(f"{CANCELLED}.")
 
     def wait_until_drawn(self):
         """Wait until the plots of a Draw or an import read in the background are drawn, running the events meanwhile:
@@ -1682,14 +1750,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.statusBar().showMessage(f"Retrieving data ({drawing.reads}/{drawing.reads + len(drawing.pending)}) ..")
 
     def _drop_drawing(self):
-        """Forget a Draw whose plots still wait for their data, as another canvas replaces it: their places get back
-        the plots they replaced, which the canvas that replaces it takes their properties from, as from the plots a
-        Draw ended would have drawn there."""
+        """Forget a Draw whose plots still wait for their data, or that was cancelled, as another canvas replaces it:
+        their places get back the plots they replaced, which the canvas that replaces it takes their properties from,
+        as from the plots a Draw ended would have drawn there."""
+        cancelled, self._cancelled = self._cancelled, None
         drawing = self._stop_drawing()
+        if drawing is None and cancelled is not None and cancelled[0] is self.canvas:
+            drawing = cancelled[1]
         if drawing is None:
             return
         for (col, row), plot in drawing.previous.items():
-            if drawing.unbuilt.get((col, row)):
+            if (drawing.unbuilt.get((col, row)) and col <= len(self.canvas.plots)
+                    and row <= len(self.canvas.plots[col - 1]) and self.canvas.plots[col - 1][row - 1] is None):
                 self.canvas.plots[col - 1][row - 1] = plot
 
     def _stop_drawing(self) -> typing.Optional[_Drawing]:
@@ -1697,6 +1769,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         drawing, self._drawing = self._drawing, None
         if drawing is None:
             return None
+        self._show_draw_button()
         self.drawn.emit()
         for pending in drawing.pending.values():
             if pending is not None:
@@ -1851,8 +1924,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         pulse_factor = len(pulse_number) if pulse_number else 1
         self._export = export = _Export(total=sum(len(job['variables']) for _, job in exports) * pulse_factor,
                                         left=len(exports), errors=errors)
-        self.exportBtn.setEnabled(False)
-        self.exportBtn.setText("Exporting...")
+        self.exportBtn.setText(CANCEL_LABEL)
         self._show_export_progress()
         if not exports:
             self._finish_export()
@@ -1863,15 +1935,18 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if pool is not None:
                 try:
                     export.calls.append(pool.call_later(export_data_source, ds_name, partial(self._exported, ds_name),
-                                                        progress=self._export_progressed, **job))
+                                                        progress=self._export_progressed, stop=export.stop, **job))
                     continue
                 except Exception:
                     logger.exception("Cannot export in the export thread, the data are exported in the GUI thread")
                     pool = None
             # It runs in this thread: what shows that it runs is painted first, as indicate_busy() did.
             QCoreApplication.processEvents()
+            if export.stop.stopped:
+                return
             try:
-                outcome = export_data_source(self.da, ds_name, progress=self._export_progressed_here, **job)
+                outcome = export_data_source(self.da, ds_name, progress=self._export_progressed_here, stop=export.stop,
+                                             **job)
             except Exception as e:
                 # As the export thread gives it.
                 logger.exception(f"Cannot export the data of {ds_name}")
@@ -1932,16 +2007,37 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if export.left == 0:
             self._finish_export()
 
-    def _finish_export(self):
+    def _export_button_clicked(self):
+        if self._export is not None:
+            self._cancel_export()
+        else:
+            self.export_clicked()
+
+    def _cancel_export(self):
+        """Stop the export in progress: the read in progress stops where the UDA client can, and the file it was
+        writing is left incomplete."""
+        export = self._export
+        if export is None:
+            return
+        export.stop.stop()
+        for call in export.calls:
+            call.cancel()
+        self._finish_export(cancelled=True)
+
+    def _finish_export(self, cancelled: bool = False):
         export, self._export = self._export, None
         self._exportLabel.hide()
         self._exportProgress.hide()
-        self.exportBtn.setEnabled(True)
         self.exportBtn.setText("Export")
         self.exportCfgWidget.ui.pathLineEdit.clear()
 
         attempt_count, success_count, errors = export.attempts, export.exported, export.errors
-        if attempt_count > 0 and success_count == 0:
+        if cancelled:
+            logger.info("Export cancelled")
+            self.show_popup_msg("Export cancelled",
+                                "The data export was cancelled. The file it was writing is left incomplete.",
+                                QMessageBox.Icon.Information)
+        elif attempt_count > 0 and success_count == 0:
             error_details = "\n".join(f"- {e}" for e in errors)
             logger.error("Export failed:\n%s", error_details)
             self.show_popup_msg("Export failed",
@@ -1969,6 +2065,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             return False
         # The export can end while the question waits for the answer.
         if self._export is not None:
+            self._export.stop.stop()
             for call in self._export.calls:
                 call.cancel()
             self._export = None
