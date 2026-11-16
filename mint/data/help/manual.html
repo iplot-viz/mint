@@ -229,7 +229,7 @@ $ mint
 
 <h3 id="export-data">2.7 Export data</h3>
 <p>The <em>Export</em> button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The <em>Time</em> box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The <em>Sampling</em> box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a <code>.resampling.log</code> file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. <em>Native</em> keeps the original samples.</p>
-<p>While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.</p>
+<p>The export runs in the background, in a thread of its own, so MINT keeps drawing meanwhile, and a progress bar in the status bar reports the variable currently being written. It exports the table as it was when <em>Export</em> was clicked: changing the table meanwhile does not change the export. A message says when it has finished. One export runs at a time: meanwhile the <em>Export</em> button shows <em>Exporting...</em>, and quitting MINT asks whether to stop it. With <code>MINT_DATA_ACCESS_WORKERS</code> set to 0, the export runs in the window, which waits for it.</p>
 <p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
 <div class="err-block">If the export fails or completes only partially, MINT shows a popup with the underlying reason. Common causes are listed under <a href="#errors">Error reference</a>: <a href="#errors-permission-denied">Permission denied</a>, <a href="#errors-export-expression">Expressions in Variable column</a>, <a href="#errors-export-custom-time">Per-signal time overrides</a>, <a href="#errors-export-xyz">Custom x/y/z processing</a>.</div>
@@ -347,6 +347,21 @@ $ mint
 }
 </code></pre>
 <p>Override the default file with <code>IPLOT_SOURCES_CONFIG</code>. <em>conninfo</em> contains connection info; for UDA it is <code>host=...,port=...</code>; for IMAS <code>database=...,path=...,backend=MDSPLUS</code>. <em>varprefix</em> can be left empty. <em>rturl</em> is optional (SSE streaming endpoint). <em>rtheaders</em> contains expected headers. <em>rtauth</em> is the authentication mechanism (<code>None</code> if none). <em>uda_for_export</em> is optional: set it to export data from a different UDA server than the one you plot from. The same <em>port</em> is used. <em>variable_group_limit</em> is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first <code>-</code> or <code>.</code> of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on <code>-</code>, <code>.</code> and <code>_</code> until none holds more. <em>cache_size</em> is optional (default 300): the number of data queries a UDA source keeps in memory.</p>
+<h4>PYUDA data sources (MAST, MAST-U)</h4>
+<p>A <code>PYUDA</code> data source reads signals from a UKAEA UDA server through <code>pyuda</code>. To use it, install the <code>pyuda</code> extra of iplotDataAccess (<code>pip install "iplotDataAccess[pyuda]"</code>). Example (<code>mint/data/datasources/mast_pyuda.cfg</code>):</p>
+<pre><code>{
+  &quot;mast&quot;: {
+    &quot;type&quot;: &quot;PYUDA&quot;,
+    &quot;host&quot;: &quot;uda2.mast.l&quot;,
+    &quot;port&quot;: 56565,
+    &quot;default&quot;: true,
+    &quot;pulse_list_size&quot;: 200,
+    &quot;list_shot&quot;: 30420
+  }
+}
+</code></pre>
+<p><em>host</em> and <em>port</em> are optional. When you do not set them, pyuda uses its own settings (for example <code>UDA_HOST</code>). <em>pulse_list_size</em> is optional (default 200): the number of recent shots that the pulse browser shows. <em>list_shot</em> is optional: the shot that gives the signal list for the variable browser. When you do not set it, MINT uses the latest shot. <em>cache_size</em> is optional (default 100): the number of signals that the source keeps in memory.</p>
+<p>Use the <strong>Pulse Id</strong> access mode. Type the shot number in the pulse field (for example <code>30420</code>). <code>0</code> is the latest shot and <code>-N</code> is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the <em>Variable</em> column. You can use a generic name (<code>ip</code>), a MAST name (<code>ANE_DENSITY</code>) or a MAST-U name (<code>/AMC/PLASMA_CURRENT</code>). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>
@@ -385,6 +400,7 @@ $ mint
   <tr><td><code>CODAC_UDA</code></td><td><code>iplotDataAccess.udaAccess</code></td><td><code>UdaAccess</code></td></tr>
   <tr><td><code>CSV</code></td><td><code>iplotDataAccess.csvAccess</code></td><td><code>CsvAccess</code></td></tr>
   <tr><td><code>IMAS</code></td><td><code>iplotDataAccess.imasAccess</code></td><td><code>IMASDataAccess</code></td></tr>
+  <tr><td><code>PYUDA</code></td><td><code>iplotDataAccess.pyudaAccess</code></td><td><code>PyudaAccess</code></td></tr>
 </table>
 
 <h2 id="faq">5. FAQ</h2>

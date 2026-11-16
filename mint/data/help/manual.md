@@ -165,7 +165,7 @@ Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON 
 
 The *Export* button opens a dialog where you choose an output path and a format (parquet or hdf5). Only signals with a valid stack id are exported. Processing signals are discarded. The *Time* box selects how timestamps are written: absolute time (nanoseconds) or relative time in seconds from the start of the time range. For pulse exports it has no effect. The *Sampling* box resamples all signals onto a common time base at the chosen frequency (1 Hz to 10 kHz): each interval holds the average of its samples, empty intervals repeat the previous value, and a `.resampling.log` file next to the output lists the affected ranges. The output then holds one time column plus one column per signal. *Native* keeps the original samples.
 
-While the export runs, a progress bar in the status bar reports the variable currently being written, so long exports are no longer mistaken for a frozen application.
+The export runs in the background, in a thread of its own, so MINT keeps drawing meanwhile, and a progress bar in the status bar reports the variable currently being written. It exports the table as it was when *Export* was clicked: changing the table meanwhile does not change the export. A message says when it has finished. One export runs at a time: meanwhile the *Export* button shows *Exporting...*, and quitting MINT asks whether to stop it. With `MINT_DATA_ACCESS_WORKERS` set to 0, the export runs in the window, which waits for it.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_11.png" alt="Export button highlighted" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 11. Export data.</i></p>
 
@@ -303,6 +303,27 @@ The default configuration lives under `/etc/opt/codac/mint/datasources_def.cfg`.
 ```
 
 Override the default file with `IPLOT_SOURCES_CONFIG`. *conninfo* contains connection info; for UDA it is `host=...,port=...`; for IMAS `database=...,path=...,backend=MDSPLUS`. *varprefix* can be left empty. *rturl* is optional (SSE streaming endpoint). *rtheaders* contains expected headers. *rtauth* is the authentication mechanism (`None` if none). *uda_for_export* is optional: set it to export data from a different UDA server than the one you plot from. The same *port* is used. *variable_group_limit* is optional and unset by default, which keeps the usual tree (one level of sub-folders on the first `-` or `.` of the variable names): set it to a number and a node holding more variables than that is split further into sub-folders on `-`, `.` and `_` until none holds more. *cache_size* is optional (default 300): the number of data queries a UDA source keeps in memory.
+
+#### PYUDA data sources (MAST, MAST-U)
+
+A `PYUDA` data source reads signals from a UKAEA UDA server through `pyuda`. To use it, install the `pyuda` extra of iplotDataAccess (`pip install "iplotDataAccess[pyuda]"`). Example (`mint/data/datasources/mast_pyuda.cfg`):
+
+```
+{
+  "mast": {
+    "type": "PYUDA",
+    "host": "uda2.mast.l",
+    "port": 56565,
+    "default": true,
+    "pulse_list_size": 200,
+    "list_shot": 30420
+  }
+}
+```
+
+*host* and *port* are optional. When you do not set them, pyuda uses its own settings (for example `UDA_HOST`). *pulse_list_size* is optional (default 200): the number of recent shots that the pulse browser shows. *list_shot* is optional: the shot that gives the signal list for the variable browser. When you do not set it, MINT uses the latest shot. *cache_size* is optional (default 100): the number of signals that the source keeps in memory.
+
+Use the **Pulse Id** access mode. Type the shot number in the pulse field (for example `30420`). `0` is the latest shot and `-N` is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the *Variable* column. You can use a generic name (`ip`), a MAST name (`ANE_DENSITY`) or a MAST-U name (`/AMC/PLASMA_CURRENT`). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.
 
 See also: [Reference - Supported data source types](#datasource-types) for the list of source types MINT recognises.
 
