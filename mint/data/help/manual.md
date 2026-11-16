@@ -200,7 +200,7 @@ Right-click a plot for per-plot actions:
 
 #### Legend
 
-Click a signal's line or name to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and what you did to the legend are kept by *Draw* and saved with the workspace.
+Click a signal's line or name to hide the signal; click again to show it. With *Auto scale* on in the preferences, the Y axis then fits the signals shown; *Autoscale* and *Autoscale All* in the menu of a plot leave hidden signals out. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and what you did to the legend are kept by *Draw* and saved with the workspace.
 
 #### Reading tick labels with very large values
 
