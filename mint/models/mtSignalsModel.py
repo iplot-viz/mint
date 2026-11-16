@@ -65,9 +65,10 @@ class MTSignalsModel(QAbstractItemModel):
     def __init__(self, blueprint: dict = mtBP.DEFAULT_BLUEPRINT, parent=None):
 
         super().__init__(parent)
-        self._white_brush = QBrush(QColor('white'))
         self._red_brush = QBrush(QColor('red'))
         self._orange_brush = QBrush(QColor('orange'))
+        # Readable on red and on orange, whichever the palette.
+        self._black_brush = QBrush(QColor('black'))
 
         self._entity_attribs = None
         column_names = list(mtBP.get_column_names(blueprint))
@@ -116,15 +117,17 @@ class MTSignalsModel(QAbstractItemModel):
             return self._table.iat[index.row(), index.column()]
         if role == Qt.ItemDataRole.BackgroundRole:
             fail_value = self._table_fails.iat[index.row(), index.column()]
-            # Value 0 corresponds to a correct cell.
+            # Value 0 corresponds to a correct cell, in the colours of the view.
             # Value 1 corresponds to a main error.
             # Value 2 corresponds to a secondary error resulting from a main error.
             if fail_value == 0:
-                return self._white_brush
+                return None
             elif fail_value == 1:
                 return self._red_brush
             else:
                 return self._orange_brush
+        if role == Qt.ItemDataRole.ForegroundRole:
+            return None if self._table_fails.iat[index.row(), index.column()] == 0 else self._black_brush
         if role == Qt.ItemDataRole.ToolTipRole:
             column_name = self._table.columns[index.column()]
             if column_name == "Comment":
@@ -515,6 +518,8 @@ class MTSignalsModel(QAbstractItemModel):
 
         for i, parsed_row in enumerate(
                 self._parse_series(self._table.loc[row_idx], self._table_fails.loc[row_idx], row_idx + 1, stack)):
+            # With copy-on-write (pandas 3) the row of fails the parse marks is a copy of the one in the table.
+            self._table_fails.loc[row_idx] = parsed_row[1]
 
             signal_params.update(mtBP.construct_params_from_series(self.blueprint, parsed_row[0]))
             errors = any(parsed_row[1] > 0)

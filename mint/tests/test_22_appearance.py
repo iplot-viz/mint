@@ -10,18 +10,21 @@ or write a real user configuration file.
 """
 
 import os
+import re
 import tempfile
 import unittest
 
-from PySide6.QtCore import QSettings, QStandardPaths
-from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtCore import QSettings, QStandardPaths, Qt
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QWidget
 
 from iplotlib.core.display import DisplayScale
 from mint.gui.mtAppearance import (MTAppearanceMenu, QT_SCALE_KEY, SCALE_KEY, STYLE_KEY, THEME_KEY,
                                    THEME_NONE, THEMES, apply_style, apply_theme, apply_ui_scale,
-                                   base_font_pt, register_scale_listener,
+                                   base_font_pt, is_dark, register_scale_listener,
                                    remember_detected_qt_scale, restore_appearance,
                                    startup_qt_scale_factor)
+from mint.gui.views.mtSignalItemView import MTSignalItemView
 from mint.tests.qAppSingleton import ensure_qapp
 
 
@@ -57,6 +60,8 @@ class SettingsSandbox(unittest.TestCase):
         DisplayScale.reset()
 
     def tearDown(self):
+        # Back to the light palette the other tests draw in.
+        apply_theme(THEME_NONE)
         QApplication.instance().setFont(self._base_font)
         DisplayScale.reset()
 
@@ -90,13 +95,71 @@ class AppearanceTest(SettingsSandbox):
         self.assertIsNone(QSettings().value(STYLE_KEY))
 
     def test_apply_theme_switches_and_persists(self):
-        for name in THEMES:
+        apply_theme('Light')
+        self.assertIn('MINT light theme', QApplication.instance().styleSheet())
+        self.assertEqual(QSettings().value(THEME_KEY), 'Light')
+        # Without a system that tells a dark scheme, Auto is light, as None is.
+        for name, dark in (('Dark', True), ('Auto', False), (THEME_NONE, False)):
             apply_theme(name)
-            self.assertIn(f'MINT {name.lower()} theme', QApplication.instance().styleSheet())
+            self.assertEqual(QApplication.instance().styleSheet(), '')
+            self.assertEqual(is_dark(), dark)
             self.assertEqual(QSettings().value(THEME_KEY), name)
-        apply_theme(THEME_NONE)
+
+    def test_dark_is_the_default_look_in_dark_colours(self):
+        style = QApplication.style().name()
+        apply_theme('Dark')
+        self.assertEqual(QApplication.style().name(), style)
         self.assertEqual(QApplication.instance().styleSheet(), '')
-        self.assertEqual(QSettings().value(THEME_KEY), THEME_NONE)
+        self.assertTrue(is_dark())
+        apply_theme(THEME_NONE)
+        self.assertFalse(is_dark())
+
+    def test_a_widget_left_marked_as_styled_takes_the_dark_palette(self):
+        # Removing the style sheet of the Light theme sometimes leaves a widget, as the menu bar of MINT, marked as
+        # styled, which kept it light in Dark.
+        window = QMainWindow()
+        bar = window.menuBar()
+        bar.addMenu('File')
+        apply_theme('Light')
+        apply_theme('Auto')
+        bar.setAttribute(Qt.WidgetAttribute.WA_StyleSheet, True)
+        apply_theme('Dark')
+        self.assertTrue(is_dark(bar.palette()))
+        window.deleteLater()
+
+    def test_a_theme_sets_no_palette_on_the_widgets_that_inherit_it(self):
+        # They take the new one by themselves: setting it on each would be work for every widget of MINT.
+        class Counting(QWidget):
+            calls = 0
+
+            def setPalette(self, palette):
+                Counting.calls += 1
+                super().setPalette(palette)
+
+        widget = Counting()
+        apply_theme('Light')
+        apply_theme('Dark')
+        # Qt posts the new palette to a window that was never shown.
+        QApplication.processEvents()
+        self.assertTrue(is_dark(widget.palette()))
+        apply_theme(THEME_NONE)
+        QApplication.processEvents()
+        self.assertFalse(is_dark(widget.palette()))
+        self.assertEqual(Counting.calls, 0)
+        widget.deleteLater()
+
+    def test_a_new_style_keeps_the_dark_palette(self):
+        apply_theme('Dark')
+        apply_style(QStyleFactory.keys()[0])
+        self.assertTrue(is_dark())
+
+    @unittest.skipUnless('windowsvista' in QStyleFactory.keys(), 'only on Windows')
+    def test_a_style_that_draws_light_controls_is_fusion_while_dark(self):
+        apply_style('windowsvista')
+        apply_theme('Dark')
+        self.assertEqual(QApplication.style().name().lower(), 'fusion')
+        apply_theme(THEME_NONE)
+        self.assertEqual(QApplication.style().name().lower(), 'windowsvista')
 
     def test_restore_appearance_reapplies_persisted_choices(self):
         style = QStyleFactory.keys()[-1]
@@ -107,7 +170,8 @@ class AppearanceTest(SettingsSandbox):
         # wrapper, so the style name can no longer be asserted alongside
         QSettings().setValue(THEME_KEY, 'Dark')
         restore_appearance()
-        self.assertIn('MINT dark theme', QApplication.instance().styleSheet())
+        self.assertEqual(QApplication.instance().styleSheet(), '')
+        self.assertTrue(is_dark())
 
     def test_restore_appearance_resets_unknown_theme(self):
         QSettings().setValue(THEME_KEY, 'no-such-theme')
@@ -133,6 +197,7 @@ class AppearanceTest(SettingsSandbox):
     def test_menu_reflects_state_and_normalizes_unknown_theme(self):
         menu = MTAppearanceMenu()
         self.assertEqual([a.text() for a in menu.actions()], ['&Style', '&Theme', 'UI &scale'])
+        self.assertEqual([a.text() for a in self._theme_actions(menu)], [THEME_NONE, 'Dark', 'Light', 'Auto'])
         checked = [a.text() for a in self._theme_actions(menu) if a.isChecked()]
         self.assertEqual(checked, [THEME_NONE])
 
@@ -153,8 +218,23 @@ class AppearanceTest(SettingsSandbox):
         menu = MTAppearanceMenu()
         dark = next(a for a in self._theme_actions(menu) if a.text() == 'Dark')
         dark.trigger()
-        self.assertIn('MINT dark theme', QApplication.instance().styleSheet())
+        self.assertTrue(is_dark())
         self.assertEqual(QSettings().value(THEME_KEY), 'Dark')
+
+
+class SignalTableGridTest(SettingsSandbox):
+
+    def test_the_grid_shows_where_mid_is_as_light_as_base(self):
+        # As the palette of SDCC, where the cells of the variables table did not show.
+        palette = QApplication.palette()
+        base = palette.color(QPalette.ColorRole.Base)
+        palette.setColor(QPalette.ColorRole.Mid, base)
+        QApplication.setPalette(palette)
+        self.addCleanup(QApplication.setPalette, QPalette())
+        view = MTSignalItemView()
+        grid = QColor(re.search(r'gridline-color: (#[0-9a-f]{6})', view.view().styleSheet()).group(1))
+        self.assertLess(grid.lightness(), base.lightness() - 60)
+        view.deleteLater()
 
 
 class UiScaleTest(SettingsSandbox):

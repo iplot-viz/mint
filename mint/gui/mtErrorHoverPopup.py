@@ -1,9 +1,11 @@
 from typing import Optional
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication, QPalette
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from iplotWidgets.sizing import scaled_px
+from mint.gui.mtAppearance import blend, is_dark
 
 
 class MTErrorHoverPopup(QFrame):
@@ -17,20 +19,7 @@ class MTErrorHoverPopup(QFrame):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setMouseTracking(True)
         self.setObjectName("mtErrorHoverPopup")
-        self.setStyleSheet("""
-            #mtErrorHoverPopup {
-                background: #fff8d6;
-                border: 1px solid #d4a800;
-                border-radius: 4px;
-            }
-            QLabel { background: transparent; color: #222; }
-            QLabel#mtErrorTitle { color: #1a4d80; font-weight: bold; }
-            QPushButton {
-                background: #1a4d80; color: white; border: 0; border-radius: 3px;
-                padding: 0.3em 1em;
-            }
-            QPushButton:hover { background: #2a5d90; }
-        """)
+        self._set_style_sheet()
 
         self._title = QLabel(self)
         self._title.setObjectName("mtErrorTitle")
@@ -68,6 +57,44 @@ class MTErrorHoverPopup(QFrame):
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._maybe_hide)
+
+    def _set_style_sheet(self):
+        """A yellow note in a light palette; in a dark one, a tooltip in the colours of the palette."""
+        # That of the application: a style sheet of its own changes that of the popup.
+        palette = QGuiApplication.palette()
+        if is_dark(palette):
+            colors = dict(background=palette.color(QPalette.ColorRole.ToolTipBase).name(), border='#d4a800',
+                          text=palette.color(QPalette.ColorRole.ToolTipText).name(),
+                          title=palette.color(QPalette.ColorRole.Link).name(),
+                          button=palette.color(QPalette.ColorRole.Highlight).name(),
+                          button_text=palette.color(QPalette.ColorRole.HighlightedText).name(),
+                          hover=blend(palette.color(QPalette.ColorRole.Highlight),
+                                      palette.color(QPalette.ColorRole.HighlightedText), 0.15).name())
+        else:
+            colors = dict(background='#fff8d6', border='#d4a800', text='#222', title='#1a4d80', button='#1a4d80',
+                          button_text='white', hover='#2a5d90')
+        sheet = """
+            #mtErrorHoverPopup {{
+                background: {background};
+                border: 1px solid {border};
+                border-radius: 4px;
+            }}
+            QLabel {{ background: transparent; color: {text}; }}
+            QLabel#mtErrorTitle {{ color: {title}; font-weight: bold; }}
+            QPushButton {{
+                background: {button}; color: {button_text}; border: 0; border-radius: 3px;
+                padding: 0.3em 1em;
+            }}
+            QPushButton:hover {{ background: {hover}; }}
+        """.format(**colors)
+        # Set only when it changes: setting it may bring a palette change of its own.
+        if sheet != self.styleSheet():
+            self.setStyleSheet(sheet)
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        if ev.type() == QEvent.Type.PaletteChange:
+            self._set_style_sheet()
 
     def populate(self, title: str, explanation: str, anchor: Optional[str]):
         self._title.setText(title)

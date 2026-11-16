@@ -110,23 +110,15 @@ def run_app(q_app: QApplication, args=None):
     AccessHelper.num_samples_override = args.use_fallback_samples
     logger.info(f"Fallback dec_samples : {AccessHelper.num_samples}")
 
-    # Workers copy the sample settings above, so they start after them.
     access_pool = getattr(iplot_data_access, 'AccessPool', None)
     if access_pool is None:
         logger.info(f"iplotlib {iplotlib_version} reads the data in the GUI thread")
     workers = data_access_workers() if access_pool is not None else 0
     if workers:
-        try:
-            # The workers start once the table holds a signal of their data sources (see MTMainWindow).
-            AccessHelper.pool = access_pool(workers)
-        except Exception:
-            logger.exception("Cannot start the data access worker processes, the data are read in the GUI thread")
-            if AccessHelper.pool is not None:
-                AccessHelper.pool.shutdown()
-            AccessHelper.pool, workers = None, 0
-        else:
-            q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
-    logger.info(f"Data access worker processes: {workers}")
+        # The workers start once the table holds a signal of their data sources (see MTMainWindow).
+        AccessHelper.pool = access_pool(workers)
+        q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
+    logger.info(f"Data access worker threads: {workers}")
 
     data_sources = AccessHelper.da.get_connected_data_source_names()
 
@@ -154,10 +146,12 @@ def run_app(q_app: QApplication, args=None):
         main_win.import_json(workspace_file)
 
         if args.image_file:
+            # The import draws the plots as their data arrive.
+            main_win.wait_until_drawn()
             export_to_file(canvas_impl, main_win.canvas, args.image_file, dpi=args.export_dpi,
                            width=args.export_width, height=args.export_height,
                            autoscale=args.export_autoscale)
-            # Without aboutToQuit, nothing else stops the workers before the exit waits for them.
+            # Without aboutToQuit, nothing else stops the workers.
             if getattr(AccessHelper, 'pool', None) is not None:
                 AccessHelper.pool.shutdown()
             exit(0)

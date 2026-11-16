@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Optional
 
-from PySide6.QtCore import Signal, Qt, QDate, QDateTime, QRegularExpression, QTime
+from PySide6.QtCore import QEvent, Signal, Qt, QDate, QDateTime, QMimeData, QRegularExpression, QTime
 from PySide6.QtGui import QFontMetrics, QIcon, QRegularExpressionValidator
 from PySide6.QtWidgets import (
     QComboBox, QCompleter, QDateTimeEdit, QDialog, QDialogButtonBox,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from iplotWidgets.sizing import clamp_to_screen
+from mint.gui.mtAppearance import secondary_text_color
 
 PULSE_STATUS_OPTIONS = ["completed", "aborted", "terminated", "failed"]
 DESCRIPTION_MAX_CHARS = 200
@@ -75,6 +76,28 @@ def join_ns(shown: QDateTime, fraction: str) -> int:
                           time.hour(), time.minute(), time.second(),
                           tzinfo=_dt.timezone.utc)
     return int(moment.timestamp()) * NS_PER_SECOND + int(fraction or 0)
+
+
+def single_line(text: str) -> str:
+    """``text`` with its line breaks turned into spaces; UDA does not store
+    them in a pulse description."""
+    return " ".join(text.splitlines())
+
+
+class MTDescriptionEdit(QPlainTextEdit):
+    """Description box that wraps long text but takes no line breaks, typed
+    or pasted."""
+
+    def keyPressEvent(self, event) -> None:
+        # Swallowed: if it reached the dialog, Enter would press Create.
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            return
+        super().keyPressEvent(event)
+
+    def insertFromMimeData(self, source: QMimeData) -> None:
+        flat = QMimeData()
+        flat.setText(single_line(source.text()))
+        super().insertFromMimeData(flat)
 
 
 class MTCategoryPicker(QDialog):
@@ -169,7 +192,7 @@ class MTCreatePulseDialog(QDialog):
         self.statusCombo.addItems(PULSE_STATUS_OPTIONS)
 
         self.rangePreview = QLabel("", self)
-        self.rangePreview.setStyleSheet("color: palette(mid); font-style: italic;")
+        self._set_range_preview_color()
 
         # Built before the editors below, which refresh it as soon as they change.
         fraction_validator = QRegularExpressionValidator(
@@ -189,9 +212,9 @@ class MTCreatePulseDialog(QDialog):
                 11 * QFontMetrics(widget.font()).horizontalAdvance("0"))
             widget.textChanged.connect(self._refresh_range_preview)
 
-        self.descriptionEdit = QPlainTextEdit(self)
+        self.descriptionEdit = MTDescriptionEdit(self)
         self.descriptionEdit.setPlaceholderText(
-            "Short description of this pulse (max 200 characters).")
+            "Short one-line description of this pulse (max 200 characters).")
 
         categoryLayout = QHBoxLayout()
         categoryLayout.addWidget(self.categoryCombo)
@@ -216,6 +239,16 @@ class MTCreatePulseDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.buttons)
+
+    def _set_range_preview_color(self):
+        sheet = f"color: {secondary_text_color(self.palette())}; font-style: italic;"
+        if self.rangePreview.styleSheet() != sheet:
+            self.rangePreview.setStyleSheet(sheet)
+
+    def changeEvent(self, ev):
+        super().changeEvent(ev)
+        if ev.type() == QEvent.Type.PaletteChange:
+            self._set_range_preview_color()
 
     # ---- Public API used by the host (MTMainWindow) ----
 
@@ -283,7 +316,8 @@ class MTCreatePulseDialog(QDialog):
             "status": self.statusCombo.currentText(),
             "start_ns": start_ns,
             "end_ns": end_ns,
-            "description": self.descriptionEdit.toPlainText().strip(),
+            # A description loaded for an update can still hold line breaks.
+            "description": single_line(self.descriptionEdit.toPlainText()).strip(),
         }
 
     def _configure_mode(self, pulse_id: Optional[str]) -> None:

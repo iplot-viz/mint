@@ -5,6 +5,10 @@ import unittest
 import unittest.mock
 from unittest.mock import MagicMock
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
+
 from iplotDataAccess.appDataAccess import AppDataAccess
 
 from mint.gui.mtCreatePulseDialog import (
@@ -292,6 +296,56 @@ class DialogTests(unittest.TestCase):
             self.assertTrue(d.locationEdit.isEnabled())
             d.locationEdit.setText("W7X")
             self.assertEqual(d.result_dict()["location"], "W7X")
+        finally:
+            d.close()
+
+
+class DescriptionLineBreakTests(unittest.TestCase):
+    """UDA does not store line breaks in a pulse description, so the
+    description stays on one line however it is entered."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = ensure_qapp()
+
+    def test_enter_does_not_start_a_new_line(self):
+        d = MTCreatePulseDialog()
+        d.populate(["ITER:local"], 1_000_000_000, 2_000_000_000)
+        d.categoryCombo.setCurrentText("local")
+        sent = []
+        d.submitted.connect(sent.append)
+        d.show()
+        try:
+            QTest.keyClicks(d.descriptionEdit, "first")
+            QTest.keyClick(d.descriptionEdit, Qt.Key_Return)
+            QTest.keyClick(d.descriptionEdit, Qt.Key_Return, Qt.ShiftModifier)
+            QTest.keyClick(d.descriptionEdit, Qt.Key_Enter)
+            QTest.keyClicks(d.descriptionEdit, " second")
+            self.assertEqual(d.descriptionEdit.toPlainText(), "first second")
+            # Nor does it reach the dialog, where it would press Create.
+            self.assertEqual(sent, [])
+        finally:
+            d.close()
+
+    def test_pasted_lines_come_in_on_one_line(self):
+        d = MTCreatePulseDialog()
+        d.populate(["ITER:local"], 1, 2)
+        try:
+            QApplication.clipboard().setText("line one\r\nline two\nline three")
+            d.descriptionEdit.paste()
+            self.assertEqual(d.descriptionEdit.toPlainText(),
+                             "line one line two line three")
+        finally:
+            d.close()
+
+    def test_description_loaded_for_an_update_is_saved_on_one_line(self):
+        # Loaded text does not go through the editor's key and paste handling.
+        d = MTCreatePulseDialog()
+        d.populate(["ITER:local"], 1, 2, pulse_id="ITER:local/7",
+                   current_description="first line\nsecond line")
+        try:
+            self.assertEqual(d.result_dict()["description"],
+                             "first line second line")
         finally:
             d.close()
 

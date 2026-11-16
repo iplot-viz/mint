@@ -71,6 +71,34 @@ HTML_TEMPLATE = """\
 </html>
 """
 
+#: The colours of the manual in a dark palette, by those of HTML_TEMPLATE and of the figures of manual.md: MTHelp
+#: shows it in them there. Each colour of the manual needs one.
+DARK_COLORS = {
+    '#222': '#e6e6e6',     # text
+    '#1a4d80': '#7fb2e5',  # h1, h2 and their rules
+    '#2a5d90': '#8fc0ee',  # h3
+    '#335': '#c5c5e6',     # h4
+    '#cdd': '#4b5757',     # rule under h2
+    '#f4f4f4': '#383838',  # code
+    '#888': '#8c8c8c',     # rule beside pre
+    '#aaa': '#5f5f5f',     # table borders
+    '#e6eef7': '#2b3a4a',  # table headers
+    '#fff8d6': '#3d3826',  # notes
+    '#d4a800': '#d4a800',  # their rule
+    '#fdecec': '#432a2a',  # error blocks
+    '#c0392b': '#e06050',  # their rule
+    '#555': '#b0b0b0',     # captions
+    '#ccc': '#555555',     # figure borders
+}
+_STYLES = re.compile(r'<style>.*?</style>|style="[^"]*"', re.S)
+HEX_COLOR = re.compile(r'#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b')
+
+
+def dark_colors(html: str) -> str:
+    """The manual in its colours for a dark palette (DARK_COLORS): in its style sheet and style attributes only."""
+    return _STYLES.sub(lambda style: HEX_COLOR.sub(
+        lambda color: DARK_COLORS.get(color.group(0).lower(), color.group(0)), style.group(0)), html)
+
 
 def _escape(text: str) -> str:
     return (text.replace("&", "&amp;")
