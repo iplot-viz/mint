@@ -13,6 +13,7 @@ import json  # noqa: E402
 import queue  # noqa: E402
 import shutil  # noqa: E402
 import stat  # noqa: E402
+import tempfile  # noqa: E402
 import threading  # noqa: E402
 import time  # noqa: E402
 
@@ -82,15 +83,7 @@ def verify_model(fd, path, allowed, cache_path):
     Remembered per file_key (path, size, times, inode): hashing a few GB takes seconds.
     """
     key = file_key(fd, path)
-    cache = {}
-    if cache_path:
-        try:
-            with open(cache_path, "r", encoding="utf-8") as f:
-                cache = json.load(f)
-        except (OSError, ValueError):
-            cache = {}
-    if not isinstance(cache, dict):
-        cache = {}
+    cache = trusted_record(cache_path) if cache_path else {}
     cached = cache.get(key)
     actual = cached if isinstance(cached, str) else sha256_of(fd)
     if actual not in allowed:
@@ -99,14 +92,37 @@ def verify_model(fd, path, allowed, cache_path):
     if cache_path and cache.get(key) != actual:
         cache[key] = actual
         try:
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-            tmp = cache_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
+            folder = os.path.dirname(cache_path)
+            os.makedirs(folder, exist_ok=True)
+            # A name of its own, created here: a link left under a fixed name would take the write elsewhere.
+            handle, tmp = tempfile.mkstemp(dir=folder, suffix=".tmp")
+            with os.fdopen(handle, "w", encoding="utf-8") as f:
                 json.dump(cache, f)
             os.replace(tmp, cache_path)
         except OSError as e:
             print(f"verified model cache not saved: {e}", file=sys.stderr, flush=True)
     return actual
+
+
+def trusted_record(cache_path) -> dict:
+    """The record of model files already hashed, when only this user can have written it; else empty.
+
+    An entry stands in for hashing the file, so a record someone else can write would let any file pass.
+    """
+    try:
+        handle = os.open(cache_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return {}
+    with os.fdopen(handle, "r", encoding="utf-8") as f:
+        info = os.fstat(f.fileno())
+        if not stat.S_ISREG(info.st_mode) or writable_by_others(info) or \
+                (hasattr(os, "getuid") and info.st_uid != os.getuid()):
+            return {}
+        try:
+            record = json.load(f)
+        except ValueError:
+            return {}
+    return record if isinstance(record, dict) else {}
 
 
 class Worker:
