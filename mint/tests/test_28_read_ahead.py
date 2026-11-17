@@ -607,6 +607,27 @@ class ReadAheadTest(_MainWindowTestCase):
         for name in reference:
             np.testing.assert_array_equal(drawn[name], reference[name])
 
+    def test_a_workspace_saved_without_the_signal_of_a_row_imports_each_row_with_its_own(self):
+        # A workspace keeps no signal for a row that couldn't be drawn when it was saved. Matched by place, the row
+        # took the signal of the next one, with its name, and the next one was left out (mint#233).
+        AccessHelper.pool = None
+        source = self._main_window({'DS': ['csv', 'csv'], 'Variable': [VAR1, VAR2], 'Alias': ['first', 'second'],
+                                    'Stack': ['1.1', '1.1'], 'Plot type': ['PlotXY', 'PlotXY']})
+        source.draw_clicked()
+        workspace = source.export_dict()
+        del next(iter(workspace['main_canvas']['plots'][0][0]['signals'].values()))[0]
+        path = self._workspace_file(workspace)
+        for pool in (None, _PoolStub()):
+            with self.subTest(pool=pool):
+                AccessHelper.pool = pool
+                win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
+                win.import_json(path)
+                _drawn_when_done(win)
+                signals = win.canvasStack.currentWidget().get_signals(win.canvas)
+                self.assertEqual([(signal.label, signal.name) for signal in signals],
+                                 [(f'first:{PULSE_ID}', VAR1), (f'second:{PULSE_ID}', VAR2)])
+                self.assertEqual(len({signal.color for signal in signals}), 2)
+
     def test_the_status_bar_says_ready_once_the_import_is_done(self):
         AccessHelper.pool = None
         source = self._two_plots()
