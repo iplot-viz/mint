@@ -10,6 +10,12 @@ KNOWN_MODELS = {
     "a5fc9c66a5aa463cefe6ccd3f117844c8e3b343db56668124d1f031314002c29": {
         "name": "MINT assistant (Qwen3-1.7B trained for MINT) Q4_K_M v12", "format": "qwen3-nothink", "few_shot": False,
         "files": True},
+    "907c9f16166049204425a41a9095575e317106714b42ebbe42b150a1dc8d4bc5": {
+        "name": "MINT assistant (Qwen3-1.7B trained for MINT) Q4_K_M v13", "format": "qwen3-nothink", "few_shot": False,
+        "files": True},
+    "a82df86bd1a06e9537f73c75e6c701dd249017a7c55fcb24f16cac306affe1cf": {
+        "name": "MINT assistant (Qwen3-1.7B trained for MINT) Q4_K_M v15", "format": "qwen3-nothink", "few_shot": False,
+        "files": True},
 }
 
 

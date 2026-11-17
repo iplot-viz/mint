@@ -4,6 +4,8 @@ import shlex
 from dataclasses import dataclass, field
 from typing import Dict, List
 
+from mint.assistant import settings
+
 MAX_COMMANDS = 3
 MAX_IDS = 12
 RANGE_UNITS = ("seconds", "minutes", "hours", "days")
@@ -11,7 +13,17 @@ WINDOW_UNITS = ("ms", "s", "min", "h", "d")
 WINDOW_SECONDS = {"ms": 0.001, "s": 1, "min": 60, "h": 3600, "d": 86400}
 WINDOW = re.compile(r"^(-?\d+(?:\.\d+)?)(ms|s|min|h|d)$")
 COMBINE_OPS = ("subtract", "add", "multiply", "divide")
-PLOT_SWITCHES = ("log", "grid", "legend")
+PLOT_SWITCHES = ("log", "grid", "legend", "marker")
+# The units of a time counted from the start of a pulse ("range from 40 to 60 s").
+PULSE_UNITS = ("ms", "s", "min", "h")
+# The canvas toolbar's tools, the windows and dialogs MINT opens, its themes, and the samples a ruler can mark.
+TOOLS = ("select", "crosshair", "pan", "zoom", "dist", "marker", "ruler")
+OPENABLE = ("export", "image", "csv", "save_workspace", "open_workspace", "preferences", "rulers")
+THEMES = ("dark", "light", "auto", "none")
+EXTREMES = ("max", "min", "first", "last")
+SHIFT_UNITS = ("ms", "s", "min", "h", "d")
+# Settings whose value is free text, written in quotes.
+TEXT_PARAMS = ("title", "label", "ylabel")
 # A time of the attached file (see snapshot.FileInfo), which a range can use instead of a date.
 TIME_ID = re.compile(r"^t\d+$")
 
@@ -36,9 +48,18 @@ class Command:
             ids, words = words + ids, []
         elif self.verb in ("move", "source"):
             words = ["to"] + words
+        elif self.verb == "range" and words[:1] == ["from"] and len(words) == 4:
+            words = ["from", words[1], "to", words[2], words[3]]
         elif self.verb == "range" and words[:1] == ["from"]:
             words = ["from", _when(words[1]), "to", _when(words[2])]
-        params = [f"window={v}s" if k == "seconds" else f'{k}="{v}"' if k == "title" else f"{k}={v}"
+        elif self.verb == "zoom" and words[:1] != ["last"]:
+            words = ["from", words[0], "to", words[1]] + words[2:] if len(words) == 3 else \
+                ["from", _when(words[0]), "to", _when(words[1])]
+        elif self.verb == "pan":
+            words = ["by"] + words
+        elif self.verb == "ruler" and words != ["off"]:
+            words = ["at"] + (words if len(words) == 2 or words[0] in EXTREMES else [_when(words[0])])
+        params = [f"window={v}s" if k == "seconds" else f'{k}="{v}"' if k in TEXT_PARAMS else f"{k}={v}"
                   for k, v in self.params.items()]
         return " ".join([self.verb] + ids + words + params + self.flags + ([f'"{self.text}"'] if self.text else []))
 
@@ -51,8 +72,9 @@ def _alt(options) -> str:
     return " | ".join(f'"{o}"' for o in options)
 
 
-def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) -> str:
-    """GBNF grammar of the answers valid for these rows and plots, and the variables and times of an attached file.
+def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=(), data_sources=()) -> str:
+    """GBNF grammar of the answers valid for these rows and plots, the variables and times of an attached file, and
+    the data sources rows can use.
 
     Numbers are optional even where a recipe needs them: a forced number is invented, while MINT can ask.
     """
@@ -68,10 +90,13 @@ def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) ->
         # The window keeps the user's unit: converting "a quarter of an hour" is MINT's job.
         recipe_rules.insert(0, f'({_alt(windowed)}) (" window=" num ({_alt(WINDOW_UNITS)}))?')
 
-    verbs = (["plot-cmd"] if plot_ids else []) + (["add"] if file_ids else []) + ["find", "range", "draw", "say"]
+    canvas = ["zoom", "pan", "home", "view", "focus", "ruler", "tool", "timewindow", "detach", "canvas"]
+    verbs = (["plot-cmd", "split"] + canvas if plot_ids else []) + (["add"] if file_ids else []) + \
+        ["find", "range", "draw", "open", "theme", "say"]
     if row_ids:
         # ask is for choosing among rows: with an empty table, a request about a signal is a search.
-        verbs = ["process", "combine", "move", "remove"] + verbs + ["ask"]
+        verbs = ["process", "combine", "move", "remove", "hide", "show", "envelope", "style", "shift"] + \
+            (["source"] if data_sources else []) + verbs + ["ask"]
     # With the times of a file (t1, t2...) a date can be one of them, and a pulse can't.
     when = "when" if time_ids else "str"
     pulse = ("[A-Za-z0-9_:.+/()-]{1,80}" if not time_ids else "([A-Za-su-z0-9_:.+/()-] [A-Za-z0-9_:.+/()-]{0,79} | "
@@ -87,10 +112,14 @@ def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) ->
         "range ::= \"range \" (\"last \" int \" \" (" + _alt(RANGE_UNITS) + ") | \"day \" (\"today\" | \"yesterday\" | "
         "[0-9]{4} \"-\" [0-9]{2} \"-\" [0-9]{2}" + (" | tid" if time_ids else "") + ")"
         " | \"month \" [0-9]{4} \"-\" [0-9]{2} | \"from \" " + when + " \" to \" " + when
-        + " | \"pulse \" " + pulse + ")",
+        + " | \"from \" num \" to \" num \" \" (" + _alt(PULSE_UNITS) + ") | \"pulse \" " + pulse + ")",
         "draw ::= \"draw\"",
+        "onoff ::= \"on\" | \"off\"",
         "ask ::= \"ask \" str",
         "say ::= \"say \" str",
+        "open ::= \"open \" (" + _alt(OPENABLE) + ")",
+        "theme ::= \"theme \" (" + _alt(THEMES) + ")",
+        "units ::= " + _alt(PULSE_UNITS),
     ]
     if row_ids:
         lines += [
@@ -100,9 +129,20 @@ def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) ->
             "recipe ::= " + " | ".join(recipe_rules),
             "combine ::= \"combine \" (" + _alt(COMBINE_OPS) + ") \" \" row \" \" row",
             "remove ::= \"remove\" rows",
+            "hide ::= \"hide\" rows",
+            "show ::= \"show\" rows",
+            "envelope ::= \"envelope\" rows \" \" onoff",
         ]
+        if data_sources:
+            lines += ["ds ::= " + _alt(data_sources), "source ::= \"source\" rows \" to \" ds"]
         target = "plot | \"new\"" if plot_ids else "\"new\""
         lines.append(f"move ::= \"move\" rows \" to \" ({target})")
+        lines += [
+            "style ::= \"style\" rows sprop{1,4}",
+            "sprop ::= " + " | ".join(f'" {key}=" ({settings.grammar_values(s)})' for key, s in settings.SIGNAL.items()),
+            "shift ::= \"shift \" row \" \" (\"time \" num \" \" (" + _alt(SHIFT_UNITS) + ") | \"value \" num)"
+            " (\" copy\")?",
+        ]
     if file_ids:
         lines += [
             "fvar ::= " + _alt(file_ids),
@@ -113,9 +153,25 @@ def build_grammar(row_ids, plot_ids, recipes: dict, file_ids=(), time_ids=()) ->
     if plot_ids:
         lines += [
             "plot ::= " + _alt(plot_ids),
-            "plot-cmd ::= \"plot\" ((\" \" plot){1," + str(MAX_IDS) + "} | \" all\") prop{1,4}",
-            "onoff ::= \"on\" | \"off\"",
-            "prop ::= " + " | ".join(f'" {s}=" onoff' for s in PLOT_SWITCHES) + " | \" title=\" str",
+            "plots ::= (\" \" plot){1," + str(MAX_IDS) + "} | \" all\"",
+            "plot-cmd ::= \"plot\" plots prop{1,4}",
+            "split ::= \"split\" plots",
+            "prop ::= " + " | ".join(f'" {key}=" ({settings.grammar_values(s)})' for key, s in settings.PLOT.items()),
+            # A time from the start of what is drawn (of the pulse, in a pulse), or a date and time.
+            "moment ::= num \" to \" num \" \" units | str \" to \" str",
+            # "last": the end of what is drawn, back by that much.
+            "zoom ::= \"zoom\" plots (\" from \" moment | \" last \" num \" \" units)",
+            "pan ::= \"pan\" plots \" by \" num \" \" (" + _alt(SHIFT_UNITS) + ")",
+            "home ::= \"home\" (\" \" plot){0," + str(MAX_IDS) + "}",
+            "view ::= \"view \" (\"undo\" | \"redo\")",
+            "focus ::= \"focus \" (plot | \"off\")",
+            "ruler ::= \"ruler \" (plot \" at \" (num \" \" units | str)"
+            + (" | row \" at \" (" + _alt(EXTREMES) + ")" if row_ids else "") + " | \"off\")",
+            "tool ::= \"tool \" (" + _alt(TOOLS) + ")",
+            "timewindow ::= \"timewindow\" (\" \" plot)?",
+            "detach ::= \"detach \" onoff",
+            "canvas ::= \"canvas\" cprop{1,3}",
+            "cprop ::= " + " | ".join(f'" {key}=" ({settings.grammar_values(s)})' for key, s in settings.CANVAS.items()),
         ]
     return "\n".join(lines) + "\n"
 
@@ -124,7 +180,8 @@ def merge(cmds: List[Command]) -> List[Command]:
     """Fold commands that only differ in their ids, and drop repeated ones."""
     merged = []
     for c in cmds:
-        twin = next((m for m in merged if m.verb == c.verb and m.verb in ("process", "plot", "remove", "hide", "show")
+        twin = next((m for m in merged if m.verb == c.verb and m.verb in ("process", "plot", "remove", "hide", "show",
+                                                                          "envelope", "split")
                      and m.words == c.words and m.params == c.params and m.flags == c.flags
                      and "all" not in m.ids + c.ids), None)
         if twin is not None:
@@ -151,6 +208,14 @@ def parse(text: str) -> List[Command]:
     if not commands:
         raise CommandError("empty answer")
     return merge(commands)[:MAX_COMMANDS]
+
+
+def _is_number(text: str) -> bool:
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
 
 
 def _plain(value: float) -> str:
@@ -218,6 +283,9 @@ def _parse_tokens(tokens, line) -> Command:
             return Command("range", words=rest)
         if kind == "from" and len(rest) == 4 and rest[2] == "to":
             return Command("range", words=["from", rest[1], rest[3]])
+        if kind == "from" and len(rest) == 5 and rest[2] == "to" and rest[4] in PULSE_UNITS \
+                and _is_number(rest[1]) and _is_number(rest[3]):
+            return Command("range", words=["from", rest[1], rest[3], rest[4]])
         raise CommandError(f"unreadable range {line!r}")
     if verb == "move":
         ids = _ids(rest, "r")
@@ -229,6 +297,16 @@ def _parse_tokens(tokens, line) -> Command:
         if not ids or len(rest) != 2 or rest[0] != "to":
             raise CommandError(f"source needs rows and a data source: {line!r}")
         return Command("source", ids=ids, words=[rest[1]])
+    if verb == "envelope":
+        ids = _ids(rest, "r")
+        if not ids or rest not in (["on"], ["off"]):
+            raise CommandError(f"envelope needs rows and on or off: {line!r}")
+        return Command("envelope", ids=ids, words=rest)
+    if verb == "split":
+        ids = ["all"] if rest == ["all"] else _ids(rest, "p")
+        if not ids or (ids != ["all"] and rest):
+            raise CommandError(f"split needs plots: {line!r}")
+        return Command("split", ids=ids)
     if verb in ("remove", "hide", "show"):
         ids = _ids(rest, "r")
         if not ids or rest:
@@ -241,6 +319,74 @@ def _parse_tokens(tokens, line) -> Command:
         if not ids or rest not in ([], ["together"]):
             raise CommandError(f"add needs variables of the file: {line!r}")
         return Command("add", ids=ids, flags=rest)
+    if verb in ("style", "canvas"):
+        ids = _ids(rest, "r") if verb == "style" else []
+        cmd = Command(verb, ids=ids)
+        for token in rest:
+            if "=" not in token:
+                raise CommandError(f"unexpected {token!r} in {line!r}")
+            key, value = token.split("=", 1)
+            cmd.params[key] = value
+        if (verb == "style" and not ids) or not cmd.params:
+            raise CommandError(f"{verb} needs {'rows and ' if verb == 'style' else ''}a setting: {line!r}")
+        return cmd
+    if verb in ("zoom", "pan"):
+        ids = ["all"] if rest[:1] == ["all"] else _ids(rest, "p")
+        if ids == ["all"]:
+            rest = rest[1:]
+        if verb == "zoom" and ids and len(rest) == 5 and rest[0] == "from" and rest[2] == "to" \
+                and rest[4] in PULSE_UNITS and _is_number(rest[1]) and _is_number(rest[3]):
+            return Command("zoom", ids=ids, words=[rest[1], rest[3], rest[4]])
+        if verb == "zoom" and ids and len(rest) == 3 and rest[0] == "last" and _is_number(rest[1]) \
+                and rest[2] in PULSE_UNITS:
+            return Command("zoom", ids=ids, words=rest)
+        if verb == "zoom" and ids and len(rest) == 4 and rest[0] == "from" and rest[2] == "to":
+            return Command("zoom", ids=ids, words=[rest[1], rest[3]])
+        if verb == "pan" and ids and len(rest) == 3 and rest[0] == "by" and _is_number(rest[1]) \
+                and rest[2] in SHIFT_UNITS:
+            return Command("pan", ids=ids, words=[rest[1], rest[2]])
+        raise CommandError(f"unreadable {verb} {line!r}")
+    if verb == "home":
+        ids = _ids(rest, "p")
+        if rest:
+            raise CommandError(f"home takes plots or nothing: {line!r}")
+        return Command("home", ids=ids)
+    if verb == "view" and rest in (["undo"], ["redo"]):
+        return Command("view", words=rest)
+    if verb == "focus" and len(rest) == 1 and (rest[0] == "off" or _ids(list(rest), "p")):
+        return Command("focus", ids=[] if rest[0] == "off" else rest, words=["off"] if rest[0] == "off" else [])
+    if verb == "ruler":
+        if rest == ["off"]:
+            return Command("ruler", words=["off"])
+        ids = _ids(rest, "p") or _ids(rest, "r")
+        if len(ids) == 1 and rest[:1] == ["at"]:
+            if len(rest) == 3 and _is_number(rest[1]) and rest[2] in PULSE_UNITS:
+                return Command("ruler", ids=ids, words=rest[1:])
+            if len(rest) == 2:
+                return Command("ruler", ids=ids, words=rest[1:])
+        raise CommandError(f"unreadable ruler {line!r}")
+    if verb == "tool" and len(rest) == 1 and rest[0] in TOOLS:
+        return Command("tool", words=rest)
+    if verb == "timewindow":
+        ids = _ids(rest, "p")
+        if rest:
+            raise CommandError(f"timewindow takes a plot or nothing: {line!r}")
+        return Command("timewindow", ids=ids)
+    if verb == "detach" and rest in (["on"], ["off"]):
+        return Command("detach", words=rest)
+    if verb == "open" and len(rest) == 1 and rest[0] in OPENABLE:
+        return Command("open", words=rest)
+    if verb == "theme" and len(rest) == 1 and rest[0] in THEMES:
+        return Command("theme", words=rest)
+    if verb == "shift":
+        ids = _ids(rest, "r")
+        flags = ["copy"] if rest[-1:] == ["copy"] else []
+        rest = rest[:-1] if flags else rest
+        if len(ids) == 1 and len(rest) == 3 and rest[0] == "time" and _is_number(rest[1]) and rest[2] in SHIFT_UNITS:
+            return Command("shift", ids=ids, words=rest, flags=flags)
+        if len(ids) == 1 and len(rest) == 2 and rest[0] == "value" and _is_number(rest[1]):
+            return Command("shift", ids=ids, words=rest, flags=flags)
+        raise CommandError(f"unreadable shift {line!r}")
     if verb == "draw" and not rest:
         return Command("draw")
     if verb in ("ask", "say") and len(rest) == 1:

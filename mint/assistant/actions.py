@@ -203,7 +203,10 @@ def _pulse_name(pulse: str) -> str:
     return pulse if len(pulse) <= 30 else [part for part in re.split(r"[/=?]", pulse) if part][-1]
 
 
-class Planner:
+from mint.assistant.canvas_actions import CanvasActions  # noqa: E402  (it uses the above)
+
+
+class Planner(CanvasActions):
     """Builds a Proposal from commands, checking them against a snapshot of the workspace."""
 
     def __init__(self, workspace, snap: Snapshot):
@@ -390,13 +393,15 @@ class Planner:
 
     def _move(self, cmd: Command, proposal: Proposal) -> str:
         target = cmd.words[0]
+        rising = {}
         if target == "new":
             stack, place = self._new_plot("move"), "a new plot"
         else:
             plot = self.snap.plot(target)
             if plot is None:
                 raise ActionError(f"There is no plot {target}.")
-            stack, place = plot.stack, self.snap.place(target)
+            rising = self._rising(set(cmd.ids), target)
+            stack, place = f"{rising.get(target, plot.row)}.{plot.col}", self.snap.place(target)
         rows = [self._row(row_id) for row_id in cmd.ids]
         if len(rows) > 1:
             # One line for the lot: "Move A to a new plot" twice would read as two new plots.
@@ -407,7 +412,33 @@ class Planner:
         for row, line in zip(rows, lines):
             proposal.changes.append(self._set_cells_change(
                 row, {"Stack": stack}, line))
+        cols = {p.id: p.col for p in self.snap.plots}
+        below = [row for row in self.snap.rows + self.snap.unlisted if row.plot in rising and row.id not in cmd.ids]
+        for row in below:
+            sub = (row.stack.split(".") + ["", "", ""])[2]
+            new = f"{rising[row.plot]}.{cols[row.plot]}" + (f".{sub}" if sub else "")
+            proposal.changes.append(self._set_cells_change(row, {"Stack": new}, ""))
+        if below:
+            proposal.changes[-1].lines = ["The plots below move up into the space left"]
         return "Move"
+
+    def _rising(self, moving: set, target: str) -> dict:
+        """The new row of each plot below one a move empties, in its column: as split makes room, a merge closes
+        the space, which MINT would otherwise keep empty."""
+        members = {}
+        for row in self.snap.rows + self.snap.unlisted:
+            if row.plot:
+                members.setdefault(row.plot, []).append(row.id)
+        emptied = {plot for plot, ids in members.items() if plot != target and set(ids) <= moving}
+        rising = {}
+        for col in sorted({plot.col for plot in self.snap.plots}):
+            shift = 0
+            for plot in sorted((p for p in self.snap.plots if p.col == col), key=lambda p: p.row):
+                if plot.id in emptied:
+                    shift += 1
+                elif shift:
+                    rising[plot.id] = plot.row - shift
+        return rising
 
     def _source(self, cmd: Command, proposal: Proposal) -> str:
         """The data source of rows, among those MINT has here; grouped by the one each had on the card."""
@@ -435,6 +466,57 @@ class Planner:
             proposal.changes.append(self._remove_row_change(self._row(row_id)))
         return "Remove"
 
+    def _envelope(self, cmd: Command, proposal: Proposal) -> str:
+        """The min/max envelope of rows on or off: their Envelope cell, as the table has it."""
+        on = cmd.words == ["on"]
+        rows = [row for row in (self._row(row_id) for row_id in cmd.ids) if row.envelope != on]
+        if not rows:
+            raise ActionError(f"{'They' if len(cmd.ids) > 1 else 'It'} already "
+                              f"{'show' if len(cmd.ids) > 1 else 'shows'} {'an' if on else 'no'} envelope.")
+        names = _listed([self._name(row) for row in rows])
+        line = f"Envelope of {names}: min, average and max of each point" if on else f"No envelope on {names}"
+        for n, row in enumerate(rows):
+            proposal.changes.append(self._set_cells_change(row, {"Envelope": "1" if on else ""}, line if n == 0 else ""))
+        return "Envelope"
+
+    def _split(self, cmd: Command, proposal: Proposal) -> str:
+        """Each signal of the plots in a plot of its own, right below, in table order; plots further down move down."""
+        plots = self.snap.plots if cmd.ids == ["all"] else [self._plot_info(plot_id) for plot_id in cmd.ids]
+        members = {}
+        for row in self.snap.rows:
+            if row.plot:
+                members.setdefault(row.plot, []).append(row)
+        splitting = {plot.id for plot in plots if len(members.get(plot.id, [])) > 1}
+        if not splitting:
+            raise ActionError("Each of them shows a single signal already." if len(plots) > 1 else
+                              f"{_capital(self.snap.place(plots[0].id))} shows a single signal already.")
+        stacks = {}
+        for col in sorted({plot.col for plot in self.snap.plots}):
+            shift = 0
+            for plot in sorted((p for p in self.snap.plots if p.col == col), key=lambda p: p.row):
+                rows = members.get(plot.id, [])
+                if plot.id in splitting:
+                    for n, row in enumerate(rows):
+                        stacks[row.uid] = f"{plot.row + shift + n}.{col}"
+                    shift += len(rows) - 1
+                elif shift:
+                    for row in rows:
+                        sub = (row.stack.split(".") + ["", "", ""])[2]
+                        stacks[row.uid] = f"{plot.row + shift}.{col}" + (f".{sub}" if sub else "")
+        for plot in plots:
+            if plot.id not in splitting:
+                continue
+            rows = members[plot.id]
+            line = f"{_capital(self.snap.place(plot.id))}: {_listed([self._name(row) for row in rows])}, one plot each"
+            for n, row in enumerate(rows):
+                proposal.changes.append(self._set_cells_change(row, {"Stack": stacks[row.uid]}, line if n == 0 else ""))
+        moved = [row for row in self.snap.rows if row.uid in stacks and row.plot not in splitting]
+        for row in moved:
+            proposal.changes.append(self._set_cells_change(row, {"Stack": stacks[row.uid]}, ""))
+        if moved:
+            proposal.changes[-1].lines = ["The plots below move down to make room"]
+        return "Split"
+
     def _hide(self, cmd: Command, proposal: Proposal) -> str:
         return self._visibility(cmd, proposal, hidden=True)
 
@@ -445,9 +527,14 @@ class Planner:
         """Drawn signals hidden or shown again, as a click on their legend entry does: the row stays in the table."""
         rows = [self._row(row_id) for row_id in cmd.ids]
         states = {row.uid: self.ws.is_hidden(row.uid) for row in rows}
-        undrawn = [self._name(row) for row in rows if states[row.uid] is None]
+        undrawn = [row for row in rows if states[row.uid] is None]
         if undrawn:
-            raise ActionError(f"{_capital(_listed(undrawn))} {'isn' if len(undrawn) == 1 else 'aren'}'t drawn. "
+            names = _capital(_listed([self._name(row) for row in undrawn]))
+            if self._unreadable(undrawn):
+                raise ActionError(f"{names} {'has' if len(undrawn) == 1 else 'have'} nothing drawn: "
+                                  f"{'its data' if len(undrawn) == 1 else 'their data'} couldn't be read, "
+                                  f"as the Status says.")
+            raise ActionError(f"{names} {'isn' if len(undrawn) == 1 else 'aren'}'t drawn. "
                               "Click Draw, then ask me again.")
         rows = [row for row in rows if states[row.uid] != hidden]
         if not rows:
@@ -470,60 +557,16 @@ class Planner:
         proposal.changes.append(Change([line], do, undo, needs_refresh=True))
         return "Hide" if hidden else "Show"
 
+    def _unreadable(self, rows) -> bool:
+        """Whether reading these rows failed at the last Draw (a range with no data, a variable not found): another
+        Draw wouldn't put them on the canvas."""
+        return bool(rows) and all(self.ws.unreadable(row.uid) for row in rows)
+
     def _draw(self, cmd: Command, proposal: Proposal) -> str:
         proposal.changes.append(Change([], lambda: None, lambda: None, needs_draw=True))
         return "Draw"
 
 
-    def _plot(self, cmd: Command, proposal: Proposal) -> str:
-        plots = self.snap.plots if cmd.ids == ["all"] else [self._plot_info(pid) for pid in cmd.ids]
-        if not plots:
-            raise ActionError("There are no plots yet.")
-        settings = {}
-        words = []
-        for key, value in cmd.params.items():
-            if key in ("log", "grid", "legend"):
-                if value not in ("on", "off"):
-                    raise ActionError(f"{key} must be on or off.")
-                settings[{"log": "log_scale"}.get(key, key)] = value == "on"
-                words.append(f"{'log scale' if key == 'log' else key} {value}")
-            elif key == "title":
-                settings["plot_title"] = value
-                words.append(f"title \"{value}\"")
-            else:
-                raise ActionError(f"I can't change '{key}' of a plot.")
-        positions = [(p.id, p.row, p.col) for p in plots]
-        for plot_id, row, col in positions:
-            if self.ws.canvas_plot(row, col) is None:
-                raise ActionError(f"{_capital(self.snap.place(plot_id))} isn't drawn yet. Click Draw, then ask me again.")
-        ws = self.ws
-        places = {p.id: self.snap.place(p.id) for p in plots}
-        old = []
-
-        def find(plot_id, row, col):
-            # A Draw replaces the plot objects, so they are looked up by position every time.
-            plot = ws.canvas_plot(row, col)
-            if plot is None:
-                raise ActionError(f"{_capital(places[plot_id])} isn't drawn any more, so I couldn't change it.")
-            return plot
-
-        def do():
-            old.clear()
-            for plot_id, row, col in positions:
-                plot = find(plot_id, row, col)
-                old.append({k: getattr(plot, k, None) for k in settings})
-                for k, v in settings.items():
-                    setattr(plot, k, v)
-
-        def undo():
-            for (plot_id, row, col), previous in zip(positions, old):
-                plot = find(plot_id, row, col)
-                for k, v in previous.items():
-                    setattr(plot, k, v)
-
-        where = "all plots" if cmd.ids == ["all"] else " and ".join(places[p.id] for p in plots)
-        proposal.changes.append(Change([f"{_capital(where)}: {', '.join(words)}"], do, undo, needs_refresh=True))
-        return "Plot settings"
 
 
     def _range(self, cmd: Command, proposal: Proposal) -> str:
@@ -551,6 +594,12 @@ class Planner:
                 end = self.snap.now.astimezone(timezone.utc)
                 start_ns, end_ns = _ns(end - timedelta(seconds=span)), _ns(end)
                 set_range = lambda: ws.set_time_range_ns(start_ns, end_ns)  # noqa: E731
+        elif kind == "from" and len(cmd.words) == 4 and self.snap.pulse_mode:
+            new, line = self._pulse_times(cmd)
+            set_range = lambda: ws.set_range_dict(new)  # noqa: E731
+        elif kind == "from" and len(cmd.words) == 4:
+            start_ns, end_ns, line = self._times_from_start(cmd)
+            set_range = lambda: ws.set_time_range_ns(start_ns, end_ns)  # noqa: E731
         elif kind == "pulse":
             pulse = cmd.words[1]
             new = {"mode": "PULSE_NUMBER", "pulse_nb": [pulse], "base": 1, "t_start": "", "t_end": ""}
@@ -573,8 +622,36 @@ class Planner:
                 ws.set_range_dict(before["range"])
                 ws.set_time_range_fields(before["fields"])
 
-        proposal.changes.append(Change([line], do, undo, needs_draw=True, sets_range=kind != "pulse"))
+        proposal.changes.append(Change([line], do, undo, needs_draw=True,
+                                       sets_range=kind != "pulse" and not self.snap.pulse_mode))
         return "Time range"
+
+    def _times_from_start(self, cmd: Command) -> Tuple[int, int, str]:
+        """The part of the time range drawn that times from its start give ("40 to 60 s"), as dates: the last hours
+        become the dates they are now."""
+        drawn = self.ws.time_range_ns()
+        if drawn is None:
+            raise ActionError("There is no time range yet. Tell me the dates and times, like 6 Aug 07:10 to 07:20.")
+        start, end, unit = float(cmd.words[1]), float(cmd.words[2]), cmd.words[3]
+        if end <= start:
+            raise ActionError("The end of the time range must be after its start.")
+        seconds = {"ms": 0.001, "s": 1, "min": 60, "h": 3600}[unit]
+        start_ns, end_ns = (drawn[0] + round(t * seconds * 1e9) for t in (start, end))
+        moments = [datetime.fromtimestamp(ns / 1e9, timezone.utc) for ns in (start_ns, end_ns)]
+        line = (f"Time range: {recipes.number(start)} to {recipes.number(end)} {unit} from the start of the one drawn, "
+                f"{when.span(moments[0], moments[1], self.snap.now)}")
+        return start_ns, end_ns, line
+
+    def _pulse_times(self, cmd: Command):
+        """The part of the pulse a range of times from its start shows ("40 to 60 s"): its Start and End time."""
+        start, end, unit = float(cmd.words[1]), float(cmd.words[2]), cmd.words[3]
+        if end <= start:
+            raise ActionError("The end of the time range must be after its start.")
+        # The pulse mode counts in seconds, minutes or hours: milliseconds go as seconds.
+        base, scale = {"ms": (1, 0.001), "s": (1, 1), "min": (60, 1), "h": (3600, 1)}[unit]
+        new = dict(self.ws.range_dict(), mode="PULSE_NUMBER", base=base, t_start=recipes.number(start * scale),
+                   t_end=recipes.number(end * scale))
+        return new, f"Time range: {recipes.number(start)} to {recipes.number(end)} {unit} from the start of the pulse"
 
     def period_ns(self, cmd: Command) -> Tuple[int, int]:
         """The span, in ns since the epoch, of a range over a day or between two moments (dates or file times)."""

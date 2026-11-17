@@ -16,9 +16,12 @@ process ROWS RECIPE [replace] - adds a processed copy of each row to its plot. A
   derivative, integral, abs, log10, scale factor=N [offset=N].
   relative_time: time axis in seconds from the first point.
 combine subtract|add|multiply|divide ROW_A ROW_B - a new signal A-B, A+B, A*B or A/B.
-plot PLOTS|all [log=on|off] [grid=on|off] [legend=on|off] [title="..."] - how plots look. log=on is a logarithmic axis.
+plot PLOTS|all [log=on|off] [grid=on|off] [legend=on|off] [marker=on|off] [title="..."] - how plots look. log=on is a logarithmic axis, marker=on a dot at each point.
+split PLOTS|all - each signal of those plots in a plot of its own.
+hide ROWS, show ROWS - hides a drawn signal from its plot, or shows it again. envelope ROWS on|off - the min/max envelope of rows.
+source ROWS to SOURCE - the data source of rows, one of those listed.
 find WORDS - searches variables to add, by words of their name.
-range last N seconds|minutes|hours|days | range day today|yesterday|YYYY-MM-DD | range month YYYY-MM | range from "YYYY-MM-DD HH:MM" to "YYYY-MM-DD HH:MM" | range pulse ID - the time range to plot, in UTC.
+range last N seconds|minutes|hours|days | range day today|yesterday|YYYY-MM-DD | range month YYYY-MM | range from "YYYY-MM-DD HH:MM" to "YYYY-MM-DD HH:MM" | range pulse ID - the time range to plot, in UTC. In a pulse: range from N to N ms|s|min|h, from its start.
 move ROWS to PLOT|new - shows rows in another plot. remove ROWS. draw.
 ask "QUESTION" - when you cannot tell which row or plot the user means.
 say "SENTENCE" - for anything else: greetings, questions, things these commands cannot do.
@@ -27,7 +30,7 @@ Rules:
 - Use only ids from the workspace. "This", "it" or "these" mean the selected rows; if none is selected, ask which.
 - "Names in the request" tells you which rows the user's words point to.
 - Leave out any number the user did not give (window, hz, factor): MINT picks a window or asks.
-- Write ask and say in English, like the rest of MINT, also when the request is in another language. Keep them short and warm, like a colleague in the control room. Call signals by their names and plots by where they are (the top plot), never r1 or p1.
+- Write ask and say in English, like the rest of MINT. Keep them short and warm, like a colleague in the control room. Call signals by their names and plots by where they are (the top plot), never r1 or p1.
 - "The same for X" repeats the Last applied commands on X.
 - No say next to a change: MINT shows the change itself."""
 
@@ -68,13 +71,13 @@ EXAMPLES: List[Tuple[Optional[str], str, str]] = [
     (None, "no grid on the right plot", "plot p2 grid=off"),
     (None, "log on both plots", "plot p1 p2 log=on"),
     (None, "average the flow over a quarter of an hour", "process r3 moving_average window=15min"),
-    (None, "du 3 novembre 8h au 4 novembre 20h", "range from \"2026-11-03 08:00\" to \"2026-11-04 20:00\""),
+    (None, "from 3 November 8:00 to 4 November 20:00", "range from \"2026-11-03 08:00\" to \"2026-11-04 20:00\""),
     (None, "show pulse ITER:MCTB_PSS-TF07_FD/12 instead", "range pulse ITER:MCTB_PSS-TF07_FD/12"),
     (None, "export this to excel", "say \"I can't export myself, but the Export button next to Draw will.\""),
     (None, "hello! what can you do?",
      "say \"Hi! I can smooth or filter signals, combine them, change the plots, add variables and set the time "
      "range. What do you need?\""),
-    (None, "perfecto, gracias!", "say \"You're welcome!\""),
+    (None, "perfect, thanks!", "say \"You're welcome!\""),
 ]
 
 STOPWORDS = {"the", "and", "for", "plot", "plots", "signal", "signals", "all", "with", "from", "this", "that",
@@ -101,26 +104,15 @@ MAX_TEXT = 100
 # What a signal measures, read from its ITER code (MT0021 is a temperature sensor) or the
 # transmitter in the name (-TT, -PT...), so "the temperature" also points at rows shown by alias.
 MEASURES = {
-    "temperature": ("MT", "TT", {"temp", "temperature", "temperatures"},
-                    {"temperature", "temperatures", "temp", "température", "températures", "temperatura",
-                     "temperaturas", "temperatur", "temperaturen"}),
-    "pressure": ("MP", "PT", {"pressure", "press", "pirani", "penning"},
-                 {"pressure", "pressures", "pression", "pressions", "presión", "presion", "presiones", "pressione",
-                  "pressioni", "pressão", "pressao", "pressões", "druck", "drücke"}),
-    "flow": ("MF", "FT", {"flow"},
-             {"flow", "flows", "débit", "debit", "débits", "caudal", "caudales", "flujo", "portata", "portate",
-              "vazão", "vazao", "durchfluss", "durchfluß"}),
-    "level": ("ML", "LT", {"level"},
-              {"level", "levels", "niveau", "niveaux", "nivel", "niveles", "livello", "livelli", "nível", "níveis",
-               "füllstand", "pegel"}),
+    "temperature": ("MT", "TT", {"temp", "temperature", "temperatures"}, {"temperature", "temperatures", "temp"}),
+    "pressure": ("MP", "PT", {"pressure", "press", "pirani", "penning"}, {"pressure", "pressures"}),
+    "flow": ("MF", "FT", {"flow"}, {"flow", "flows"}),
+    "level": ("ML", "LT", {"level"}, {"level", "levels"}),
 }
 SAID = {word: meaning for meaning, (_, _, _, words) in MEASURES.items() for word in words}
 # Words that point back at the change just applied ("the same for MP0071"). Only then is it shown:
 # a small model shown it on every request repeats it.
-BACK = re.compile(r"\b(?:same|again|too|also|as well|likewise|repeat|now|try|mism[oa]s?|igual|tambi[eé]n|otra vez|"
-                  r"de nuevo|repite|ahora|m[eê]mes?|pareil|aussi|encore|refais|maintenant|gleiche[nrs]?|dasselbe|"
-                  r"selbe|auch|nochmal|noch mal|wieder|jetzt|ebenso|stess[oaie]|anche|ancora|di nuovo|adesso|"
-                  r"mesm[oa]s?|tamb[eé]m|de novo|agora|repete|outra vez)\b", re.IGNORECASE)
+BACK = re.compile(r"\b(?:same|again|too|also|as well|likewise|repeat|now|try)\b", re.IGNORECASE)
 CONTROL = re.compile("[\x00-\x1f\x7f\u0085  ]+")
 
 
@@ -195,19 +187,25 @@ def _positions(snap: Snapshot) -> str:
     return "Plots: " + ", ".join(places) + "."
 
 
-def _row_line(row: RowInfo) -> str:
+def _row_line(row: RowInfo, sources=()) -> str:
     # The alias alone when there is one: MINT keeps aliases unique, and variable codes cost
     # about one token per character. A request naming the variable still finds the row.
     name = f"\"{clean(row.alias, 48)}\"" if row.alias else clean(row.variable)
     text = f"{row.id} {'in ' + row.plot if row.plot else 'not plotted'}: {name}"
-    return text + (" (processed)" if row.y or row.x else "")
+    notes = [note for note, shown in (("processed", row.y or row.x), ("envelope", row.envelope),
+                                      ("hidden", row.hidden)) if shown]
+    if sources and row.data_source and row.data_source not in sources:
+        notes.append(f"data source {clean(row.data_source, 24)}, not available")
+    return text + "".join(f" ({note})" for note in notes)
 
 
 def render_workspace(snap: Snapshot) -> str:
     # The date and not the time: this text must stay the same until the table changes, to be
     # evaluated ahead, and dates are all a range needs ("yesterday", "8 to 9:30 this morning").
     lines = [f"Today {snap.now.strftime('%Y-%m-%d')} (UTC). Time range: {clean(snap.range_text) or 'not set'}."]
-    lines += [_row_line(row) for row in snap.rows]
+    if snap.data_sources:
+        lines.append("Data sources: " + ", ".join(clean(s, 24) for s in snap.data_sources) + ".")
+    lines += [_row_line(row, snap.data_sources) for row in snap.rows]
     if snap.hidden_rows:
         lines.append(f"({snap.hidden_rows} more rows are not listed; select rows to talk about them.)")
     positions = _positions(snap)
@@ -221,6 +219,8 @@ def render_workspace(snap: Snapshot) -> str:
             notes.append(f"title \"{clean(plot.title, 48)}\"")
         if notes:
             lines.append(f"{plot.id}: {', '.join(notes)}")
+    if snap.canvas:
+        lines.append(f"Canvas: {clean(snap.canvas, 160)}.")
     if not snap.rows:
         lines.append("The table is empty.")
     lines.append("Selected: " + (" ".join(snap.selected) if snap.selected else "none"))
@@ -291,7 +291,7 @@ def measures(row: RowInfo) -> Optional[str]:
     part = row.variable.split(":")[-1].upper() if ":" in row.variable else ""
     alias = set(WORD.findall(row.alias.lower()))
     for meaning, (component, transmitter, alias_words, _) in MEASURES.items():
-        if re.match(component + r"\d", part) or re.search(rf"-{transmitter}[A-Z0-9]*(?:-|$)", part) \
+        if re.match(rf"(?:{component}|{transmitter})\d", part) or re.search(rf"-{transmitter}[A-Z0-9]*(?:-|$)", part) \
                 or alias & alias_words:
             return meaning
     return None
@@ -376,6 +376,12 @@ def mentions(snap: Snapshot, request: str) -> str:
              for row, words in named(snap, request)]
     parts += [f"{variable.id} = {word} (in the file)" for variable, word in named_in_file(snap, request)]
     return clean(", ".join(parts), 240)
+
+
+def source_ids(snap: Snapshot) -> List[str]:
+    """The data sources a "source" answer may name: those here, when there is a choice or a row uses another."""
+    used = {row.data_source for row in snap.rows if row.data_source}
+    return list(snap.data_sources) if len(snap.data_sources) > 1 or used - set(snap.data_sources) else []
 
 
 def answer_ids(snap: Snapshot, request: str) -> Tuple[List[str], List[str]]:

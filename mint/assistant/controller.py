@@ -9,8 +9,8 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
 from iplotLogging import setupLogger
-from mint.assistant import (check, commands, diagnose, doubt, features, files, followup, prompt, recipes, record,
-                            when)
+from mint.assistant import (check, commands, diagnose, doubt, features, files, followup, insight, manual, prompt,
+                            recipes, record, when)
 from mint.assistant.actions import MAX_ADDED, ActionError, ApplyContext, MissingValue, Planner, Proposal, added_rows
 from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
@@ -31,10 +31,15 @@ MAX_SUGGESTION = 48
 PLACEHOLDER = "Tell me what you need…"
 # Words around a data source that only ask to search there instead: "no, take sdnuda", "use sdnuda instead".
 SEARCH_AGAIN = set("no not nope take use using instead of looking look search searching find in on at from with try "
-                   "it them the then ok okay please there again rather better en usa usar busca buscar prueba mejor "
-                   "mira de del dans utilise cherche plutôt essaie im nimm suche versuch lieber stattdessen cerca "
-                   "prova invece piuttosto em procure tente".split())
-NOT_THIS = set("instead not rather vez lugar lieu statt anstatt invece".split())
+                   "it them the then ok okay please there again rather better".split())
+NOT_THIS = set("instead not rather".split())
+# An undo of what the canvas shows rather than of a card: "undo my last zoom".
+VIEW_WORDS = re.compile(r"\b(?:zoom\w*|pan\w*|view)\b", re.IGNORECASE)
+# The whole message asks what the assistant can do.
+WHAT_CAN_YOU_DO = re.compile(
+    r"^\s*(?:hi|hello|hey)?[\s,!]*(?:what can you do|what do you do|how can you help(?: me)?|help|what are you for|"
+    r"what can i ask(?: you)?)\s*[?!.]*\s*$", re.IGNORECASE)
+
 
 
 def _time_offer(info) -> str:
@@ -93,6 +98,21 @@ def suggestions(snap) -> list:
     if len(names) > 1:
         out.append(f"{names[0]} minus {names[1]}")
     out += ["Show the last 6 hours", "What can you do?"]
+    return [s for s in out if len(s) <= MAX_SUGGESTION][:4]
+
+
+def examples(snap) -> list:
+    """What can be asked here, with this workspace's signals and plots: one of each kind the assistant handles."""
+    rows = [r for r in snap.rows if r.plot and not r.derived]
+    names = [name for name in map(_spoken, rows) if name]
+    crowded = next((p for p in snap.plots if sum(r.plot == p.id for r in rows) > 1), None)
+    out = []
+    if names:
+        out.append(f"Smooth {names[0]} over 30 s")
+        out.append(f"What's the last value of {names[-1]}?")
+    if crowded is not None:
+        out.append(f"Split {snap.place(crowded.id)}, one plot each")
+    out.append("Zoom between 10 and 20 s" if snap.pulse_mode else "Show the last 6 hours")
     return [s for s in out if len(s) <= MAX_SUGGESTION][:4]
 
 
@@ -202,6 +222,7 @@ class AssistantController(QObject):
         self._fix_offer = ""  # the one change of data source just offered, which "yes" takes
         self._told_problems = ""  # the missing data sources last told on opening the panel
         self._last_search = None  # (words, data source) of the last search shown, for "no, in sdnuda"
+        self._help_offer = {}  # suggestion text -> the place in the manual an answer came from
         self._search_source = ""  # the data source the user chose to search in, until they choose the default again
         self._turns = 0
         self._file = None  # snapshot.FileInfo of the attached file
@@ -270,11 +291,7 @@ class AssistantController(QObject):
             return False
         self._told_problems = told
         planner = Planner(self.workspace, snap)
-        fixes = {source: diagnose.replacement(source, problems.sources) for source in problems.missing}
-        offers = {}
-        for source, rows in problems.missing.items():
-            for target in [fixes[source]] if fixes[source] else problems.sources[:3]:
-                offers[self.voice.change_source(source, target)] = f"source {' '.join(r.id for r in rows)} to {target}"
+        fixes, offers = self._source_fixes(problems)
         shown = problems.invalid[:3]
         self.panel.add_assistant_message(self.voice.problems(
             [(source, [planner.name(row) for row in rows]) for source, rows in problems.missing.items()], fixes,
@@ -284,6 +301,30 @@ class AssistantController(QObject):
         # "Yes" to "Shall I change them to imas?" is that one change.
         self._fix_offer = next(iter(offers)) if len(offers) == 1 else ""
         self._suggest(list(offers))
+        return True
+
+    def _source_fixes(self, problems):
+        """The data source each missing one most likely became, and the changes offered: {chip text: command}."""
+        fixes = {source: diagnose.replacement(source, problems.sources) for source in problems.missing}
+        offers = {}
+        for source, rows in problems.missing.items():
+            for target in [fixes[source]] if fixes[source] else problems.sources[:3]:
+                offers[self.voice.change_source(source, target)] = f"source {' '.join(r.id for r in rows)} to {target}"
+        return fixes, offers
+
+    def _fix_sources(self, text: str) -> bool:
+        """ "Fix the data source of the signals": the change MINT found, as a card; False when there isn't one."""
+        try:
+            problems = diagnose.find(self.workspace.snapshot(), self.workspace.data_source_choices())
+            _, offers = self._source_fixes(problems)
+        except Exception:
+            logger.exception("Assistant: could not look at the table's problems")
+            return False
+        if len(offers) != 1:
+            return False
+        command = next(iter(offers.values()))
+        self._record_turn(text, [command], by="MINT")
+        self._plan_direct(commands.parse(command), text)
         return True
 
     def _fit_in_splitter(self):
@@ -537,7 +578,8 @@ class AssistantController(QObject):
         pending = self._pending_card
         self._set_pending(None)
         fix, self._fix_offer = self._fix_offer, ""
-        if fix and followup.agrees(text):
+        if fix and (followup.agrees(text) or
+                    diagnose.asks_to_fix(text, self.workspace.data_source_choices(), offered=True)):
             text = fix
         known = [row.variable for row in self.workspace.snapshot().rows] if self._reads_files else ()
         pasted = files.pasted(text, known) if self._reads_files else None
@@ -550,6 +592,10 @@ class AssistantController(QObject):
                 return
         search, self._searches = self._searches.get(text), {}
         planned, self._planned = self._planned.get(text), {}
+        help_at, self._help_offer = self._help_offer.get(text), {}
+        if help_at is not None:
+            self.workspace.open_help(help_at)
+            return
         if search:
             self._open_question = None
             self._show_search(search, text)
@@ -560,14 +606,36 @@ class AssistantController(QObject):
             return
         if followup.is_undo(text):
             self._open_question = None
+            if VIEW_WORDS.search(text) and not self._last_change_was_a_view():
+                # "Undo my last zoom" after a zoom with the mouse: the canvas's own undo, not the last card's.
+                self._plan_direct(commands.parse("view undo"), text)
+                return
             self._undo_last()
             return
         # Only right after it: "use sdnuda" later on is another request.
         last_search, self._last_search = self._last_search, None
+        if WHAT_CAN_YOU_DO.match(text):
+            self._open_question = None
+            self.panel.add_assistant_message(self.voice.capabilities())
+            self._suggest(examples(self.workspace.snapshot()))
+            self._record_turn(text, ["tell what it can do"], by="MINT")
+            return
         wanted = features.asked(text)
         if wanted is not None:
             self._open_question = None
             self._use_feature(wanted, text)
+            return
+        about = insight.asked(text)
+        if about:
+            self._open_question = None
+            self._tell_data(about, text)
+            return
+        # The model takes "what does the envelope column do?" for a request to plot envelopes.
+        said = self._from_manual(self.workspace.snapshot(), text) if manual.DEFINES.match(text) else None
+        if said:
+            self._open_question = None
+            self.panel.add_assistant_message(said[0].text)
+            self._record_turn(text, ["answer from the manual"], by="MINT")
             return
         source = self._other_source(text, last_search)
         if source:
@@ -578,6 +646,9 @@ class AssistantController(QObject):
         if diagnose.asks_about_state(text) and self._tell_problems():
             self._open_question = None
             self._record_turn(text, ["why are rows not drawn"], by="MINT")
+            return
+        if diagnose.asks_to_fix(text, self.workspace.data_source_choices()) and self._fix_sources(text):
+            self._open_question = None
             return
         # A reply to the last question: fills a number, names the signal "it" meant, or goes to the model
         # with the request it answers. Anything longer is a new request.
@@ -654,6 +725,35 @@ class AssistantController(QObject):
             said = voice.went_wrong()
         self.panel.add_assistant_message(said)
         self._record_turn(request, [f"{wanted.how} {wanted.feature}"], by="MINT")
+
+    def _tell_data(self, about, request: str):
+        """The numbers the question asks of the signals drawn: those it names, else those selected, else all."""
+        try:
+            snap = self.workspace.snapshot()
+            named = [row for row, _ in prompt.named(snap, request)]
+            selected = [snap.row(row_id) for row_id in snap.selected]
+            rows = named or (selected if selected and not insight.for_every_row(request) else []) or \
+                [row for row in snap.rows if row.plot]
+            planner = Planner(self.workspace, snap)
+            found, undrawn, unreadable = [], [], []
+            for row in rows:
+                summary = self.workspace.data_summary(row.uid)
+                if summary is not None:
+                    found.append((planner.name(row), summary))
+                else:
+                    (unreadable if self.workspace.unreadable(row.uid) else undrawn).append(planner.name(row))
+            if not found and not named and not unreadable:
+                said = self.voice.nothing_drawn()
+            else:
+                shown = found[:insight.MAX_ROWS]
+                said = self.voice.data_summary(shown, about, undrawn, more=len(found) - len(shown),
+                                               unreadable=unreadable)
+        except Exception:
+            logger.exception("Assistant could not read the data drawn")
+            said = self.voice.went_wrong()
+        self.panel.add_assistant_message(said)
+        self._record_turn(request, [f"tell {' '.join(about)}"], by="MINT")
+        self._suggest(["Open the statistics"])
 
     def _other_source(self, text: str, last_search) -> str:
         """Right after a search, "no, take sdnuda" or "use sdnuda instead": the data source to search again in."""
@@ -744,7 +844,7 @@ class AssistantController(QObject):
             shown = prompt.visible(snap)
             _, full = prompt.build(self.format, shown, text, self._few_shot)
             grammar = commands.build_grammar(*prompt.answer_ids(shown, text), recipes.load(),
-                                             *prompt.file_ids(shown, text))
+                                             *prompt.file_ids(shown, text), data_sources=prompt.source_ids(shown))
         except Exception:
             logger.exception("Assistant: could not prepare the request")
             self.panel.add_assistant_message(self.voice.could_not_work_out())
@@ -782,6 +882,16 @@ class AssistantController(QObject):
         between = None
         try:
             cmds = check.review(snap, request, commands.parse(text))
+            if all(cmd.verb == "say" for cmd in cmds):
+                cmds = self._from_manual(snap, request) or cmds
+            # A window of MINT opens at once: what it changes, the user confirms there.
+            for cmd in [c for c in cmds if c.verb == "open"]:
+                opened = self.workspace.open_window(cmd.words[0])
+                self.panel.add_assistant_message(self.voice.opened(cmd.words[0]) if opened else
+                                                 self.voice.not_openable(cmd.words[0]))
+            cmds = [c for c in cmds if c.verb != "open"]
+            if not cmds:
+                return
             rewritten = None if answering else check.selection_for_it(snap, request, cmds)
             if rewritten:
                 # "Derivative of this" with a row selected: no question, the model is asked about that row.
@@ -791,7 +901,8 @@ class AssistantController(QObject):
             proposal = planner.plan(cmds)
             rows, plots = prompt.answer_ids(snap, request)
             # Not after an answer: one question per request.
-            unsure = None if answering else doubt.doubtful(timings.get("ids"), set(rows) | set(plots))
+            unsure = None if answering else doubt.doubtful(timings.get("ids"), set(rows) | set(plots),
+                                                           check.alike(snap, request, cmds))
             if unsure and proposal.changes:
                 # It hesitated between two rows or plots: asking costs the user less than a wrong change.
                 logger.info(f"Assistant unsure between {unsure[0]} and {unsure[1]} in {text!r}")
@@ -824,6 +935,16 @@ class AssistantController(QObject):
             if codes:
                 self._searches = {f"Find {codes[0]}": [codes[0]]}
                 self._suggest(list(self._searches))
+
+    def _from_manual(self, snap, request: str):
+        """A question about MINT the model could only say something to, answered by the manual; None if it can't."""
+        names = [word for _, words in prompt.named(snap, request) for word in words]
+        found = manual.answer(request, ignore=names)
+        if found is None:
+            return None
+        self._help_offer = {self.voice.OPEN_HELP: found.anchor}
+        self._suggest([self.voice.OPEN_HELP])
+        return [commands.Command("say", text=self.voice.from_manual(manual.excerpt(found), found.section))]
 
     def _suggest(self, texts):
         """Suggestions shown in the conversation, not only before it starts."""
@@ -871,6 +992,14 @@ class AssistantController(QObject):
     def _apply_pending(self):
         if self._pending_card in self._cards:
             self.on_card_action(self._pending_card, APPLY, [])
+
+    def _last_change_was_a_view(self) -> bool:
+        """Whether the last card applied changed the view (a zoom, a pan, Home)."""
+        applied = [card for card, entry in self._cards.items() if entry.get("applied")]
+        if not applied:
+            return False
+        written = self._cards[max(applied)]["proposal"].commands
+        return bool(written) and all(c.split()[0] in ("zoom", "pan", "home") for c in written)
 
     def _undo_last(self):
         applied = [card for card, entry in self._cards.items() if entry.get("applied")]

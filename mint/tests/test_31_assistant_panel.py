@@ -552,7 +552,17 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertIn("uses the data source other", self.said[-1])
         cards = self.ask("yes", 'say "no model here"')
         self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["source r3 to csv"])
+        # A user's words: the change MINT found, at any time, whatever data source the model would take.
+        cards = self.ask("fix the data source of the signals", "source r3 to other")
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["source r3 to csv"])
         self.assertEqual(len(self.engine.prompts), calls, "none of it needs the model")
+
+    def test_undo_of_a_zoom_made_with_the_mouse_is_the_canvas_undo(self):
+        planned = []
+        self.ctl._plan_direct = lambda cmds, text: planned.append([str(c) for c in cmds])
+        self.ask("undo my last zoom", 'say "no model here"')
+        self.assertEqual(planned, [["view undo"]], "no card changed the view: the zoom was the mouse's")
+        self.assertEqual(self.engine.prompts, [])
 
     def test_closing_the_panel_frees_the_model(self):
         self.ctl.set_visible(True)
@@ -634,13 +644,12 @@ class AssistantFlowTest(unittest.TestCase):
         ws.open_statistics = lambda: opened.append("statistics") or True
         ws.open_search_vars = lambda: opened.append("search")
         self.ask("can you open the stats table?", 'say "no model here"')
-        self.ask("how many samples do we have per signal?", 'say "no model here"')
         self.assertEqual(self.said[-1], self.ctl.voice.statistics_opened())
         self.ask("can you open the search variables?", 'say "no model here"')
-        self.assertEqual(opened, ["statistics", "statistics", "search"])
+        self.assertEqual(opened, ["statistics", "search"])
         # Three plots in the table and none drawn: the mini-map can't show.
         self.ask("can you enable the mini-map", 'say "no model here"')
-        self.assertTrue(self.said[-1].startswith("The mini-map only works when a single plot is visible"),
+        self.assertTrue(self.said[-1].startswith("The mini-map only works when a single plot is shown"),
                         self.said[-1])
         self.assertFalse(self.win.toolBar.minimapAction.isChecked())
         self.ask("what is the mini-map?", 'say "no model here"')
@@ -649,6 +658,57 @@ class AssistantFlowTest(unittest.TestCase):
         del ws.open_statistics
         self.ask("the statistics", 'say "no model here"')
         self.assertEqual(self.said[-1], self.ctl.voice.statistics_nothing_drawn())
+
+    def test_questions_about_the_data_are_answered_with_its_numbers(self):
+        ws = self.ctl.workspace
+        self.ask("how many samples do we have per signal?", 'say "no model here"')
+        self.assertEqual(self.said[-1], self.ctl.voice.nothing_drawn())
+        at = 1754467198 * 10 ** 9
+        pirani = ws.snapshot().rows[0].uid
+        ws.data_summary = lambda uid: {"count": 120, "unit": "mbar", "last": (4.2e-3, at), "max": (5e-3, at),
+                                       "min": (1e-3, at), "first": (2e-3, at), "mean": 3e-3} if uid == pirani else None
+        self.ask("what's the last value of the pirani?", 'say "no model here"')
+        self.assertTrue(self.said[-1].startswith("pirani: last 0.0042 mbar at 07:59:58 UTC."), self.said[-1])
+        self.ask("can you tell me the last values for each of them?", 'say "no model here"')
+        self.assertIn("aren't drawn", self.said[-1])
+        ws.unreadable = lambda uid: uid != pirani
+        self.ask("can you tell me the last values for each of them?", 'say "no model here"')
+        self.assertIn("have nothing drawn: their data couldn't be read", self.said[-1], "Draw again wouldn't help")
+        self.assertEqual(self.engine.prompts, [], "MINT answers these itself")
+        self.assertEqual(self.ctl.panel._suggestions, ["Open the statistics"])
+
+    def test_what_it_can_do_is_shown_with_the_workspace_own_signals(self):
+        for text in ("what can you do?", "Hi! How can you help me?", "help"):
+            self.ask(text, 'say "no model here"')
+            self.assertEqual(self.said[-1], self.ctl.voice.capabilities(), text)
+        self.assertEqual(self.ctl.panel._suggestions, ["Smooth pirani over 30 s",
+                                                       "What's the last value of MT0001?",
+                                                       "Split the top plot, one plot each", "Show the last 6 hours"])
+        self.assertEqual(self.engine.prompts, [])
+        self.ask("help me smooth the pirani over 30 s", "process r1 moving_average window=30s")
+        self.assertEqual(len(self.engine.prompts), 1, "a request that asks for something goes to the model")
+
+    def test_a_question_about_mint_is_answered_from_the_manual(self):
+        opened = []
+        self.ctl.workspace.open_help = opened.append
+        # The model reads it as a request to plot envelopes: what a thing is, the manual says before it.
+        self.ask("what does the envelope column do?", "envelope all on")
+        self.assertTrue(self.said[-1].startswith("Envelope: Empty disables envelope."), self.said[-1])
+        self.assertTrue(self.said[-1].endswith("(Help, 2.4.2 Columns definition)"), self.said[-1])
+        self.assertEqual(self.engine.prompts, [])
+        self.ask(self.ctl.voice.OPEN_HELP, 'say "no model here"')
+        self.assertEqual(opened, ["table"])
+        self.ask("how do I add a ruler?", 'say "I can\'t help with that, sorry."')
+        self.assertTrue(self.said[-1].startswith("RULER: double-click to drop a ruler"), self.said[-1])
+        self.ask("what is shared time?", 'ask "Sure, which one: MT0001 or pirani?"')
+        self.assertTrue(self.said[-1].startswith("Shared time is the time axis common to all plots"), self.said[-1])
+        self.ask("what is relative mode?", 'say "It sets the time range up to now."')
+        self.assertEqual(self.said[-1], "It sets the time range up to now.", "no entry of the manual says what it is")
+        # What the model can do stays its answer.
+        cards = self.ask("smooth the pirani over 30 s, how?", "process r1 moving_average window=30s")
+        self.assertEqual(len(cards), 1)
+        self.ask("how are you?", 'say "Fine, thanks! What do you need?"')
+        self.assertEqual(self.said[-1], "Fine, thanks! What do you need?")
 
     def test_no_take_sdnuda_searches_the_same_again_there(self):
         ws, searched = self.ctl.workspace, []
@@ -749,7 +809,7 @@ class AssistantFlowTest(unittest.TestCase):
         self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])
         self.assertEqual(len(self.rows()), 5)
         calls = len(self.engine.prompts)
-        self.ask("deshaz eso", 'say "no model here"')
+        self.ask("undo that", 'say "no model here"')
         self.assertEqual(len(self.rows()), 4)
         self.assertTrue(self.said[-1].startswith("Undone"), self.said[-1])
         self.assertEqual(len(self.engine.prompts), calls)
@@ -806,7 +866,7 @@ class AssistantFlowTest(unittest.TestCase):
     def test_a_window_asked_again_is_answered_as_people_write(self):
         # A signal archived on change: a sample about every 12 s.
         self.ctl.workspace.sample_period_seconds = lambda row: 11.654
-        for reply in ("50s it's okey", "ok", "vale, 50 s"):
+        for reply in ("50s it's okey", "ok"):
             with self.subTest(reply=reply):
                 self.ask("smooth the pirani over 10 s", "process r1 moving_average seconds=10")
                 self.assertTrue(self.said[-1].endswith("For example 50 s."), self.said[-1])
