@@ -12,8 +12,12 @@ but the serialisation behaviour is testable headlessly.
 
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
-from PySide6.QtCore import QDateTime
+from PySide6.QtCore import QDate, QDateTime, QEvent, QPointF, Qt
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QAbstractItemView, QApplication
+from shiboken6 import isValid
 
 from iplotDataAccess.appDataAccess import AppDataAccess
 
@@ -23,6 +27,7 @@ from mint.models.accessModes.mtPulseId import MTPulseId
 from mint.models.accessModes.mtRelativeTime import MTRelativeTime
 from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
+from mint.tools.icon_loader import create_icon
 
 
 def _ensure_data_access() -> None:
@@ -80,6 +85,71 @@ class AbsoluteTimeTest(unittest.TestCase):
         props = mode.properties()
         self.assertEqual(props['ts_ns_start'], '000000000')
         self.assertEqual(props['ts_ns_end'], '000000000')
+
+
+class AbsoluteTimeCalendarTest(unittest.TestCase):
+    """The calendar next to From and To picks whole days, as booking sites do: a first day, then a last one."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def setUp(self):
+        self.mode = MTAbsoluteTime({})
+        self.mode.from_dict({'ts_start': '2026-11-10T08:15:30', 'ts_end': '2026-11-12T09:45:00'})
+        self.calendar = self.mode.pick_days()
+        self.addCleanup(lambda: isValid(self.calendar) and self.calendar.close())
+
+    def _times(self) -> tuple:
+        props = self.mode.properties()
+        return props['ts_start'], props['ts_ns_start'], props['ts_end'], props['ts_ns_end']
+
+    def test_it_opens_on_the_days_of_the_range(self):
+        self.assertEqual(self.calendar.calendar.selectedDate(), QDate(2026, 11, 10))
+        self.assertEqual(self.calendar.step.text(), "Click the first day")
+        self.assertEqual(self.calendar.summary.text(), "10 Nov → 12 Nov 2026 · 3 days")
+
+    def test_the_first_click_sets_that_day_and_asks_for_the_last(self):
+        self.calendar.calendar.clicked.emit(QDate(2026, 11, 3))
+        self.assertEqual(self._times(), ('2026-11-03T00:00:00', '000000000', '2026-11-03T23:59:59', '999999999'))
+        self.assertTrue(self.calendar.isVisible())
+        self.assertEqual(self.calendar.step.text(), "Now click the last day")
+        self.assertEqual(self.calendar.summary.text(), "3 Nov 2026 · 1 day")
+
+    def test_the_second_click_ends_the_range_before_or_after_the_first(self):
+        for second, expected in ((QDate(2026, 12, 2), ('2026-11-03T00:00:00', '2026-12-02T23:59:59')),
+                                 (QDate(2026, 10, 28), ('2026-10-28T00:00:00', '2026-11-03T23:59:59'))):
+            with self.subTest(second=second.toString(Qt.DateFormat.ISODate)):
+                self.calendar = self.mode.pick_days()
+                self.calendar.calendar.clicked.emit(QDate(2026, 11, 3))
+                self.calendar.calendar.clicked.emit(second)
+                times = self._times()
+                self.assertEqual((times[0], times[2]), expected)
+                self.assertEqual((times[1], times[3]), ('000000000', '999999999'))
+                self.assertFalse(isValid(self.calendar) and self.calendar.isVisible())
+
+    def test_the_range_follows_the_mouse_after_the_first_click(self):
+        self.calendar.calendar.clicked.emit(QDate(2026, 11, 3))
+        view = self.calendar.calendar.findChild(QAbstractItemView)
+        model = view.model()
+        cell = next(model.index(row, column) for row in range(model.rowCount() - 1, 0, -1)
+                    for column in range(model.columnCount()) if str(model.index(row, column).data()) == '18')
+        at = QPointF(view.visualRect(cell).center())
+        QApplication.sendEvent(view.viewport(), QMouseEvent(QEvent.Type.MouseMove, at, view.viewport().mapToGlobal(at),
+                                                            Qt.MouseButton.NoButton, Qt.MouseButton.NoButton,
+                                                            Qt.KeyboardModifier.NoModifier))
+        self.assertEqual(self.calendar.summary.text(), "3 Nov → 18 Nov 2026 · 16 days")
+        self.assertEqual(self._times()[2], '2026-11-03T23:59:59')  # the fields wait for the click
+
+    def test_the_icon_takes_the_grey_of_a_dark_palette(self):
+        icon_grey = {}
+        for name, colors in (('light', None), ('dark', {'icon': '#ffffff'})):
+            with mock.patch('mint.tools.icon_loader.theme_colors', return_value=colors):
+                image = create_icon('calendar', 'svg').pixmap(48, 48).toImage()
+            icon_grey[name] = max((image.pixelColor(x, y) for x in range(48) for y in range(48)),
+                                  key=lambda colour: colour.alpha()).name()
+        self.assertEqual(icon_grey, {'light': '#3b3b3b', 'dark': '#ffffff'})
 
 
 class AbsoluteTimeFillFromPulseTest(unittest.TestCase):
