@@ -275,6 +275,8 @@ NumPy is available via the `np.` prefix. The X/Y columns can also be used to plo
 
 In the *x*, *y* and *z* columns, `${self}` is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. `${Bus1}.data - ${self}.data`.
 
+Expressions can also use `${startTime}` and `${endTime}`, the start and end of the row's time range (its own, or the one of the time configuration), and `${pulseID}`, its pulse. They are in the units of the time vectors and do not change with a zoom: `(${self}.time-${startTime})/1e9` keeps its origin, where `${self}.time[0]` is the first time read, which a zoom moves.
+
 <p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 ### 2.10 Data Sources {#data-sources}
@@ -407,7 +409,7 @@ Raised when MINT asks a data source for a signal and either cannot reach the ser
 
 #### Processing {#cat-processing}
 
-Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
+Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
 
 #### Export {#cat-export}
 

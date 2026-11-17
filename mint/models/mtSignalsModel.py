@@ -484,8 +484,10 @@ class MTSignalsModel(QAbstractItemModel):
                     # If variable is not valid we have two cases:
                     #   1) Incorrect name
                     #   2) No data in that interval
+                    # An x, y or z expression that can't be evaluated marks its own cell instead.
                     index = self._table.index[self._table['uid'] == signal.uid].tolist()
-                    self._table_fails.loc[index, 'Variable'] = 1
+                    column = getattr(signal.status_info, 'expression', '') or 'Variable'
+                    self._table_fails.loc[index, column] = 1
 
             self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
