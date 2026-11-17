@@ -36,6 +36,7 @@ from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Re
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
+from mint.app.dirs import WORKSPACES_FOLDER_KEY, remember_folder, remembered_folder
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtAppearance import MTAppearanceMenu, register_scale_listener
@@ -297,7 +298,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                                  data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
-        self._data_dir = os.path.join(data_dir, 'workspaces')
+        self._data_dir = remembered_folder(WORKSPACES_FOLDER_KEY, os.path.join(data_dir, 'workspaces'))
         self._data_export_dir = os.path.join(data_dir, 'data_signals')
         self._progressBar = QProgressBar()
         self._statusBar = MTStatusBar()
@@ -858,7 +859,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             else:
                 file_name = file[0]
             self.export_json(file_name)
-            self._data_dir = os.path.dirname(file_name)
+            self._picked_workspace(file_name)
+
+    def _picked_workspace(self, file_name: str):
+        """The next dialogs of a workspace, in this session and the next ones, open in the folder of `file_name`."""
+        self._data_dir = os.path.dirname(file_name)
+        remember_folder(WORKSPACES_FOLDER_KEY, self._data_dir)
 
     def on_export_data(self):
         directory = self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -880,7 +886,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             # into the new canvas.
             if self.streamerCfgWidget.is_activated():
                 self.streamerCfgWidget.stop()
-            self._data_dir = os.path.dirname(file[0])
+            self._picked_workspace(file[0])
             self.import_json(file[0])
 
     def on_minimap_toggled(self, checked: bool):
@@ -1251,9 +1257,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         if _left_out(signal_valid):
             return
 
-        plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-        if not plot:
+        # A workspace saved before a Draw has no plot at the place of its rows.
+        place = self._imported_place(waypt)
+        if place is None:
             return
+        plot = self.canvas.plots[place[0] - 1][place[1] - 1]  # type: Plot
         plot.parent = weakref.ref(self.canvas)
         # Stored positions can exceed the built canvas when sibling
         # signals failed to load; skip them instead of aborting the import.

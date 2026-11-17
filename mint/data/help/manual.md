@@ -110,7 +110,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 #### 2.4.1 Icons and buttons
 
-The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
+The toolbar above the variable table provides import / save / append actions, which open where the last signal set was opened or saved, in the next sessions too, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
 
 In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file). Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).
 
@@ -157,7 +157,7 @@ Draw and workspace import lay the plots out at once, each saying how many of its
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 
-Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON files.
+Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON files. Both open where the last workspace was imported or exported, in the next sessions too. A workspace exported before *Draw* imports its table, to draw.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
