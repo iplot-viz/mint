@@ -154,7 +154,7 @@ Data is read in the background, so the window keeps responding. After *Draw* or 
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 
-A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. Use *File > Import Workspace* or *File > Export Workspace*.
+A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use *File > Export Workspace*; to open one, *File > Import Workspace*.
 
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
@@ -225,6 +225,8 @@ Opens behind the canvas when you activate the RULER tool; click the RULER button
 #### Canvas-level preferences
 
 Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), vertical lines (none, solid, dotted or dashed: a line in the signal colour and size through each point while a signal shows 50 points or fewer, as after a zoom), focus all plots on stack.
+
+*Shared time* is the time axis common to all plots: a zoom or a pan on one moves them all, and a ruler appears on each. With it off, each plot keeps its own time range.
 
 Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.
 
@@ -325,18 +327,26 @@ See also: [Reference - Supported data source types](#datasource-types) for the l
 
 ### 2.11 Assistant {#assistant}
 
-Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
+Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
 
 - *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
-- *put the second plot in log scale*, *no grid anywhere*.
+- *put the second plot in log scale*, *no grid anywhere*, *markers on the second plot*.
+- *split each plot, one plot per signal*: each signal goes in a plot of its own, right below; *merge the first two plots*: the plots below move up into the space left.
+- *plot the envelope of FAST-TC3*, *use sdnuda for these*.
 - *outlet minus inlet*: a new signal in a new plot.
 - *add the TF07 current*: lists the matching variables to tick and add.
 - *two signals from EC in sdnuda*: lists the variables of that data source that start with EC. Right after a search, *no, in sdnuda* looks there instead.
-- *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*.
+- *last 6 hours*, *yesterday*, *pulse ITER:MCTB_PSS-TF07_FD/12*; in a pulse, *set the start time to 10 s and the end to 30 s*.
+- *zoom between 40 and 60 s* (from the start of the pulse, or of what is drawn), *zoom on 07:20 to 07:30*, *zoom on the last 10 minutes* (of what is drawn), *move the view 10 minutes back*, *reset the zoom*, *undo my last zoom*: as ZOOM, PAN and Home do in the canvas toolbar. *Keep this zoom as the time range* reads it again.
+- *show only the bottom plot*, *all plots again*; *put a ruler at 07:30*, *a ruler on the peak of MP0111*, *remove the rulers*; *turn on the crosshair*; *detach the canvas*.
+- *make MP0111 red and thicker*, *dashed lines on the top plot*, *legend at the upper left*, *y axis from 0 to 100*, *unlink the time axes*, *dark mode*: what the preferences and *View > Appearance* set.
+- *shift MP0111 by 10 s*, *compare MP0111 with itself one hour earlier*: as the Shift of the DIST window.
+- *export the data*, *save a picture of the plots*, *save the workspace*: opens the window where you finish it.
 - *the same for MP0071*: repeats the last change on another signal.
 - *why are these red?*: says why rows aren't drawn, and offers to change a data source that isn't available here.
-- *disable FAST-TC0*: hides it from the plot, as a click on its legend entry does.
-- *open the statistics*, *how many samples?*, *show the mini-map*, *open Search Vars*: opens them, or says what they are.
+- *disable FAST-TC0*, *show it again*: hides it from the plot as a click on its legend entry does, and back.
+- *what is the last value of MP0111?*, *how many samples per signal?*: the numbers of the data drawn.
+- *open the statistics*, *show the mini-map*, *open Search Vars*: opens them, or says what they are; *how do I add a ruler?* is answered from this manual.
 - With a file attached: *add the pressures from the report*, *over the dates in the file*.
 
 Each answer comes as a card: nothing changes until **Apply** (or Enter with nothing typed, or *ok*), and **Undo** (or typing *undo*) puts it back; *no* dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (*12 s*) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (*.scsv*) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (*MT0021-XI*) are looked up in the data source, and a list of names in a message, one per line or in a line, is read like a file. *Formula* on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks; *both* or *the 3 of them* takes them all. The processing goes in the *x* or *y* column like any other expression, so the workspace opens the same without the assistant.

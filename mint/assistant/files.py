@@ -93,7 +93,7 @@ def find(lines: Iterable[str]) -> Found:
 
 
 # A run of names in a line ("A, B and C"), and the words before it that already say what they are.
-NAME_RUN = re.compile(r"\x00(?:[\s,;&]*(?:and|y|et|und|e|or)?[\s,;&]*\x00)*")
+NAME_RUN = re.compile(r"\x00(?:[\s,;&]*(?:and|or)?[\s,;&]*\x00)*")
 SAID_BEFORE = re.compile(r"\b(?:variables?|signals?|names?|these|those|following|vars)\s*:?\s*$", re.IGNORECASE)
 
 

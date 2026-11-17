@@ -6,17 +6,17 @@ from typing import Dict, List, Optional, Tuple
 
 from mint.assistant.snapshot import RowInfo, Snapshot
 
-# A question about the table's state: "why are they red?", "¿qué falla?", "pourquoi en rouge ?"...
+# A question about the table's state: "why are they red?", "what is wrong?"...
 ABOUT_STATE = re.compile(
     r"\b(?:red|wrong|errors?|fail\w*|broken|problems?|issues?|not (?:work\w*|drawn|shown)|doesn'?t work|nothing|"
-    r"empty|blank|roj[oa]s?|errores|fall[ao]n?|problemas?|no funciona\w*|no (?:se )?(?:ve|dibuja)\w*|nada|vac[ií][oa]|"
-    r"rouges?|erreurs?|marche pas|rien|vide|"
-    r"rot|fehler\w*|funktioniert nicht|nichts|leer|"
-    r"ross[oaie]|errori|non funziona|niente|nulla|vuot[oa]|"
-    r"vermelh[oa]s?|erros?|não funciona|nao funciona|vazi[oa])\b", re.IGNORECASE)
-ASKING = re.compile(r"\?|^\s*(?:why|what|how come|por ?qu[eé]|qu[eé]|pourquoi|qu'est|warum|was|perch[eé]|cosa|"
-                    r"por que|o que)\b", re.IGNORECASE)
+    r"empty|blank)\b", re.IGNORECASE)
+ASKING = re.compile(r"\?|^\s*(?:why|what|how come)\b", re.IGNORECASE)
 INVALID = "Invalid|"
+# A request to put the data sources right: "fix the data source of the signals"...
+FIXING = re.compile(r"\b(?:fix|correct|repair|solve|sort out|change|update|switch|replace)\b", re.IGNORECASE)
+SOURCE_WORDS = re.compile(r"\b(?:data ?sources?|sources?|ds)\b", re.IGNORECASE)
+THEM = re.compile(r"^\s*(?:please\s+)?(?:fix|correct|change|repair)\w*\s+(?:it|them|that|those|these|this)\b",
+                  re.IGNORECASE)
 
 
 @dataclass
@@ -43,6 +43,15 @@ def find(snap: Snapshot, sources) -> Problems:
 def asks_about_state(text: str) -> bool:
     """A question about what is wrong, red or not drawn, rather than a request to change something."""
     return bool(ABOUT_STATE.search(text or "")) and bool(ASKING.search(text or ""))
+
+
+def asks_to_fix(text: str, sources, offered: bool = False) -> bool:
+    """A request to fix the data sources that names none of them: the change MINT found is the one meant. Right
+    after MINT offered it, "fix them" says the same."""
+    text = text or ""
+    if any(re.search(rf"(?<![\w-]){re.escape(source)}(?![\w-])", text, re.IGNORECASE) for source in sources):
+        return False
+    return bool(FIXING.search(text) and SOURCE_WORDS.search(text)) or (offered and bool(THEM.search(text)))
 
 
 def replacement(name: str, sources) -> Optional[str]:

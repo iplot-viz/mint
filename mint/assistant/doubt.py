@@ -67,10 +67,11 @@ class TokenWatch:
         return found
 
 
-def doubtful(ids: List[dict], valid: set) -> Optional[Tuple[str, str]]:
-    """The first id the model hesitated on, and the valid id it hesitated with, if any."""
+def doubtful(ids: List[dict], valid: set, alike: set = frozenset()) -> Optional[Tuple[str, str]]:
+    """The first id the model hesitated on, and the valid id it hesitated with, if any; not two of alike."""
     for entry in ids or []:
-        alts: Dict[str, float] = {a: p for a, p in entry.get("alts", {}).items() if a in valid and a != entry["id"]}
+        alts: Dict[str, float] = {a: p for a, p in entry.get("alts", {}).items() if a in valid and a != entry["id"]
+                                  and not (a in alike and entry["id"] in alike)}
         if entry["id"] in valid and entry["p"] < SURE and alts:
             alt, p = max(alts.items(), key=lambda item: item[1])
             if p >= ALTERNATIVE:

@@ -1,4 +1,5 @@
 """Fixed sentences around the cards: on a CPU every word the model writes costs time."""
+from datetime import datetime, timezone
 
 # A card is a proposal, not something done: the openers say so.
 OPENERS = ("Here's what I'd do.", "Got it. Here's the change.", "Okay, how does this look?", "This should do it.")
@@ -9,6 +10,26 @@ DONE = ("Done.", "There you go.", "All set.")
 def _listed(names) -> str:
     names = list(names)
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
+def _number(value: float) -> str:
+    return f"{value:.4g}" if abs(value) < 1e6 else f"{value:.4e}"
+
+
+def _is_date(x: float) -> bool:
+    # Dates are ns since the epoch; a pulse or a relative axis counts seconds from its start.
+    return abs(x) > 1e12
+
+
+def _day(x: float):
+    return datetime.fromtimestamp(x / 1e9, timezone.utc).date() if _is_date(x) else None
+
+
+def _moment(x: float, with_day: bool) -> str:
+    if not _is_date(x):
+        return f"{_number(x)} s"
+    moment = datetime.fromtimestamp(x / 1e9, timezone.utc)
+    return f"{moment:%d %b %H:%M:%S} UTC" if with_day else f"{moment:%H:%M:%S} UTC"
 
 
 class Voice:
@@ -102,6 +123,77 @@ class Voice:
         return f"Change {old} to {new}"
 
     @staticmethod
+    def data_summary(found, asked, undrawn=(), more: int = 0, unreadable=()) -> str:
+        """What the data drawn says: one line per signal with what was asked (see insight); ``found`` is
+        [(name, summary)], ``undrawn`` the names of those not drawn, ``unreadable`` of those whose data couldn't
+        be read."""
+        lines = []
+        days = {_day(s[what][1]) for _, s in found for what in ("first", "last", "max", "min") if s.get(what)}
+        for name, s in found:
+            if not s.get("count"):
+                lines.append(f"{name}: no sample with a value in what is drawn.")
+                continue
+            unit = f" {s['unit']}" if s.get("unit") else ""
+            parts = []
+            for what in asked:
+                if what == "count":
+                    parts.append(f"{s['count']} samples")
+                elif what == "mean":
+                    parts.append(f"mean {_number(s['mean'])}{unit}")
+                else:
+                    value, x = s[what]
+                    parts.append(f"{what} {_number(value)}{unit} at {_moment(x, len(days) > 1)}")
+            lines.append(f"{name}: " + ", ".join(parts) + ".")
+        if unreadable:
+            one = len(unreadable) == 1
+            lines.append(f"{_listed(unreadable)} {'has' if one else 'have'} nothing drawn: "
+                         f"{'its' if one else 'their'} data couldn't be read, as the Status says.")
+        if undrawn:
+            lines.append(f"{_listed(undrawn)} {'isn' if len(undrawn) == 1 else 'aren'}'t drawn: click Draw first.")
+        if more:
+            lines.append(f"…and {more} more: Statistics has them all.")
+        if found:
+            lines.append("That's over the time drawn; Statistics, the bar chart button above the plots, has the rest.")
+        return "\n".join(lines)
+
+    OPEN_HELP = "Open the help there"
+
+    @staticmethod
+    def opened(name: str) -> str:
+        return {
+            "export": "I've opened Export: choose the file there (Parquet or HDF5), the time and the sampling, then "
+                      "click Export. Only signals with a Stack are exported.",
+            "image": "Choose where to save the image of the canvas: PNG, SVG or JPEG, by its extension.",
+            "csv": "Choose where to save the points drawn of each signal, as a CSV file.",
+            "save_workspace": "Choose where to save the workspace: the table, the time range and the plots, to open "
+                              "it again or share it.",
+            "open_workspace": "Choose the workspace to open; it replaces the table and the plots.",
+            "preferences": "Here are the preferences of the canvas, its plots and signals; Apply sets them.",
+            "rulers": "Here is the Rulers window: each ruler, its values on every signal it crosses, and the "
+                      "distance between them.",
+        }.get(name, "Opened.")
+
+    @staticmethod
+    def not_openable(name: str) -> str:
+        return "There are no rulers to show yet: the RULER tool puts one with a double-click, or ask me." \
+            if name == "rulers" else "I couldn't open that now."
+
+    @staticmethod
+    def capabilities() -> str:
+        return ("I work on this workspace with you: I smooth or filter signals and combine them, change the plots, "
+                "their look and how they are laid out, zoom, pan and put rulers, add variables, set the time range, "
+                "open MINT's windows, and tell you what the data drawn says or how MINT works. Each change comes as "
+                "a card you apply or undo. For example:")
+
+    @staticmethod
+    def from_manual(text: str, section: str) -> str:
+        return f"{text} (Help, {section.split(' › ')[-1]})"
+
+    @staticmethod
+    def nothing_drawn() -> str:
+        return "Nothing is drawn yet, so I have no values to tell. Click Draw, then ask me again."
+
+    @staticmethod
     def statistics_opened() -> str:
         return ("Here are the statistics of each signal drawn: minimum, average and maximum, first and last values "
                 "with their times, and samples. The bar chart button above the plots opens them too.")
@@ -117,7 +209,7 @@ class Voice:
         if was is None:
             if streaming:
                 return "The mini-map doesn't work while streaming. Click Stop first, then ask me again."
-            return (f"The mini-map only works when a single plot is visible, on its own or in focus mode, and there "
+            return (f"The mini-map only works when a single plot is shown, alone or in full screen, and there "
                     f"are {plots} now.")
         if was:
             return "The mini-map is already on, under the plot." if on else "The mini-map is already off."

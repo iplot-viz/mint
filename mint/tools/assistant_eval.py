@@ -27,10 +27,15 @@ def _known(cls, values: dict) -> dict:
 
 def snapshot_from_dict(d: dict) -> Snapshot:
     rows = [RowInfo(**_known(RowInfo, r)) for r in d.get("rows", [])]
+    for row in rows:
+        row.hidden = row.hidden or row.id in d.get("hidden", ())
     plots = [PlotInfo(**_known(PlotInfo, p)) for p in d.get("plots", [])]
+    # MINT always lists the data sources it has; a workspace saved without them has those its rows use.
+    sources = d.get("data_sources") or sorted({row.data_source for row in rows if row.data_source})
     snap = Snapshot(rows=rows, plots=plots, selected=d.get("selected", []), range_text=d.get("range_text", ""),
-                    range_seconds=d.get("range_seconds"), pulse_mode=d.get("pulse_mode", False),
-                    last_action=d.get("last_action", ""))
+                    range_seconds=d.get("range_seconds"),
+                    pulse_mode=bool(d.get("pulse_mode")) or d.get("range_text", "").startswith("pulse "),
+                    last_action=d.get("last_action", ""), data_sources=list(sources), canvas=d.get("canvas", ""))
     if d.get("now"):
         snap.now = datetime.fromisoformat(d["now"])
     attached = d.get("file")
@@ -141,7 +146,8 @@ def main(argv=None):
 
         row_ids, plot_ids = prompt.answer_ids(snap, case["request"])
         grammar = LlamaGrammar.from_string(commands.build_grammar(row_ids, plot_ids, recipes.load(),
-                                                                  *prompt.file_ids(snap, case["request"])),
+                                                                  *prompt.file_ids(snap, case["request"]),
+                                                                  data_sources=prompt.source_ids(snap)),
                                            verbose=False)
         t0 = time.perf_counter()
         watch = doubt.TokenWatch()
@@ -159,20 +165,25 @@ def main(argv=None):
             _, full = prompt.build(fmt, snap, again, few)
             watch = doubt.TokenWatch()
             grammar = LlamaGrammar.from_string(commands.build_grammar(*prompt.answer_ids(snap, again), recipes.load(),
-                                                                      *prompt.file_ids(snap, again)), verbose=False)
+                                                                      *prompt.file_ids(snap, again),
+                                                                      data_sources=prompt.source_ids(snap)),
+                                               verbose=False)
             out = llm.create_completion(full, max_tokens=160, temperature=0.0, top_k=1, repeat_penalty=1.0,
                                         grammar=grammar, logits_processor=LogitsProcessorList([watch]))
             text = out["choices"][0]["text"]
             request_s[-1] = time.perf_counter() - t0
+        reviewed = []
         try:
-            got = normalize(check.review(snap, case["request"], commands.parse(text)), snap.now, snap.range_seconds)
+            reviewed = check.review(snap, case["request"], commands.parse(text))
+            got = normalize(reviewed, snap.now, snap.range_seconds)
         except commands.CommandError as e:
             got = ("unparsable", str(e))
         expected = [normalize(commands.parse(e), snap.now, snap.range_seconds) for e in case["expect"]]
         hit = got in expected
         # As MINT does: a proposal naming a row or plot the model hesitated on becomes a question.
         unsure = got[:1] != (("ask",),) and doubt.doubtful(
-            watch.ids(lambda t: llm.detokenize([t]).decode("utf-8", "ignore")), set(row_ids) | set(plot_ids))
+            watch.ids(lambda t: llm.detokenize([t]).decode("utf-8", "ignore")), set(row_ids) | set(plot_ids),
+            check.alike(snap, case["request"], reviewed))
         asked[(bool(unsure), hit)] = asked.get((bool(unsure), hit), 0) + 1
         verb = commands.parse(case["expect"][0])[0].verb
         stats = by_verb.setdefault(verb, [0, 0])

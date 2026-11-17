@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 import numpy as np
-from PySide6.QtCore import QModelIndex, Qt
+from PySide6.QtCore import QModelIndex, QSettings, Qt
 
 from iplotlib.interface.iplotSignalAdapter import Result, Stage, StatusInfo
 from iplotLogging import setupLogger
@@ -23,6 +23,7 @@ DRAWN, EMPTY, NOT_COMPUTED = "drawn", "empty", "not computed"
 # What the archive says about a variable's last sample (see MintWorkspace.latest_sample).
 FOUND, NONE_BEFORE, UNKNOWN_VARIABLE, UNTOLD = "found", "none before", "unknown variable", "untold"
 MAX_SEARCH_RESULTS = 40
+PULSE_UNIT_WORDS = {1: "s", 60: "min", 3600: "h", 86400: "days"}
 # Written like a code: "EC", "CRYO", "D1", "System1". The variable tree groups names by what comes
 # before their first separator.
 GROUP = re.compile(r"[A-Z][A-Z0-9]{1,7}|[A-Z][a-z]+[0-9]+")
@@ -52,6 +53,13 @@ def _as_typed(word: str, request: str) -> str:
     # The model may change the case; the request has it as the user wrote it.
     match = re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", request, re.IGNORECASE) if request else None
     return match.group(0) if match else word
+
+
+def _as_number(value) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _named_source(words, request: str, sources) -> Optional[str]:
@@ -103,8 +111,31 @@ class MintWorkspace:
     def snapshot(self, last_action: str = "") -> snapshot.Snapshot:
         self.ensure_uids()
         text, seconds, pulse_mode = self.range_summary()
-        return snapshot.build(self.table(), self.selected_indices(), canvas=self.window.canvas, range_text=text,
-                              range_seconds=seconds, pulse_mode=pulse_mode, last_action=last_action)
+        snap = snapshot.build(self.table(), self.selected_indices(), canvas=self.window.canvas, range_text=text,
+                              range_seconds=seconds, pulse_mode=pulse_mode, last_action=last_action,
+                              data_sources=self.data_source_choices())
+        snap.canvas = self.canvas_state(snap)
+        return snap
+
+    def canvas_state(self, snap) -> str:
+        """The canvas as the model must know it to undo it: a plot shown alone, rulers, a tool, its own window."""
+        parts = []
+        try:
+            focused = self.focused()
+            plot = next((p for p in snap.plots if (p.row, p.col) == focused), None) if focused else None
+            if plot is not None:
+                parts.append(f"{plot.id} shown alone")
+            names = sorted({r["name"] for r in self.rulers()})
+            if names:
+                parts.append(f"ruler{'s' if len(names) > 1 else ''} " + ", ".join(names))
+            mode = self.mouse_mode()
+            if mode and mode != "MM_SELECT":
+                parts.append(f"{mode[3:].lower()} tool on")
+            if self.detached():
+                parts.append("in a window of its own")
+        except Exception as e:  # a canvas being rebuilt: the plots alone are enough
+            logger.debug(f"Assistant: no canvas state: {e}")
+        return ", ".join(parts)
 
     def ensure_uids(self):
         """Give a uid to rows that have none or share one.
@@ -154,7 +185,12 @@ class MintWorkspace:
                 seconds = (float(current.get("t_end")) - float(current.get("t_start"))) * float(current.get("base") or 1)
             except (TypeError, ValueError):
                 pass
-            return f"pulse {pulses}", seconds if seconds and seconds > 0 else None, True
+            # Its times count from the start of the pulse: "40 to 60 s" is a part of it, not a time of day.
+            start, end = str(current.get("t_start") or "").strip(), str(current.get("t_end") or "").strip()
+            unit = PULSE_UNIT_WORDS.get(_as_number(current.get("base")) or 1, "s")
+            times = f", {start or 'start'} to {end or 'end'} {unit} from its start" if start or end else \
+                ", times in s from its start"
+            return f"pulse {pulses}{times}", seconds if seconds and seconds > 0 else None, True
         try:
             start, end = selector.get_time_range()
             start_s, end_s = int(start) / 1e9, int(end) / 1e9
@@ -269,6 +305,9 @@ class MintWorkspace:
             logger.debug(f"Assistant: can't tell how {uid} came out: {e}")
             return None
         return DRAWN if drawable.any() else EMPTY
+
+    def unreadable(self, uid: str) -> bool:
+        return self.drawn_outcome(uid) == NOT_COMPUTED
 
     def _failed_off_canvas(self, uid: str) -> Optional[str]:
         """NOT_COMPUTED when the row's Status says reading or computing it failed: MINT leaves those signals off
@@ -431,6 +470,42 @@ class MintWorkspace:
     def open_search_vars(self):
         self.window.sigCfgWidget.on_tree_view()
 
+    def open_help(self, anchor: str):
+        """The manual, at a section."""
+        self.window._open_manual(anchor=anchor)
+
+    def data_summary(self, uid: str) -> Optional[dict]:
+        """The samples drawn for a row: how many, the first and last, the extremes and the mean, with the x of each.
+
+        None when it isn't drawn. An envelope gives its min, max and average curves, as Statistics reads them.
+        """
+        signal = self._drawn_signal(uid)
+        if signal is None:
+            return None
+        try:
+            x = np.asarray(signal.x_data, dtype=float).ravel()
+            store = getattr(signal, "data_store", None) or []
+            if len(store) > 3 and np.asarray(store[2]).size and np.asarray(store[3]).size:
+                low, high, mean = (np.asarray(store[i], dtype=float).ravel() for i in (1, 2, 3))
+            else:
+                low = high = mean = np.asarray(signal.y_data, dtype=float).ravel()
+            n = min(x.size, low.size, high.size, mean.size)
+            x, low, high, mean = x[:n], low[:n], high[:n], mean[:n]
+            shown = np.isfinite(mean) & np.isfinite(x)
+        except (TypeError, ValueError) as e:
+            logger.debug(f"Assistant: no summary of {uid}: {e}")
+            return None
+        unit = str(getattr(signal.y_data, "unit", "") or "")
+        if not shown.any():
+            return {"count": 0, "unit": unit}
+        where = np.flatnonzero(shown)
+        first, last = where[0], where[-1]
+        top = where[np.nanargmax(high[where])]
+        bottom = where[np.nanargmin(low[where])]
+        return {"count": int(where.size), "unit": unit, "first": (float(mean[first]), float(x[first])),
+                "last": (float(mean[last]), float(x[last])), "max": (float(high[top]), float(x[top])),
+                "min": (float(low[bottom]), float(x[bottom])), "mean": float(np.nanmean(mean[where]))}
+
     def is_hidden(self, uid: str) -> Optional[bool]:
         """Whether the drawn signal of a row is hidden from its legend; None when it isn't drawn."""
         signal = self._drawn_signal(uid)
@@ -445,6 +520,235 @@ class MintWorkspace:
 
     def refresh_plots(self):
         self.window.update_canvas_preferences()
+
+    # The canvas, as its toolbar and its plots' menus work it: the same calls, so its undo history, the plots
+    # sharing its time and the data read for a new view follow as they do for the mouse.
+
+    def _canvas_widget(self):
+        return self.window.canvasStack.currentWidget()
+
+    def _impl(self, row: int, col: int):
+        plot = self.canvas_plot(row, col)
+        impl = self._canvas_widget()._get_impl_plot_for_plot(plot) if plot is not None else None
+        if impl is None:
+            raise ActionError("That plot isn't on the canvas now.")
+        return plot, impl
+
+    def x_is_date(self, row: int, col: int) -> Optional[bool]:
+        """Whether a plot's x is dates (ns since the epoch) or seconds from the start of a pulse; None if not drawn."""
+        plot = self.canvas_plot(row, col)
+        try:
+            return bool(plot.axes[0].is_date)
+        except (AttributeError, IndexError, TypeError):
+            return None
+
+    def view(self, row: int, col: int) -> Optional[Tuple[float, float]]:
+        """The x interval a plot shows: ns since the epoch, or s from the start of a pulse."""
+        try:
+            plot, impl = self._impl(row, col)
+            begin, end = self._canvas_widget()._parser.get_oaw_axis_limits(impl, 0)
+            return float(begin), float(end)
+        except (ActionError, TypeError, ValueError):
+            return None
+
+    def set_view(self, row: int, col: int, begin: float, end: float, name: str = "Zoom"):
+        """Shows [begin, end] of x as the zoom tool does: one step of the canvas's undo, the plots sharing its time
+        follow, and the data of that interval is read."""
+        widget = self._canvas_widget()
+        _, impl = self._impl(row, col)
+        widget.stage_view_lim_cmd(impl, name=name)
+        widget._parser.set_oaw_axis_limits(impl, 0, (begin, end))
+        while widget._staging_cmds:
+            widget.commit_view_lim_cmd(impl)
+        while widget._commitd_cmds:
+            widget.push_view_lim_cmd()
+        widget._flush_view()
+        widget.stats(self.window.canvas)
+        sync = getattr(widget, "_sync_minimap_viewport", None)
+        if sync is not None:
+            sync()
+
+    def home(self):
+        self.window.home()
+
+    def view_history(self, redo: bool) -> bool:
+        """The canvas's own undo or redo of its views (zoom, pan, Home); False when there is none."""
+        widget = self._canvas_widget()
+        if not (widget.can_redo() if redo else widget.can_undo()):
+            return False
+        (self.window.redo if redo else self.window.undo)()
+        return True
+
+    def focused(self) -> Optional[Tuple[int, int]]:
+        """The plot shown alone on the canvas, as (row, col); None when all are."""
+        plot = getattr(self._canvas_widget()._parser, "_focus_plot", None)
+        return (plot.row, plot.col) if plot is not None else None
+
+    def focus(self, row: Optional[int], col: Optional[int] = None):
+        """One plot alone on the canvas, as "Focus on plot" does; None shows them all again."""
+        widget = self._canvas_widget()
+        if row is None:
+            widget._full_screen_mode_off()
+            return
+        _, impl = self._impl(row, col)
+        widget._full_screen_mode_on(impl)
+
+    def rulers(self) -> List[dict]:
+        """The rulers on the canvas: their name, plot (row, col), x and y as the data has them, and colour."""
+        out = []
+        for row_plots in self.window.canvas.plots or []:
+            for plot in row_plots or []:
+                for ruler in getattr(plot, "rulers", None) or []:
+                    x, y = (list(ruler.xy) + [None, None])[:2]
+                    out.append({"name": ruler.name, "plot": (plot.row, plot.col), "x": x, "y": y,
+                                "color": ruler.color})
+        return out
+
+    def add_ruler(self, row: int, col: int, x: float, y: Optional[float] = None, name: str = None,
+                  color: str = None) -> str:
+        """A ruler at x (as the data has it), as a double-click in RULER mode drops one: named by the Rulers
+        window, on every plot sharing the time axis. Returns its name."""
+        widget = self._canvas_widget()
+        plot, impl = self._impl(row, col)
+        parser = widget._parser
+        if y is None:
+            low, high = parser.get_oaw_axis_limits(impl, 1)
+            y = (float(low) + float(high)) / 2
+        before = {r["name"] for r in self.rulers()}
+        widget._add_ruler_at(impl, plot, parser.transform_value(impl, 0, x, inverse=True),
+                             parser.transform_value(impl, 1, y, inverse=True), name=name, color=color)
+        render = getattr(widget, "render", None)
+        if render is not None:
+            render()
+        added = [r["name"] for r in self.rulers() if r["name"] not in before]
+        return added[0] if added else (name or "")
+
+    def remove_ruler(self, name: str, plot: Tuple[int, int]):
+        self._canvas_widget()._remove_ruler_from_menu(name, plot)
+        render = getattr(self._canvas_widget(), "render", None)
+        if render is not None:
+            render()
+
+    def mouse_mode(self) -> str:
+        return self._canvas_widget()._mmode
+
+    def set_mouse_mode(self, mode: str):
+        """A tool of the canvas toolbar (Canvas.MOUSE_MODE_*), as clicking its button: the button shows it."""
+        self.window.toolBar._tool_actions[mode].trigger()
+
+    def set_time_window(self, row: int, col: int):
+        """The x interval a plot shows becomes the time range, as "Set as time window" does (not drawn yet)."""
+        self.window.on_set_time_window(self.canvas_plot(row, col))
+
+    def x_origin(self, row: int, col: int) -> Optional[float]:
+        """Where the x of a plot started when drawn: ns since the epoch for dates, 0 for a pulse."""
+        plot = self.canvas_plot(row, col)
+        try:
+            axis = plot.axes[0]
+            if not axis.is_date:
+                return 0.0
+            begin = axis.original_begin if axis.original_begin is not None else axis.begin
+            return float(begin)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return None
+
+    def x_drawn(self, row: int, col: int) -> Optional[Tuple[float, float]]:
+        """Where the x of a plot began and ended when drawn: ns since the epoch for dates, s from the start of a
+        pulse (before it too)."""
+        plot = self.canvas_plot(row, col)
+        try:
+            axis = plot.axes[0]
+            begin = axis.original_begin if axis.original_begin is not None else axis.begin
+            end = axis.original_end if axis.original_end is not None else axis.end
+            return float(begin), float(end)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return None
+
+    def reset_plot(self, row: int, col: int):
+        """A plot back to its view when drawn, as its "Reset zoom/pan" does (the plots sharing its time too)."""
+        _, impl = self._impl(row, col)
+        self._canvas_widget().reset_plot_view(impl)
+
+    def y_axis(self, row: int, col: int):
+        """The y axis of a plot (its first), whose limits and label the preferences set."""
+        plot = self.canvas_plot(row, col)
+        axes = getattr(plot, "axes", None) or []
+        y = axes[1] if len(axes) > 1 else None
+        return y[0] if isinstance(y, (list, tuple)) and y else y
+
+    def drawn_signal(self, uid: str):
+        return self._drawn_signal(uid)
+
+    def canvas(self):
+        return self.window.canvas
+
+    def last_canvas_command(self):
+        """The last step of the canvas's own undo history (a zoom, a shift...); None when there is none."""
+        stack = getattr(self._canvas_widget()._parser._hm, "_undo_stack", None)
+        return stack[-1] if stack else None
+
+    def undo_canvas_command(self, command) -> bool:
+        """Undoes a step of the canvas's history if it is still the last one; False otherwise."""
+        if command is None or self.last_canvas_command() is not command:
+            return False
+        self.window.undo()
+        return True
+
+    def shift_signal(self, uid: str, dx: float, dy: float, copy: bool):
+        """Moves a drawn signal in x (the axis's units) and y as the DIST window's Shift does; a copy keeps it."""
+        signal = self._drawn_signal(uid)
+        if signal is None:
+            raise ActionError(f"{self.name_of(uid)} isn't drawn, so I can't shift it.")
+        if getattr(signal, "envelope", False):
+            raise ActionError("An envelope can't be shifted.")
+        self.window._on_signal_shift_requested(uid, "", "", "", dx, dy, copy)
+
+    def theme(self) -> str:
+        from mint.gui import mtAppearance
+        return str(getattr(mtAppearance, "_theme", None) or
+                   QSettings().value(mtAppearance.THEME_KEY, mtAppearance.THEME_NONE))
+
+    def set_theme(self, name: str):
+        """A theme as the View > Appearance > Theme menu sets it, its tick included."""
+        from mint.gui import mtAppearance
+        for menu in self.window.menuBar().findChildren(mtAppearance.MTAppearanceMenu):
+            for action in menu._theme_menu.actions():
+                if action.text() == name:
+                    action.trigger()
+                    return
+        mtAppearance.apply_theme(name)
+
+    def open_window(self, name: str) -> bool:
+        """A window or dialog of MINT, where the user finishes what they asked; False when it can't open now."""
+        window = self.window
+        if name == "export":
+            window.export_clicked()
+        elif name == "image":
+            window.save_canvas_image()
+        elif name == "csv":
+            window.on_export_data()
+        elif name == "save_workspace":
+            window.on_export()
+        elif name == "open_workspace":
+            window.on_import()
+        elif name == "preferences":
+            window.toolBar.configureAction.trigger()
+        elif name == "rulers":
+            ruler_window = getattr(self._canvas_widget(), "_ruler_window", None)
+            if ruler_window is None:
+                return False
+            ruler_window.show()
+            ruler_window.raise_()
+        else:
+            return False
+        return True
+
+    def detached(self) -> bool:
+        return self.window.toolBar.detachAction.text() == "Reattach"
+
+    def detach(self, on: bool):
+        if self.detached() != on:
+            self.window.toolBar.detachAction.trigger()
 
 
     def data_source_choices(self) -> List[str]:

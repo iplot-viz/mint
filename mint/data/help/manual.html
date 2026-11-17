@@ -224,7 +224,7 @@ $ mint
 <div class="note">Preferences cannot be changed while streaming: set them and press <em>Draw</em> before starting the stream. <em>Draw</em> stays disabled until the stream is stopped.</div>
 
 <h3 id="export-import-workspace">2.6 Export/Import workspace</h3>
-<p>A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. Use <em>File &gt; Import Workspace</em> or <em>File &gt; Export Workspace</em>.</p>
+<p>A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use <em>File &gt; Export Workspace</em>; to open one, <em>File &gt; Import Workspace</em>.</p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
 <h3 id="export-data">2.7 Export data</h3>
@@ -283,6 +283,7 @@ $ mint
 <p><em>Hide/Show signals</em> picks which signal columns (rows, in the Columns layout) are shown; <em>Hide/Show labels</em> turns the name tags or the value tags of every ruler on or off at once, new rulers included. Copy the selection (Ctrl+C or right-click → <em>Copy</em>) or the whole table (<em>Copy table</em>) to paste it into a spreadsheet. <em>Export to CSV</em> saves the whole table as <code>.scsv</code> (semicolon-separated, like the signal sets) or <code>.csv</code>. <em>Remove ruler</em> deletes the selected rulers. <em>Compute distance</em> shows ΔX, ΔY and the difference of each signal between two or more selected rulers, also across plots, with its own <em>Copy</em> button; ΔY and the signal differences are signed (later ruler minus earlier), and on a time axis ΔX also shows as a duration, e.g. <code>9.5 s (9s500ms)</code>.</p>
 <h4>Canvas-level preferences</h4>
 <p>Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), vertical lines (none, solid, dotted or dashed: a line in the signal colour and size through each point while a signal shows 50 points or fewer, as after a zoom), focus all plots on stack.</p>
+<p><em>Shared time</em> is the time axis common to all plots: a zoom or a pan on one moves them all, and a ruler appears on each. With it off, each plot keeps its own time range.</p>
 <p>Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.</p>
 <p><em>Draw</em> keeps most preference changes, but not axis limits. Click <em>Apply</em> to apply them and close the panel.</p>
 <p>To keep preferences for the next sessions, click <em>Save preferences</em> in the canvas preferences: they are written to <code>~/.local/1DPreferences/default_properties.json</code> and loaded at start. To share one file among users, set <code>IPLOT_CANVAS_CONFIG</code> to its path; it takes precedence over the saved preferences.</p>
@@ -363,18 +364,26 @@ $ mint
 <p>Use the <strong>Pulse Id</strong> access mode. Type the shot number in the pulse field (for example <code>30420</code>). <code>0</code> is the latest shot and <code>-N</code> is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the <em>Variable</em> column. You can use a generic name (<code>ip</code>), a MAST name (<code>ANE_DENSITY</code>) or a MAST-U name (<code>/AMC/PLASMA_CURRENT</code>). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h3 id="assistant">2.11 Assistant</h3>
-<p>Ask in plain words for processing, plot settings, signals or a time range. Other languages work too; it answers in English. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
+<p>Ask in plain English for processing, plot settings, signals or a time range. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
 <ul>
 <li><em>smooth the pirani over 30 s</em>: adds a smoothed copy of the signal to the same plot.</li>
-<li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>.</li>
+<li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>, <em>markers on the second plot</em>.</li>
+<li><em>split each plot, one plot per signal</em>: each signal goes in a plot of its own, right below; <em>merge the first two plots</em>: the plots below move up into the space left.</li>
+<li><em>plot the envelope of FAST-TC3</em>, <em>use sdnuda for these</em>.</li>
 <li><em>outlet minus inlet</em>: a new signal in a new plot.</li>
 <li><em>add the TF07 current</em>: lists the matching variables to tick and add.</li>
 <li><em>two signals from EC in sdnuda</em>: lists the variables of that data source that start with EC. Right after a search, <em>no, in sdnuda</em> looks there instead.</li>
-<li><em>last 6 hours</em>, <em>yesterday</em>, <em>pulse ITER:MCTB_PSS-TF07_FD/12</em>.</li>
+<li><em>last 6 hours</em>, <em>yesterday</em>, <em>pulse ITER:MCTB_PSS-TF07_FD/12</em>; in a pulse, <em>set the start time to 10 s and the end to 30 s</em>.</li>
+<li><em>zoom between 40 and 60 s</em> (from the start of the pulse, or of what is drawn), <em>zoom on 07:20 to 07:30</em>, <em>zoom on the last 10 minutes</em> (of what is drawn), <em>move the view 10 minutes back</em>, <em>reset the zoom</em>, <em>undo my last zoom</em>: as ZOOM, PAN and Home do in the canvas toolbar. <em>Keep this zoom as the time range</em> reads it again.</li>
+<li><em>show only the bottom plot</em>, <em>all plots again</em>; <em>put a ruler at 07:30</em>, <em>a ruler on the peak of MP0111</em>, <em>remove the rulers</em>; <em>turn on the crosshair</em>; <em>detach the canvas</em>.</li>
+<li><em>make MP0111 red and thicker</em>, <em>dashed lines on the top plot</em>, <em>legend at the upper left</em>, <em>y axis from 0 to 100</em>, <em>unlink the time axes</em>, <em>dark mode</em>: what the preferences and <em>View &gt; Appearance</em> set.</li>
+<li><em>shift MP0111 by 10 s</em>, <em>compare MP0111 with itself one hour earlier</em>: as the Shift of the DIST window.</li>
+<li><em>export the data</em>, <em>save a picture of the plots</em>, <em>save the workspace</em>: opens the window where you finish it.</li>
 <li><em>the same for MP0071</em>: repeats the last change on another signal.</li>
 <li><em>why are these red?</em>: says why rows aren't drawn, and offers to change a data source that isn't available here.</li>
-<li><em>disable FAST-TC0</em>: hides it from the plot, as a click on its legend entry does.</li>
-<li><em>open the statistics</em>, <em>how many samples?</em>, <em>show the mini-map</em>, <em>open Search Vars</em>: opens them, or says what they are.</li>
+<li><em>disable FAST-TC0</em>, <em>show it again</em>: hides it from the plot as a click on its legend entry does, and back.</li>
+<li><em>what is the last value of MP0111?</em>, <em>how many samples per signal?</em>: the numbers of the data drawn.</li>
+<li><em>open the statistics</em>, <em>show the mini-map</em>, <em>open Search Vars</em>: opens them, or says what they are; <em>how do I add a ruler?</em> is answered from this manual.</li>
 <li>With a file attached: <em>add the pressures from the report</em>, <em>over the dates in the file</em>.</li>
 </ul>
 <p>Each answer comes as a card: nothing changes until <strong>Apply</strong> (or Enter with nothing typed, or <em>ok</em>), and <strong>Undo</strong> (or typing <em>undo</em>) puts it back; <em>no</em> dismisses it. If a signal it makes comes out with nothing to draw, the card says so. If a new time range leaves signals without data, it says when their latest sample is and offers the same span up to it. A number alone (<em>12 s</em>) repeats the last processing with it. The clip next to the input box attaches a CSV, Excel, PDF or signal set (<em>.scsv</em>) file (or drop one on the panel): the assistant finds the signal names, the dates and the pulses in it, and can add those signals or set their time range until the file is left out with its ×. Names written without their system (<em>MT0021-XI</em>) are looked up in the data source, and a list of names in a message, one per line or in a line, is read like a file. <em>Formula</em> on the card shows the expression it adds. When it isn't sure which signal or plot you mean, it asks; <em>both</em> or <em>the 3 of them</em> takes them all. The processing goes in the <em>x</em> or <em>y</em> column like any other expression, so the workspace opens the same without the assistant.</p>

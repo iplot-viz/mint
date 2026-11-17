@@ -34,6 +34,7 @@ class RowInfo:
     uid: str = ""
     pulse: str = ""  # its own PulseId, when it doesn't use the workspace's
     status: str = ""
+    hidden: bool = False  # drawn, but hidden from the plot by its legend entry
 
     @property
     def is_expression(self) -> bool:
@@ -101,6 +102,9 @@ class Snapshot:
     # Rows left out of what the model is shown (see prompt.visible), still reachable by name.
     unlisted: List[RowInfo] = field(default_factory=list)
     file: Optional[FileInfo] = None
+    data_sources: List[str] = field(default_factory=list)  # those a row can use here
+    # What the canvas shows besides the plots, when it isn't as drawn: "p2 shown alone, rulers A and B".
+    canvas: str = ""
 
     @property
     def hidden_rows(self) -> int:
@@ -158,10 +162,11 @@ def _cell(table, i, name):
 
 
 def build(table, selected_indices=(), canvas=None, range_text="", range_seconds=None, pulse_mode=False,
-          last_action="") -> Snapshot:
+          last_action="", data_sources=()) -> Snapshot:
     """Snapshot of a signals table: rows r1, r2... in table order, plots p1, p2... row by row, left to right."""
     rows = []
     placed = {}
+    hidden = _hidden_uids(canvas)
     for i in range(len(table.index)):
         variable = _cell(table, i, "Variable")
         alias = _cell(table, i, "Alias")
@@ -172,6 +177,7 @@ def build(table, selected_indices=(), canvas=None, range_text="", range_seconds=
                       envelope=_cell(table, i, "Envelope") in ("1", "True", "true"),
                       plot_type=_cell(table, i, "Plot type") or "PlotXY", uid=_cell(table, i, "uid"),
                       pulse=_cell(table, i, "PulseId"), status=_cell(table, i, "Status"))
+        row.hidden = bool(row.uid) and row.uid in hidden
         rows.append(row)
         position = parse_stack(row.stack)
         if position:
@@ -193,7 +199,17 @@ def build(table, selected_indices=(), canvas=None, range_text="", range_seconds=
     by_index = {r.index: r.id for r in rows}
     selected = [by_index[i] for i in sorted(set(selected_indices)) if i in by_index]
     return Snapshot(rows=rows, plots=plots, selected=selected, range_text=range_text,
-                    range_seconds=range_seconds, pulse_mode=pulse_mode, last_action=last_action)
+                    range_seconds=range_seconds, pulse_mode=pulse_mode, last_action=last_action,
+                    data_sources=list(data_sources))
+
+
+def _hidden_uids(canvas) -> set:
+    """The rows whose drawn signal a click on its legend entry hid."""
+    try:
+        return {getattr(signal, "uid", None) for column in canvas.plots for plot in column if plot is not None
+                for group in (plot.signals or {}).values() for signal in group if getattr(signal, "hidden", False)}
+    except (AttributeError, TypeError):
+        return set()
 
 
 def canvas_plot(canvas, row: int, col: int):

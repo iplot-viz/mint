@@ -99,7 +99,8 @@ class AssistantActionsTest(_WindowCase):
                          ["pirani — smoothed with a 15 min average → new signal pirani_avg_900s, in the top plot"])
         self.win.canvas.plots = [[PlotXY(row=r, col=1) for r in (1, 2, 3)]]
         self.assertEqual(self.plan("plot p2 log=on").lines, ["The second plot from the top: log scale on"])
-        self.assertEqual(self.plan("move r3 to p3").lines, ["Move CRYO:MT0001 to the bottom plot"])
+        self.assertEqual(self.plan("move r3 to p3").lines, ["Move CRYO:MT0001 to the bottom plot",
+                                                            "The plots below move up into the space left"])
         self.assertEqual(self.plan("move r1 r2 to new").lines,
                          ["Move pirani and MAG-MCTB-F1:VAR2 together to a new plot"])
         self.assertEqual(self.plan("remove r2").lines, ["Remove MAG-MCTB-F1:VAR2 from the table"])
@@ -398,6 +399,125 @@ class AssistantActionsTest(_WindowCase):
         self.assertEqual([planner.name(row) for row in rows],
                          [f"{coil} (pulse pf_active_5k)", f"{coil} (the workspace's pulse)"])
 
+    def test_the_samples_drawn_are_summed_up_as_statistics_reads_them(self):
+        import numpy as np
+
+        class Drawn:
+            def __init__(self, x, y, store=()):
+                self.x_data, self.y_data, self.data_store = np.array(x), np.array(y), list(store)
+
+        uid = self.ws.snapshot().rows[0].uid
+        drawn = {uid: Drawn([10, 20, 30, 40], [1.0, 5.0, np.nan, 2.0])}
+        self.ws._drawn_signal = drawn.get
+        s = self.ws.data_summary(uid)
+        self.assertEqual((s["count"], s["first"], s["last"], s["max"], s["min"]),
+                         (3, (1.0, 10.0), (2.0, 40.0), (5.0, 20.0), (1.0, 10.0)), "a missing value is left out")
+        self.assertAlmostEqual(s["mean"], 8 / 3)
+        # An envelope: the extremes from its min and max curves, the rest from its average.
+        drawn[uid] = Drawn([1, 2], [0, 0], [np.array([1, 2]), np.array([0.5, 1.5]), np.array([3.0, 9.0]),
+                                            np.array([2.0, 4.0])])
+        s = self.ws.data_summary(uid)
+        self.assertEqual((s["max"], s["min"], s["last"]), ((9.0, 2.0), (0.5, 1.0), (4.0, 2.0)))
+        drawn[uid] = Drawn([1, 2], [np.nan, np.nan])
+        self.assertEqual(self.ws.data_summary(uid)["count"], 0)
+        self.assertIsNone(self.ws.data_summary("not drawn"))
+
+    def stacks(self):
+        return list(self.ws.table()["Stack"][:4])
+
+    def test_split_gives_each_signal_its_own_plot_right_below_in_order(self):
+        # p1 holds pirani and VAR2; MT0001 and VAR3 are in the plots below it.
+        proposal = self.plan("split p1")
+        self.assertEqual(proposal.title, "Split")
+        self.assertEqual(proposal.lines, ["The top plot: pirani and MAG-MCTB-F1:VAR2, one plot each",
+                                          "The plots below move down to make room"])
+        proposal.apply()
+        self.assertEqual(self.stacks(), ["1.1", "2.1", "3.1", "4.1"])
+        proposal.undo()
+        self.assertEqual(self.stacks(), ["1.1", "1.1", "2.1", "3.1"])
+        self.assertEqual(self.plan("split all").lines[0], "The top plot: pirani and MAG-MCTB-F1:VAR2, one plot each")
+        with self.assertRaises(ActionError) as e:
+            self.plan("split p2")
+        self.assertIn("single signal already", str(e.exception))
+
+    def test_a_move_that_empties_a_plot_closes_its_space(self):
+        # MT0001 is alone in the middle plot: moved to the top one, VAR3 rises into its place.
+        proposal = self.plan("move r3 to p1")
+        self.assertEqual(proposal.lines, ["Move CRYO:MT0001 to the top plot",
+                                          "The plots below move up into the space left"])
+        proposal.apply()
+        self.assertEqual(self.stacks(), ["1.1", "1.1", "1.1", "2.1"])
+        proposal.undo()
+        self.assertEqual(self.stacks(), ["1.1", "1.1", "2.1", "3.1"])
+        # Into a plot below the one it empties, that plot rises too.
+        proposal = self.plan("move r1 r2 to p3")
+        proposal.apply()
+        self.assertEqual(self.stacks(), ["2.1", "2.1", "1.1", "2.1"])
+        proposal.undo()
+        # A plot that keeps a signal keeps its place.
+        proposal = self.plan("move r1 to p2")
+        self.assertEqual(proposal.lines, ["Move pirani to the second plot from the top"])
+        proposal.apply()
+        self.assertEqual(self.stacks(), ["2.1", "1.1", "2.1", "3.1"])
+
+    def test_the_envelope_of_rows_is_set_in_the_table_and_undone(self):
+        proposal = self.plan("envelope r1 r2 on")
+        self.assertEqual(proposal.lines, ["Envelope of pirani and MAG-MCTB-F1:VAR2: min, average and max of each point"])
+        proposal.apply()
+        self.assertEqual(list(self.ws.table()["Envelope"][:2]), ["1", "1"])
+        proposal.undo()
+        self.assertEqual(list(self.ws.table()["Envelope"][:2]), ["", ""])
+        self.assertEqual(self.plan("envelope r4 off").lines, ["No envelope on MAG-MCTB-F1:VAR3"])
+        with self.assertRaises(ActionError):
+            self.plan("envelope r4 on")
+
+    def test_markers_on_a_drawn_plot_and_undone(self):
+        plot = PlotXY(row=1, col=1)
+        self.win.canvas.plots = [[plot]]
+        proposal = self.plan("plot p1 marker=on")
+        self.assertEqual(proposal.lines, ["The top plot: markers on"])
+        proposal.apply()
+        self.assertEqual(plot.marker, "o")
+        proposal.undo()
+        self.assertIsNone(plot.marker)
+        proposal = self.plan("plot p1 marker=off")
+        proposal.apply()
+        self.assertEqual(plot.marker, "None", "none, rather than what the canvas would give it")
+
+    def test_times_from_the_start_of_a_time_range_are_dates_from_its_start(self):
+        # The last hours: the dates they are now, 20 s of them.
+        proposal = self.plan("range from 40 to 60 s")
+        self.assertTrue(proposal.lines[0].startswith("Time range: 40 to 60 s from the start of the one drawn, "),
+                        proposal.lines)
+        before = self.ws.range_dict()
+        proposal.apply()
+        start, end = self.ws.time_range_ns()
+        self.assertEqual((self.ws.range_dict()["mode"], end - start), ("TIME_RANGE", 20 * 10 ** 9))
+        proposal.undo()
+        self.assertEqual(self.ws.range_dict(), before)
+        # Two dates: from the first one.
+        start = 1754463600 * 10 ** 9
+        self.ws.set_time_range_ns(start, start + 3 * 3600 * 10 ** 9)
+        self.plan("range from 1.5 to 2 h").apply()
+        self.assertEqual(self.ws.time_range_ns(), (start + 5400 * 10 ** 9, start + 7200 * 10 ** 9))
+
+    def test_times_from_the_start_of_a_pulse_set_its_start_and_end(self):
+        self.ws.set_range_dict({"mode": MTGenericAccessMode.PULSE_NUMBER, "pulse_nb": ["ITER:MCTB-TEST/111"], "base": 1,
+                                "t_start": "", "t_end": ""})
+        before = self.ws.range_dict()
+        self.assertEqual(self.ws.snapshot().range_text, "pulse ITER:MCTB-TEST/111, times in s from its start")
+        proposal = self.plan("range from 40 to 60 s")
+        self.assertEqual(proposal.lines, ["Time range: 40 to 60 s from the start of the pulse"])
+        proposal.apply()
+        now = self.ws.range_dict()
+        self.assertEqual((now["mode"], now["pulse_nb"], now["t_start"], now["t_end"]),
+                         ("PULSE_NUMBER", ["ITER:MCTB-TEST/111"], "40", "60"))
+        self.assertEqual(self.ws.snapshot().range_text, "pulse ITER:MCTB-TEST/111, 40 to 60 s from its start")
+        proposal.undo()
+        self.assertEqual(self.ws.range_dict(), before)
+        self.plan("range from 250 to 900 ms").apply()
+        self.assertEqual((self.ws.range_dict()["t_start"], self.ws.range_dict()["t_end"]), ("0.25", "0.9"))
+
     def test_hiding_a_drawn_signal_keeps_its_row_and_undo_shows_it(self):
         hidden = {}
         uids = {r.id: r.uid for r in self.ws.snapshot().rows}
@@ -415,9 +535,23 @@ class AssistantActionsTest(_WindowCase):
         with self.assertRaises(ActionError) as e:
             Planner(self.ws, self.ws.snapshot()).plan(commands.parse("hide r3"))
         self.assertIn("isn't drawn", str(e.exception))
+        self.ws.unreadable = lambda uid: uid == uids["r3"]
+        with self.assertRaises(ActionError) as e:
+            Planner(self.ws, self.ws.snapshot()).plan(commands.parse("hide r3"))
+        self.assertIn("has nothing drawn: its data couldn't be read", str(e.exception), "Draw again wouldn't help")
         hidden[uids["r1"]] = True
         self.assertEqual(Planner(self.ws, self.ws.snapshot()).plan(commands.parse("show r1")).lines,
                          ["Show pirani again"])
+
+    def test_a_plot_left_empty_by_data_that_could_not_be_read_says_so(self):
+        self.ws.canvas_plot = lambda row, col: None
+        with self.assertRaises(ActionError) as e:
+            Planner(self.ws, self.ws.snapshot()).plan(commands.parse("plot p1 marker=on"))
+        self.assertIn("isn't drawn yet. Click Draw", str(e.exception))
+        self.ws.unreadable = lambda uid: True
+        with self.assertRaises(ActionError) as e:
+            Planner(self.ws, self.ws.snapshot()).plan(commands.parse("plot p1 marker=on"))
+        self.assertIn("Nothing is drawn in the top plot: the data of its signals couldn't be read", str(e.exception))
 
     def test_a_relative_range_shows_its_span_in_from_and_to(self):
         fields = self.win.dataRangeSelector.accessModes[0]
@@ -459,7 +593,7 @@ class AssistantActionsTest(_WindowCase):
         self.assertEqual(sorted(name for name, _ in found), ["CRYO-CP3:MT0012-XI", "CRYO-CP3:TV0001-XI"],
                          "by the code, or by the description")
         self.assertEqual(source.patterns[-1], ".*CP3.*", "the server filters on a word of the names")
-        found = self.ws.search_variables(["température"]).found
+        found = self.ws.search_variables(["temperature"]).found
         self.assertEqual(source.patterns[-1], ".*MT[0-9].*")
         self.assertIn("CRYO-CP4:MT0014-XI", [name for name, _ in found])
 
