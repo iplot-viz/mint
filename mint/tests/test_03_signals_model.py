@@ -12,6 +12,7 @@ layer depend on:
 """
 
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 import pandas as pd
@@ -225,6 +226,62 @@ class TestRowLevelRelativePulse(unittest.TestCase):
         resolved = self._resolve_pulse('-1', ['10', '20', '30', '40', '50'])
         self.assertNotIn(',', str(resolved))
 
+
+class TestRowThatCannotBeDrawn(unittest.TestCase):
+    """A row with a value MINT can't use isn't drawn, and its Status says why instead of 'Ready'."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _created(self, rows: dict, **defaults) -> MTSignalsModel:
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame(rows))
+        # A Draw leaves its time range and pulses as the defaults of the blueprint, which the models share.
+        with ExitStack() as stack:
+            for key in ('PulseNumber', 'StartTime', 'EndTime'):
+                stack.enter_context(mock.patch.dict(model._blueprint[key], default=defaults.get(key, '')))
+            with model.init_create_signals():
+                for row in range(model.rowCount()):
+                    list(model.create_signals(row, []))
+        return model
+
+    def test_a_data_source_not_available_here_is_named(self):
+        model = self._created({'DS': ['imaspy'], 'Variable': ['pf_active/coil[1]/current/data'], 'Stack': ['1']})
+        self.assertEqual(model.get_dataframe().at[0, 'Status'],
+                         "Invalid|The data source imaspy isn't available here (csv)")
+        status = model.createIndex(0, model.get_dataframe().columns.get_loc('Status'))
+        self.assertEqual(model.error_info_for_cell(status)['title'], 'Data source not available')
+
+    def test_a_time_that_is_not_a_date_is_named(self):
+        model = self._created({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1'],
+                               'StartTime': ['yesterday']})
+        self.assertEqual(model.get_dataframe().at[0, 'Status'],
+                         "Invalid|The start time isn't a date like 2026-01-31T08:00:00")
+
+    def test_a_pulse_time_that_is_not_a_number_is_named_not_replaced(self):
+        model = self._created({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1'],
+                               'StartTime': ['tomorrow']},
+                              PulseNumber=['ITER:MCTB-TEST/111'], StartTime=-5.0, EndTime=4.0)
+        self.assertEqual(model.get_dataframe().at[0, 'Status'],
+                         "Invalid|With a pulse, the start time is relative to it, like -5")
+        self.assertEqual(model._table_fails.at[0, 'StartTime'], 1)
+
+    def test_an_expression_on_the_alias_of_a_row_with_an_error_says_so(self):
+        model = self._created({'DS': ['imaspy', 'csv'], 'Variable': ['MAG-MCTB-F1:VAR1', ''], 'Alias': ['a', 'b'],
+                               'Stack': ['1', '2'], 'y': ['', '${a}.data * 2']})
+        self.assertEqual(model.get_dataframe().at[1, 'Status'],
+                         "Invalid|The y expression uses a, whose row has an error")
+
+    def test_hovering_the_status_says_what_to_do(self):
+        model = self._created({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1'],
+                               'Envelope': ['2']})
+        status = model.createIndex(0, model.get_dataframe().columns.get_loc('Status'))
+        self.assertEqual(model.error_info_for_cell(status),
+                         {'title': 'Row not drawn', 'anchor': 'cat-validation',
+                          'explanation': "The envelope is 1 to show it, or 0 or empty to hide it. Fix it and Draw "
+                                         "again."})
 
 if __name__ == '__main__':
     unittest.main()

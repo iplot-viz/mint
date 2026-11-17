@@ -240,7 +240,7 @@ class ReadAheadTest(_MainWindowTestCase):
                 win.draw_clicked()
                 _drawn_when_done(win)
 
-                self.assertEqual(_status(win)[1], 'Ready')
+                self.assertEqual(_status(win)[1], 'Invalid|The y expression uses B, whose row has an error')
                 self.assertEqual(win.sigCfgWidget.model._table_fails.at[1, 'y'], 2)
                 self.assertEqual(_drawn(win), [])
 
