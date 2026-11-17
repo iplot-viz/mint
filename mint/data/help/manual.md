@@ -110,7 +110,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 #### 2.4.1 Icons and buttons
 
-The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
+The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing. Selecting a module in that window shows what it offers, from its documentation: its submodules and their functions, how each is called and what it does; click a function for its whole documentation.
 
 In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file). Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).
 
@@ -377,7 +377,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 11. **Specify a start/end time for pulse IDs?** Use Start/End Time with shared X axis off. See `CustomizedPulsesPlotsWithStartEnd.json`.
 12. **Compare signals with two different time ranges?** Yes (untick shared X). See `WeekComparison.json`.
 13. **Different time ranges on the same plot, no pulses?** See `WeekComparisonSamePlot.json`.
-14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`.
+14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`; select it in the list to read its functions.
 15. **Examples of self-written modules?** See Advanced Exercises [RD5].
 16. **Add my own data source?** See Advanced Exercises [RD6].
 17. **Where are the workspaces?**
