@@ -1101,6 +1101,34 @@ class WorkerProcessTest(unittest.TestCase):
                 os.close(fd)
 
     @unittest.skipUnless(hasattr(os, "getuid"), "POSIX permissions")
+    def test_a_record_of_hashed_models_others_can_write_is_not_trusted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "model.gguf")
+            with open(path, "wb") as f:
+                f.write(b"GGUF not really")
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                allowed = "0" * 64
+                forged = {worker.file_key(fd, path): allowed}
+                cache = os.path.join(tmp, "verified.json")
+                with open(cache, "w", encoding="utf-8") as f:
+                    json.dump(forged, f)
+                os.chmod(cache, 0o666)
+                with self.assertRaises(ValueError, msg="a record anyone can write says nothing"):
+                    worker.verify_model(fd, path, {allowed}, cache)
+                elsewhere = os.path.join(tmp, "elsewhere.json")
+                os.replace(cache, elsewhere)
+                os.chmod(elsewhere, 0o600)
+                os.symlink(elsewhere, cache)
+                with self.assertRaises(ValueError, msg="nor one reached through a link"):
+                    worker.verify_model(fd, path, {allowed}, cache)
+                os.remove(cache)
+                os.replace(elsewhere, cache)
+                self.assertEqual(worker.verify_model(fd, path, {allowed}, cache), allowed, "this user's own record")
+            finally:
+                os.close(fd)
+
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX permissions")
     def test_a_model_file_other_users_can_change_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "model.gguf")
