@@ -29,7 +29,6 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
-from iplotlib.core.signal import SignalXY
 import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
@@ -205,8 +204,6 @@ class _Build:
     x_axis_date: bool
     x_axis_follow: bool
     x_axis_window: typing.Optional[int]
-    # The signals of the canvas built before, by uid: the new ones keep their markers.
-    previous_signals: dict
     # What build_canvas() draws, by column and row of the plots.
     plan: dict = field(default_factory=dict)
     rows: typing.Optional[_TableRows] = None
@@ -1194,9 +1191,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.begin_build()
         self.sigCfgWidget.set_progress(0)
 
-        # Clear markers table before importing new signals
-        self.qtcanvas._marker_window.clear_info()
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
@@ -1289,10 +1283,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Replace signal
         plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
-
-        # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
-        if isinstance(new_signal, SignalXY) and new_signal.markers_list:
-            self.qtcanvas._marker_window.import_table(new_signal)
 
     def _signals_updated(self):
         """Show in the table the status of the rows that an import updated."""
@@ -1522,7 +1512,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.canvasStack.currentWidget().check_markers(self.canvas)
         self.canvasStack.currentWidget().stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -1757,7 +1746,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             canvas_widget.set_canvas(self.canvas)
         # It listed the plots drawn when the Draw began.
         self.canvasStack.refreshLinks()
-        canvas_widget.check_markers(self.canvas)
         canvas_widget.stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -2149,16 +2137,13 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.canvas.auto_refresh = refresh_interval
 
-        # Get signals in order to preserve markers
-        previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
         return _Build(stream=stream, valid=valid, ts=ts, te=te,
                       da_params=dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number), x_axis_date=x_axis_date,
-                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window, previous_signals=previous_signals)
+                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window)
 
     def _build_row(self, build: _Build, waypt, signal):
         """Read the data of the signal of a waypoint of the table, show the status of its row and add the signal to
@@ -2190,11 +2175,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         if _left_out(signal):
             return
-
-        # Preserve markers
-        prev_signal = build.previous_signals.get(signal.uid)
-        if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
-            signal.markers_list = prev_signal.markers_list
 
         plan = build.plan
         if waypt.col_num not in plan:
