@@ -409,7 +409,7 @@ Raised when MINT asks a data source for a signal and either cannot reach the ser
 
 #### Processing {#cat-processing}
 
-Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
+Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
 
 #### Export {#cat-export}
 
