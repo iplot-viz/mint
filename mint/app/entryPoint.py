@@ -28,7 +28,7 @@ def run_app(q_app: QApplication, args=None):
     from mint.app.createApp import data_access_workers
     from mint.models import MTGenericAccessMode
     from mint.models.utils import mtBlueprintParser
-    from mint.gui.mtMainWindow import MTMainWindow
+    from mint.gui.mtMainWindow import MTMainWindow, apply_remembered_layout
     from mint.tools.icon_loader import create_pxmap
     from mint.app.dirs import DEFAULT_DATA_DIR
     # The code that runs, not the metadata of an install: a checkout may carry an old egg-info.
@@ -77,6 +77,7 @@ def run_app(q_app: QApplication, args=None):
     #########################################################################
     # 2. Plot canvas
     canvas = Canvas()
+    apply_remembered_layout(canvas)
 
     #########################################################################
     # 3. Prepare model for data range
