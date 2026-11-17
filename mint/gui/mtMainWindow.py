@@ -8,19 +8,19 @@ import weakref
 from collections import defaultdict, deque
 from dataclasses import dataclass, field, fields
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 import contextlib
 import functools
 import getpass
-import inspect
 import json
 import os
 import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel, \
-    Signal
+from PySide6.QtCore import QCoreApplication, QEventLoop, QMargins, QModelIndex, QSettings, QTimer, Qt, \
+    QItemSelectionModel, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
@@ -30,8 +30,9 @@ from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
 from iplotlib.core.signal import SignalXY
+import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
-from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
+from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
@@ -48,7 +49,9 @@ from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
+from mint.models.mtSignalsModel import MAX_SPAN, exp_stack
 from mint.models.utils import mtBlueprintParser
+from mint.tools.data_export import EXPORTED_SOURCE_TYPE, accepts_kwarg, export_data_source, reports_progress
 from mint.tools.map_tricks import delete_keys_from_dict
 from mint.tools.sanity_checks import check_data_range
 from mint.gui.shift_handlers import ShiftHandlerMixin
@@ -58,13 +61,100 @@ from iplotLogging import setupLogger as setupLog
 logger = setupLog.get_logger(__name__)
 
 
-def _accepts_kwarg(func, name: str) -> bool:
-    # Guards the progress-bar wiring against sibling releases (iplotlib, iplotDataAccess)
-    # that predate the progress_callback parameter.
+@dataclass
+class _Export:
+    """An export in progress, of the data of one or more data sources (see MTMainWindow.on_export_started)."""
+    # The variables to export, as many times as pulses, and those whose export started.
+    total: int
+    started: int = 0
+    # The data sources whose export has not ended, and the calls that export them in the export thread.
+    left: int = 0
+    calls: list = field(default_factory=list)
+    # The files that the export tried to write, those it wrote and the reasons why the others failed.
+    attempts: int = 0
+    exported: int = 0
+    errors: list = field(default_factory=list)
+
+
+def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
+    """The row and the column, from 1, of the plot a Stack value puts its signal in; None if it gives no valid one,
+    which a Draw leaves out."""
+    found = exp_stack.match(str(stack).strip())
+    if found is None:
+        return None
+    row, col, stack_id = (int(group or 1) for group in found.groups())
+    return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
+
+
+def _value_of(column: str, text):
+    """What a Stack, Row span or Col span text gives: the row, the column and the stack, or the span; None if it
+    gives nothing valid."""
+    if column != 'Stack':
+        return _accepted_span(text)
+    found = exp_stack.match(str(text).strip())
+    return tuple(int(group or 1) for group in found.groups()) if found else None
+
+
+def _stack_offset(slot) -> int:
+    """The stack offset of a slot of a change of places, which only plots joined into one have (see
+    iplotlib.core.layout.Arrangement.changes)."""
+    return getattr(slot, 'stack_offset', 0)
+
+
+def _left_out(signal) -> bool:
+    """Whether the canvas leaves the signal out, as when its processing failed. One whose data could not be read is
+    drawn empty, so that its plot still shows where it goes."""
+    return signal.status_info.result == Result.FAIL and signal.status_info.stage != Stage.DA
+
+
+def _accepted_span(value) -> typing.Optional[int]:
+    """The rows or the columns a Row span or Col span value gives a plot, if the table accepts the value: an empty
+    one gives 1. None for a value that a Draw refuses."""
+    text = str(value).strip()
+    if not text:
+        return 1
+    return int(text) if text.isdigit() and 1 <= int(text) <= MAX_SPAN else None
+
+
+def _places(df) -> typing.Dict[typing.Tuple[int, int], typing.Tuple[int, int]]:
+    """The place, as the row and the column from 1, of each plot the rows of the table give, with the most rows and
+    columns its rows give it."""
+    places = {}
+    for stack, row_span, col_span in zip(df['Stack'], df['Row span'], df['Col span']):
+        place = _stack_place(stack)
+        if place is not None:
+            rows, cols = places.get(place, (1, 1))
+            places[place] = (max(rows, _accepted_span(row_span) or 1), max(cols, _accepted_span(col_span) or 1))
+    return places
+
+
+def _canvas_of(places: dict) -> typing.Tuple[Canvas, dict]:
+    """A canvas with a plot in each of these places, and the plot of each place: the plots of the table where a Draw
+    puts them, to arrange the rows as the canvas arranges its plots (see iplotlib.core.layout)."""
+    canvas = Canvas(rows=max(row + rows - 1 for (row, col), (rows, cols) in places.items()),
+                    cols=max(col + cols - 1 for (row, col), (rows, cols) in places.items()))
+    canvas.plots = [[None] * canvas.rows for _ in range(canvas.cols)]
+    plots = {}
+    for (row, col), (rows, cols) in places.items():
+        plots[(row, col)] = canvas.plots[col - 1][row - 1] = PlotXY(row_span=rows, col_span=cols)
+    return canvas, plots
+
+
+#: The rows and columns of the grid last picked with the Layout tool, which a new session starts with. Per user
+#: (QSettings): a workspace keeps a grid of its own.
+LAYOUT_ROWS_KEY, LAYOUT_COLS_KEY = 'layout/rows', 'layout/cols'
+
+
+def apply_remembered_layout(canvas: Canvas):
+    """Give the canvas, with no plot yet, the grid last picked with the Layout tool (see MTMainWindow.lay_out)."""
+    settings = QSettings()
     try:
-        return name in inspect.signature(func).parameters
+        rows, cols = int(settings.value(LAYOUT_ROWS_KEY)), int(settings.value(LAYOUT_COLS_KEY))
     except (TypeError, ValueError):
-        return False
+        return
+    if rows > 0 and cols > 0:
+        canvas.layout_rows, canvas.layout_cols = canvas.rows, canvas.cols = rows, cols
+        canvas.plots = [[] for _ in range(cols)]
 
 
 def _ready_at_the_end(method):
@@ -231,6 +321,13 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._progressBar.setMinimum(0)
         self._progressBar.setMaximum(100)
         self._progressBar.hide()
+        # An export runs while MINT goes on drawing: it reports its progress apart from the other tasks.
+        self._exportLabel = QLabel(self)
+        self._exportProgress = QProgressBar(self)
+        self._exportLabel.hide()
+        self._exportProgress.hide()
+        self._export = None  # type: typing.Optional[_Export]
+        self._exportPool = None
         self._workspaceLabel = QLabel("No workspace loaded")
         self._import_loaded_data_sources = False
         self._reading_ahead = False
@@ -245,6 +342,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._view_reads_check = QTimer(self)
         self._view_reads_check.setSingleShot(True)
         self._view_reads_check.timeout.connect(self._show_view_reads)
+        self._statusBar.addPermanentWidget(self._exportLabel)
+        self._statusBar.addPermanentWidget(self._exportProgress)
         self._statusBar.addPermanentWidget(self._progressBar)
         self._statusBar.addPermanentWidget(QLabel('|'))
         self._statusBar.addPermanentWidget(self.console_button)
@@ -291,6 +390,21 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._workers_check.timeout.connect(self._start_data_access_workers)
         for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
             change.connect(lambda *_: self._workers_check.start(0))
+        # A Row span or Col span changed by hand moves the plots below as the mouse does, from the places the table
+        # gave the plots, and the spans it gave each row, before the change (see _on_span_changed).
+        self._table_places = {}
+        self._table_spans = {}
+        self._moving_rows = False
+        # The text each row had in the Stack, Row span and Col span it left, by what the text gives (see _text_back).
+        self._texts_left = {}
+        self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
+                                                    self._on_span_changed(top_left, bottom_right))
+        # Also once a change is complete, as the workers above: a Draw reports the status of each row on its own.
+        self._places_check = QTimer(self)
+        self._places_check.setSingleShot(True)
+        self._places_check.timeout.connect(self._remember_places)
+        for reset in (self.sigCfgWidget.model.layoutChanged, self.sigCfgWidget.model.modelReset):
+            reset.connect(lambda *_: self._places_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -362,6 +476,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.streamBtn.setText("Stream")
         self.exportBtn = QPushButton("Export")
         self.exportBtn.setIcon(plot_icon)
+        # As for the Stream button: the label it shows while it exports.
+        self.exportBtn.setText("Exporting...")
+        self.exportBtn.setMinimumWidth(self.exportBtn.sizeHint().width())
+        self.exportBtn.setText("Export")
         self.daWidgetButtons = QWidget(self)
         self.daWidgetButtons.setLayout(QHBoxLayout())
         self.daWidgetButtons.layout().setContentsMargins(QMargins())
@@ -876,9 +994,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def clear_cache(self):
         self.da.clear_cache()
-        pool = getattr(AccessHelper, 'pool', None)
-        if pool is not None:
-            pool.clear_cache()
+        for pool in (getattr(AccessHelper, 'pool', None), self._exportPool):
+            if pool is not None:
+                pool.clear_cache()
 
     def _start_data_access_workers(self):
         """Start the worker threads that read the data sources of the table, before a Draw needs them."""
@@ -1052,7 +1170,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
+        canvas_widget = self.canvasStack.currentWidget()
+        # The mini-map and the focus go with the plots, until the workspace is drawn.
+        canvas_widget.unfocus_plot()
+        canvas_widget.reset()
+        self.refresh_minimap_availability()
 
         # Clear shift tracking since workspace import replaces the entire signal table.
         self._init_shift_storage()
@@ -1139,7 +1261,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Check if signal name is valid (Correct signal name and signal has data)
         self._update_row(row_idx, signal_valid)
-        if signal_valid.status_info.result == 'Fail':
+        if _left_out(signal_valid):
             return
 
         plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
@@ -1171,7 +1293,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self._update_row(row_idx, new_signal)
         # Check if new signal is valid
-        if new_signal.status_info.result == 'Fail':
+        if _left_out(new_signal):
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = None
             return
 
@@ -1323,7 +1445,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.statusBar().showMessage(f"Exporting {file_path} ..")
         try:
             kwargs = {}
-            if _accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
+            if accepts_kwarg(self.canvas.get_signals_as_csv, 'progress_callback'):
                 self._begin_export_progress()
                 kwargs['progress_callback'] = self._report_export_progress
             with open(file_path, mode='w') as f:
@@ -1401,6 +1523,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._drop_drawing()
             if not self.build():
                 return
+            # The table the canvas is drawn from, for a span changed next (see _on_span_changed).
+            self._remember_places()
         self._show_built_canvas()
 
     def _show_built_canvas(self):
@@ -1444,6 +1568,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             return
         rows = self._rows_in_reads(created, lambda row: (row[0].col_num, row[0].row_num) if self._plots_row(*row)
                                    else None)
+        # The table the canvas is drawn from, for a span changed next (see _on_span_changed).
+        self._remember_places()
 
         places = {(col, row): (entry["row_span"], entry["col_span"])
                   for col, plan_rows in build.plan.items() for row, entry in plan_rows.items()}
@@ -1711,6 +1837,29 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         """This function shows the export dialog and then creates a file with the correspondence format that contains
         info of the whole canvas"""
         self.exportCfgWidget.show()
+        # The thread that exports sets its data access up while the export is set up: it can take a while to.
+        pool = self._export_pool()
+        if pool is not None:
+            try:
+                pool.prepare(name for name, data_source in self.da.ds_list.items()
+                             if getattr(data_source, 'source_type', None) == EXPORTED_SOURCE_TYPE)
+            except Exception:
+                logger.exception("Cannot start the export thread ahead of the export")
+
+    def _export_pool(self):
+        """The worker thread that exports, apart from those that read the data of the plots, which an export would
+        keep busy for as long as it takes; None without worker threads (see AccessHelper.pool), when the export
+        runs in the GUI thread."""
+        if self._exportPool is None and getattr(AccessHelper, 'pool', None) is not None:
+            pool_class = getattr(iplot_data_access, 'AccessPool', None)
+            if pool_class is not None and hasattr(pool_class, 'call_later'):
+                try:
+                    self._exportPool = pool_class(1)
+                except Exception:
+                    logger.exception("Cannot start the export thread, the data are exported in the GUI thread")
+                    return None
+                QCoreApplication.instance().aboutToQuit.connect(self._exportPool.shutdown)
+        return self._exportPool
 
     def stream_callback(self, signal):
         # Coalesce bursts on the parser instead of one redraw per sample.
@@ -1774,6 +1923,9 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
     def on_export_started(self, data: dict):
         self.exportCfgWidget.hide()
+        if self._export is not None:
+            # The Export button waits meanwhile: an export runs at a time.
+            return
 
         ts, te = self.dataRangeSelector.get_time_range()
         pulse_number = self.dataRangeSelector.get_pulse_number()
@@ -1786,11 +1938,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 "Please provide a valid output path and select a supported export format (parquet or hdf5)",
                                 QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
-            self.indicate_ready()
             return
 
+        # What is exported is the table as it is now: it can change while the export runs.
         table, errors = self.sigCfgWidget.model.export_information()
-        self.indicate_busy('Exporting canvas information...')
 
         if table.empty:
             error_details = "\n".join(f"- {e}" for e in errors)
@@ -1799,118 +1950,115 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                 f"No data could be exported due to:\n{error_details}",
                                 QMessageBox.Icon.Critical)
             self.exportCfgWidget.ui.pathLineEdit.clear()
-            self.indicate_ready()
             return
 
-        from iplotDataAccess.dataHandling.exportData.exportData import generateData, connectUDA
-
-        gen_kwargs = {}
-        if _accepts_kwarg(generateData, 'progressCallback'):
-            pulse_factor = len(pulse_number) if pulse_number else 1
-            total_vars = sum(len(group) * pulse_factor for ds_name, group in table.groupby('DS')
-                             if getattr(self.da.ds_list.get(ds_name), 'source_type', None) == "CODAC_UDA")
-            export_index = 0
-
-            def report_progress(name):
-                nonlocal export_index
-                export_index += 1
-                self._report_export_progress(export_index, total_vars, name)
-
-            gen_kwargs['progressCallback'] = report_progress
-            self._begin_export_progress()
-
-        # Relative time only applies to time-range exports; pulse exports
-        # keep absolute timestamps.
-        if data.get('relative_time') and pulse_number is None:
-            if _accepts_kwarg(generateData, 'relativeTime'):
-                gen_kwargs['relativeTime'] = True
-            else:
-                logger.warning("Relative time export requires a newer iplotDataAccess; "
-                               "exporting absolute timestamps instead")
-
-        # Resampling applies to time-range and pulse exports alike.
-        if data.get('resample_freq'):
-            if _accepts_kwarg(generateData, 'resampleFreq'):
-                gen_kwargs['resampleFreq'] = data['resample_freq']
-            else:
-                logger.warning("Resampling on export requires a newer iplotDataAccess; "
-                               "exporting the original samples instead")
-
-        attempt_count = 0
-        success_count = 0
+        exports = []
         for ds_name, group in table.groupby('DS'):
-            filename = f"{ds_name}.csv"
-            export_group = group[['Variable', 'Comment']]
-            export_group.to_csv(filename, index=False, sep=',', header=False)
-            conn = self.da.ds_list[ds_name]
-
-            if conn.source_type != "CODAC_UDA":
+            if getattr(self.da.ds_list.get(ds_name), 'source_type', None) != EXPORTED_SOURCE_TYPE:
                 msg = f"The data source: '{ds_name}' is invalid. Only CODAC UDA data sources can be exported"
                 errors.append(msg)
                 logger.warning(msg)
                 continue
+            exports.append((ds_name, dict(variables=list(group[['Variable', 'Comment']].itertuples(index=False,
+                                                                                                     name=None)),
+                                          export_format=export_format, chunks=chunks, output_path=output_path,
+                                          pulses=pulse_number, ts=ts, te=te,
+                                          relative_time=bool(data.get('relative_time')),
+                                          resample_freq=data.get('resample_freq'))))
 
-            # When configured, export pulls the data from an alternative UDA server (same port).
-            if conn.uda_for_export:
-                export_conn = connectUDA(conn.uda_for_export, conn.port)
-                if export_conn.errc != 0:
-                    reason = (f"Export failed for data source '{ds_name}': "
-                              f"could not connect to export server '{conn.uda_for_export}'")
-                    logger.warning(reason)
-                    errors.append(reason)
+        pulse_factor = len(pulse_number) if pulse_number else 1
+        self._export = export = _Export(total=sum(len(job['variables']) for _, job in exports) * pulse_factor,
+                                        left=len(exports), errors=errors)
+        self.exportBtn.setEnabled(False)
+        self.exportBtn.setText("Exporting...")
+        self._show_export_progress()
+        if not exports:
+            self._finish_export()
+            return
+
+        pool = self._export_pool()
+        for ds_name, job in exports:
+            if pool is not None:
+                try:
+                    export.calls.append(pool.call_later(export_data_source, ds_name, partial(self._exported, ds_name),
+                                                        progress=self._export_progressed, **job))
                     continue
+                except Exception:
+                    logger.exception("Cannot export in the export thread, the data are exported in the GUI thread")
+                    pool = None
+            # It runs in this thread: what shows that it runs is painted first, as indicate_busy() did.
+            QCoreApplication.processEvents()
+            try:
+                outcome = export_data_source(self.da, ds_name, progress=self._export_progressed_here, **job)
+            except Exception as e:
+                # As the export thread gives it.
+                logger.exception(f"Cannot export the data of {ds_name}")
+                outcome = e
+            self._exported(ds_name, outcome)
+
+    def _export_progressed(self, name: str):
+        """The export of the variable `name` started."""
+        if self._export is not None:
+            self._export.started += 1
+            self._show_export_progress(name)
+
+    def _export_progressed_here(self, name: str):
+        # The export runs in this thread: the bar shows the new value at once, as the other tasks do.
+        self._export_progressed(name)
+        QCoreApplication.processEvents()
+
+    def _show_export_progress(self, name: str = None):
+        export = self._export
+        if name is None:
+            text = "Exporting .."
+        else:
+            text = f"Exporting {name} ({export.started}/{export.total}) .."
+        # Long variable names would push the rest of the status bar away.
+        metrics = self._exportLabel.fontMetrics()
+        self._exportLabel.setText(metrics.elidedText(text, Qt.TextElideMode.ElideMiddle,
+                                                     metrics.averageCharWidth() * 60))
+        self._exportLabel.setToolTip(text)
+        if reports_progress():
+            # The bar tracks completed variables; the extra 1% signals that the
+            # next variable started. 100% is reserved for the fully finished export.
+            self._exportProgress.setRange(0, 100)
+            if export.started and export.total:
+                self._exportProgress.setValue(min(int((export.started - 1) * 100 / export.total) + 1, 99))
             else:
-                export_conn = conn
+                self._exportProgress.setValue(0)
+        else:
+            # Without progress reports, the bar only shows that the export runs.
+            self._exportProgress.setRange(0, 0)
+        self._exportLabel.show()
+        self._exportProgress.show()
 
-            # Pulse mode
-            if pulse_number is not None:
-                for pulse in pulse_number:
-                    result = conn.get_pulse_info(pulse)
-                    ts_str = f"{result.timeFrom}"
-                    te_str = f"{result.timeTo}"
-                    ts_iso = pd.to_datetime(result.timeFrom).isoformat()
-                    ts_iso = ts_iso.replace(':', '-')
+    def _exported(self, ds_name: str, outcome):
+        """The export of the data source ended, with what export_data_source gave or the error that stopped it."""
+        export = self._export
+        if export is None:
+            return
+        if isinstance(outcome, Exception):
+            reason = f"Export failed for data source '{ds_name}': {outcome}"
+            logger.warning(reason)
+            export.attempts += 1
+            export.errors.append(reason)
+        else:
+            export.attempts += outcome['attempts']
+            export.exported += outcome['exported']
+            export.errors.extend(outcome['errors'])
+        export.left -= 1
+        if export.left == 0:
+            self._finish_export()
 
-                    original_path = Path(output_path)
-                    valid_name = f"{ds_name}_{ts_iso}_{original_path.stem}{original_path.suffix}"
-                    new_path = original_path.with_name(valid_name)
+    def _finish_export(self):
+        export, self._export = self._export, None
+        self._exportLabel.hide()
+        self._exportProgress.hide()
+        self.exportBtn.setEnabled(True)
+        self.exportBtn.setText("Export")
+        self.exportCfgWidget.ui.pathLineEdit.clear()
 
-                    # Use of export data script
-                    attempt_count += 1
-                    valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
-                                                  startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
-                                                  **gen_kwargs)
-                    if valid:
-                        success_count += 1
-                        logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
-                    else:
-                        reason = f"Export failed for data source '{ds_name}' (pulse {pulse}): {err_msg}"
-                        logger.warning(reason)
-                        errors.append(reason)
-            else:
-                ts_str = f"{ts}"
-                te_str = f"{te}"
-
-                original_path = Path(output_path)
-                valid_name = f"{ds_name}_{original_path.stem}{original_path.suffix}"
-                new_path = original_path.with_name(valid_name)
-
-                # Use of export data script
-                attempt_count += 1
-                valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=filename, formatType=export_format,
-                                              startTime=ts_str, endTime=te_str, outputFolder=new_path, chunkS=chunks,
-                                              **gen_kwargs)
-                if valid:
-                    success_count += 1
-                    logger.info(f"Export successful for data source: {ds_name} (format: {export_format} | Path: {new_path}")
-                else:
-                    reason = f"Export failed for data source '{ds_name}': {err_msg}"
-                    logger.warning(reason)
-                    errors.append(reason)
-
-        if gen_kwargs and success_count:
-            self._finish_export_progress()
-
+        attempt_count, success_count, errors = export.attempts, export.exported, export.errors
         if attempt_count > 0 and success_count == 0:
             error_details = "\n".join(f"- {e}" for e in errors)
             logger.error("Export failed:\n%s", error_details)
@@ -1927,14 +2075,34 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         else:
             self.show_popup_msg("Export completed",
                                 "The data export process finished successfully", QMessageBox.Icon.Information)
-        self.exportCfgWidget.ui.pathLineEdit.clear()
-        self.indicate_ready()
+
+    def _stop_export(self) -> bool:
+        """Ask whether to stop the export that runs in the export thread, before MINT quits; whether to."""
+        answer = QMessageBox.question(self, "Export in progress",
+                                      "An export is still running. Quit MINT and stop it?\n"
+                                      "The files it is writing are left incomplete.",
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                      QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        # The export can end while the question waits for the answer.
+        if self._export is not None:
+            for call in self._export.calls:
+                call.cancel()
+            self._export = None
+        return True
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # An export in this thread cannot be stopped: it ends before MINT quits, as it always did.
+        if self._export is not None and self._export.calls and not self._stop_export():
+            event.ignore()
+            return
         # Stop streaming workers before teardown: unlike daemon threads,
         # QThreads must not be destroyed while still running.
         if self.streamerCfgWidget.is_activated():
             self.streamerCfgWidget.streamer.stop()
+        if self._exportPool is not None:
+            self._exportPool.shutdown()
         QApplication.closeAllWindows()
         super().closeEvent(event)
 
@@ -2033,7 +2201,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if any(conditions):
                 signal.stream_valid = False
 
-        if signal.status_info.result == 'Fail':
+        if _left_out(signal):
             return
 
         # Preserve markers
@@ -2119,8 +2287,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         """Lay the canvas out on the places of its plots, by (column, row) from 1 with their (row span, col span), and
         fill each with plot_at(column, row): a plot, or None. No place leaves the canvas with no plot."""
         canvas = self.canvas
+        # The grid keeps the rows and columns chosen for it with Layout, the empty ones too.
+        layout_rows, layout_cols = getattr(canvas, 'layout_rows', None), getattr(canvas, 'layout_cols', None)
         if not places:
-            canvas.plots = [[]]
+            if layout_rows and layout_cols:
+                canvas.rows, canvas.cols = layout_rows, layout_cols
+                canvas.plots = [[] for _ in range(canvas.cols)]
+            else:
+                canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -2128,8 +2302,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             max_col = max(max_col, col + col_span - 1)
             max_row = max(max_row, row + row_span - 1)
 
-        canvas.cols = max_col
-        canvas.rows = max_row
+        canvas.cols = max(max_col, layout_cols or 0)
+        canvas.rows = max(max_row, layout_rows or 0)
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         rows_of = defaultdict(set)
@@ -2228,14 +2402,246 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.indicate_ready()
 
+    def accepts_drop(self, source, mime) -> bool:
+        """The canvas takes the variables dragged from the tree or the list of the variable search, and the rows
+        dragged from the table (see on_drop_plot)."""
+        browser = self.sigCfgWidget.selectVarDialog
+        return source is browser.tree or source is browser.tableView or source in self._table_views()
+
+    def _table_views(self) -> list:
+        return [widget.view() for widget in self.sigCfgWidget.item_widgets]
+
     def on_drop_plot(self, drop_info):
-        dragged_item = drop_info.dragged_item
-        row = drop_info.row
-        col = drop_info.col
-        new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
-                                columns=['DS', 'Variable', 'Stack'])
-        self.sigCfgWidget.append_dataframe(new_data)
+        """What is dropped on the canvas goes to the plot it was dropped on, in its stack under the mouse, or to a new
+        plot on the empty cell, and the canvas is drawn: the variables dragged from the variable search go to the
+        table there, and the rows dragged from the table move there."""
+        stack = f'{drop_info.row}.{drop_info.col}'
+        # An iplotlib that does not tell the stack takes drops on plots only, for their first stack.
+        stack_id = getattr(drop_info, 'stack', None)
+        if stack_id not in (None, 1):
+            stack += f'.{stack_id}'
+        source = getattr(drop_info, 'source', None)
+        if source in self._table_views():
+            if self._move_rows_to(sorted({index.row() for index in source.selectedIndexes()}), stack):
+                self.draw_clicked()
+            return
+        variables = self._dragged_variables(source)
+        if variables.empty:
+            return
+        variables['Stack'] = stack
+        self.sigCfgWidget.append_dataframe(variables)
         self.draw_clicked()
+
+    def _move_rows_to(self, rows: list, stack: str) -> bool:
+        """Give the rows of the table the Stack `stack` and the spans of the plot there, or none on an empty cell; the
+        plots they leave keep their spans. Whether a row changed."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        place = _stack_place(stack)
+        sizes = _places(df)
+        row_span, col_span = sizes.get(place) or (1, 1)
+        rows = [idx for idx in rows if str(df['Variable'].iloc[idx]).strip()]
+        edits = []
+        for idx in rows:
+            for column, text in (('Stack', stack), ('Row span', str(row_span) if row_span > 1 else ''),
+                                 ('Col span', str(col_span) if col_span > 1 else '')):
+                if _value_of(column, df[column].iloc[idx]) != _value_of(column, text):
+                    edits.append((idx, column, text))
+        # A plot the rows leave keeps its size: its first remaining row takes it if needed.
+        for left in {_stack_place(df['Stack'].iloc[idx]) for idx in rows} - {place, None}:
+            staying = [idx for idx in range(len(df)) if idx not in rows and _stack_place(df['Stack'].iloc[idx]) == left]
+            for column, size in zip(('Row span', 'Col span'), sizes[left]):
+                if staying and max(_accepted_span(df[column].iloc[idx]) or 1 for idx in staying) != size:
+                    edits.append((staying[0], column, str(size) if size > 1 else ''))
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for idx, column, text in edits:
+                model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+        return bool(edits)
+
+    def _dragged_variables(self, source=None) -> pd.DataFrame:
+        """The variables selected in the variable search, which a drag from it takes, with their data source, as its
+        Add to main table gives them: those of the rows selected in its list, or those selected in its tree."""
+        browser = self.sigCfgWidget.selectVarDialog
+        if source is browser.tableView:
+            rows = sorted({index.row() for index in source.selectedIndexes()})
+            return browser.tableView.model.dataframe.iloc[rows][['DS', 'Variable']].reset_index(drop=True)
+        items, seen = [], set()
+        for index in browser.tree.selectedIndexes():
+            item = index.internalPointer()
+            if not item.has_child() and id(item) not in seen:
+                seen.add(id(item))
+                items.append(item)
+        source = browser.get_current_source().name
+        return pd.DataFrame([[source, item.get_table_variable_str()] for item in items], columns=['DS', 'Variable'])
+
+    def reserved_slots(self) -> list:
+        """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
+        The canvas keeps those where it draws no plot, such as those of rows that were not drawn yet, for the plots of
+        those rows (see on_plots_arranged)."""
+        # Only an iplotlib that moves plots asks for them, and it has this module.
+        from iplotlib.core.layout import Slot
+        places = _places(self.sigCfgWidget.model.get_dataframe())
+        return [Slot(row - 1, col - 1, rows, cols) for (row, col), (rows, cols) in sorted(places.items())]
+
+    def reserved_stacks(self) -> dict:
+        """The highest stack the rows of the table give each plot, by its row and column from 0: a layout that joins
+        plots numbers the stacks of the next plot past it, so that the rows of a stack drawn or not keep theirs (see
+        on_plots_arranged)."""
+        stacks = {}
+        for value in self.sigCfgWidget.model.get_dataframe()['Stack']:
+            place = _stack_place(value)
+            if place is not None:
+                key = (place[0] - 1, place[1] - 1)
+                stacks[key] = max(stacks.get(key, 0), int(exp_stack.match(str(value).strip()).group(3) or 1))
+        return stacks
+
+    def max_span(self) -> int:
+        """The most rows or columns a plot spans: the table accepts no bigger Row span or Col span."""
+        return MAX_SPAN
+
+    def lay_out(self, rows: int, cols: int):
+        """Lay the plots out on the grid picked with the Layout tool, which a new session starts with (see
+        apply_remembered_layout)."""
+        super().lay_out(rows, cols)
+        if (getattr(self.canvas, 'layout_rows', None), getattr(self.canvas, 'layout_cols', None)) == (rows, cols):
+            settings = QSettings()
+            settings.setValue(LAYOUT_ROWS_KEY, rows)
+            settings.setValue(LAYOUT_COLS_KEY, cols)
+
+    def on_plots_arranged(self, changes: list):
+        """The rows of the table take the places their plots took on the canvas (see _move_rows)."""
+        self._move_rows(changes)
+        super().on_plots_arranged(changes)
+
+    def _move_rows(self, changes: list):
+        """The rows of the table take the places their plots take in `changes`: the rows of a reserved slot move with
+        it as those of a plot do, and those of plots joined into one take the stacks they have there (see
+        reserved_slots and iplotlib.core.layout.Arrangement.changes). The rows of each plot give it its rows and
+        columns, also when a plot is split, as Unstack does. A row that goes back to a place or a span it had takes
+        back the text it had there (see _text_back)."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        uids = df[model.ROWUID_COLNAME]
+        moves = {}
+        for before, after in changes:
+            moves.setdefault((before.row + 1, before.col + 1), []).append((before, after))
+        texts, going = {}, {}
+        for idx, value in enumerate(df['Stack']):
+            place = _stack_place(value)
+            if place not in moves:
+                continue
+            stack = int(exp_stack.match(str(value).strip()).group(3) or 1)
+            # Of the changes from the place, the one of the highest stack offset below the stack takes it.
+            taken = [change for change in moves[place] if stack > _stack_offset(change[0])]
+            if not taken:
+                continue
+            before, after = max(taken, key=lambda change: _stack_offset(change[0]))
+            new_stack = stack - _stack_offset(before) + _stack_offset(after)
+            parts = str(value).strip().split('.')
+            # A Stack that gives the row only keeps that form while its plot stays in the first column.
+            if len(parts) == 1 and after.col == 0 and new_stack == stack:
+                texts[idx, 'Stack'] = str(after.row + 1)
+            else:
+                tail = parts[2:] if new_stack == stack else [str(new_stack)] if new_stack > 1 else []
+                texts[idx, 'Stack'] = '.'.join([str(after.row + 1), str(after.col + 1)] + tail)
+            going[idx] = (before, after)
+        sizes = _places(df)
+        places = [_stack_place(texts.get((idx, 'Stack'), value)) for idx, value in enumerate(df['Stack'])]
+        new_sizes = dict(sizes)
+        new_sizes.update({(after.row + 1, after.col + 1): (after.row_span, after.col_span)
+                          for _, after in going.values()})
+        rows_at = {}
+        for idx, value in enumerate(df['Stack']):
+            rows_at.setdefault(('before', _stack_place(value)), set()).add(uids.iloc[idx])
+            rows_at.setdefault(('after', places[idx]), set()).add(uids.iloc[idx])
+        involved = {_stack_place(value) for value in df['Stack'].iloc[list(going)]} | {places[idx] for idx in going}
+        for idx, value in enumerate(df['Stack']):
+            if _stack_place(value) not in involved and places[idx] not in involved:
+                continue
+            if idx in going:
+                texts[idx, 'Stack'] = self._text_back(uids.iloc[idx], 'Stack', value, texts[idx, 'Stack'])
+            before, after = going.get(idx, (None, None))
+            resized = after is not None and (after.row_span, after.col_span) != (before.row_span, before.col_span)
+            for column, side in (('Row span', 0), ('Col span', 1)):
+                old, left, size = df[column].iloc[idx], sizes[_stack_place(value)][side], new_sizes[places[idx]][side]
+                new = (str(size) if size > 1 else '') if resized else str(old)
+                # A span text depends on the rows that share the plot, since one of them carries its size.
+                texts[idx, column] = self._text_back(
+                    uids.iloc[idx], column, old, new,
+                    (_value_of('Stack', value), left, frozenset(rows_at['before', _stack_place(value)])),
+                    (_value_of('Stack', texts.get((idx, 'Stack'), value)), size,
+                     frozenset(rows_at['after', places[idx]])))
+        # A plot whose rows do not carry its size, as a part of a split plot, gets it on its first row.
+        for place in involved:
+            rows = [idx for idx in range(len(df)) if places[idx] == place]
+            for column, side in (('Row span', 0), ('Col span', 1)):
+                size = new_sizes[place][side]
+                if rows and max(_accepted_span(texts.get((idx, column), df[column].iloc[idx])) or 1
+                                for idx in rows) != size:
+                    texts[rows[0], column] = str(size) if size > 1 else ''
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for (idx, column), text in texts.items():
+                if text != str(df[column].iloc[idx]):
+                    model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+
+    def _text_back(self, uid, column: str, old, new: str, left=None, going=None) -> str:
+        """`new`, or the text the row of `uid` had in `column` when it last left what `new` gives, so that a row that
+        goes back to a place or a span, as on undo, takes back the text it had there; `old` is the text it leaves.
+        `left` and `going` key what the row leaves and goes to when the value of the texts is not enough."""
+        texts = self._texts_left.setdefault((uid, column), {})
+        texts[_value_of(column, old) if left is None else left] = str(old)
+        return texts.get(_value_of(column, new) if going is None else going, new)
+
+    def _remember_places(self):
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        self._table_places = _places(df)
+        self._table_spans = {uid: (_accepted_span(row_span), _accepted_span(col_span)) for uid, row_span, col_span
+                             in zip(df[model.ROWUID_COLNAME], df['Row span'], df['Col span'])}
+        # The texts of the rows that left the table go with them (see _text_back).
+        self._texts_left = {key: texts for key, texts in self._texts_left.items() if key[0] in self._table_spans}
+
+    def _on_span_changed(self, top_left, bottom_right):
+        """A Row span or Col span changed by hand gives its plot that many rows or columns, and the plots below move
+        as when the mouse resizes the plot (see iplotlib.core.layout.resized): taking the span off a plot that the
+        mouse made taller brings the plots below back up. A size the plots cannot take, or a table whose plots
+        already overlap, moves no other row. Only the span of a row the table had counts, and only if it changes: a
+        new row comes with a span, as the copy of a shifted signal does, and an edit can leave it as it was."""
+        df = self.sigCfgWidget.model.get_dataframe()
+        columns = set(df.columns[top_left.column():bottom_right.column() + 1])
+        if not columns & {'Stack', 'Row span', 'Col span'}:
+            return
+        before, spans = self._table_places, self._table_spans
+        self._remember_places()
+        if self._moving_rows or top_left != bottom_right or not columns & {'Row span', 'Col span'}:
+            return
+        column = df.columns[top_left.column()]
+        place = _stack_place(df['Stack'].iloc[top_left.row()])
+        span = _accepted_span(df[column].iloc[top_left.row()])
+        had = spans.get(df[self.sigCfgWidget.model.ROWUID_COLNAME].iloc[top_left.row()])
+        if place not in before or span is None or had is None or had[column == 'Col span'] == span:
+            return
+        try:
+            from iplotlib.core import layout
+        except ImportError:
+            # An iplotlib that does not move plots: a span changes the size of its plot only.
+            return
+        canvas, plots = _canvas_of(before)
+        slots = [slot for _, slot in layout.slots_of(canvas)]
+        if any(a.overlaps(b) for i, a in enumerate(slots) for b in slots[i + 1:]):
+            return
+        rows, cols = before[place]
+        arrangement = layout.resized(canvas, plots[place], *((span, cols) if column == 'Row span' else (rows, span)))
+        if arrangement is not None:
+            self._move_rows(arrangement.changes)
 
     def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
         box = QMessageBox()
