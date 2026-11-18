@@ -4,12 +4,10 @@ started reads its data in the background, and clicking them stops it."""
 import os
 import shutil
 import tempfile
-import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QMessageBox
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from iplotlib.qt.gui.iplotQtCanvas import IplotQtCanvas
