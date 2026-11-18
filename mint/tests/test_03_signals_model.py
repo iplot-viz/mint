@@ -16,10 +16,11 @@ from contextlib import ExitStack
 from unittest import mock
 
 import pandas as pd
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPersistentModelIndex, Qt
 from PySide6.QtGui import QColor
 
 from iplotDataAccess.appDataAccess import AppDataAccess
+from iplotlib.interface.iplotSignalAdapter import Result, Stage, StatusInfo
 
 from mint.models.mtSignalsModel import MTSignalsModel
 from mint.tests.fixtures import write_csv_datasource_config
@@ -282,6 +283,44 @@ class TestRowThatCannotBeDrawn(unittest.TestCase):
                          {'title': 'Row not drawn', 'anchor': 'cat-validation',
                           'explanation': "The envelope is 1 to show it, or 0 or empty to hide it. Fix it and Draw "
                                          "again."})
+
+
+class _UnreadableSignal:
+    """A signal whose data can't be read, for update_signal_data."""
+    isDownsampled = False
+    y_data = None
+
+    def __init__(self, uid: str):
+        self.uid = uid
+        self.status_info = StatusInfo()
+
+    def get_data(self):
+        self.status_info.result, self.status_info.stage = Result.FAIL, Stage.DA
+
+
+class TestSortKeepsRowsWhole(unittest.TestCase):
+    """Sorting the table moves with each row its red cells and the indexes the views hold of it."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def test_a_red_cell_and_the_index_of_its_row_move_with_the_row(self):
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame({'DS': ['csv'] * 3, 'Variable': ['B', 'C', 'A'], 'Stack': ['1', '2', '3']}))
+        column = model.get_dataframe().columns.get_loc('Variable')
+        model.update_signal_data(1, _UnreadableSignal(model.get_dataframe().at[1, 'uid']), fetch_data=True)
+        selected = QPersistentModelIndex(model.index(1, column))
+
+        model.sort(column, Qt.SortOrder.AscendingOrder)
+
+        table = model.get_dataframe()
+        red = [table.at[row, 'Variable'] for row in range(len(table))
+               if model.data(model.index(row, column), Qt.ItemDataRole.BackgroundRole) is not None]
+        self.assertEqual(red, ['C'])
+        self.assertEqual(table.at[selected.row(), 'Variable'], 'C')
+
 
 if __name__ == '__main__':
     unittest.main()

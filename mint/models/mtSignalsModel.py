@@ -947,6 +947,7 @@ class MTSignalsModel(QAbstractItemModel):
         """
         Sort the model by the given column index and order.
         Empty values always pushed to the bottom, rest by column as string.
+        The cells marked with an error, and the indexes the views hold, move with their rows.
         """
         # Determine the column name from the DataFrame
         col_name = self._table.columns[column]
@@ -958,6 +959,7 @@ class MTSignalsModel(QAbstractItemModel):
         # Convert everything to string before flag (homogenize)
         col_as_str = self._table[col_name].astype(str)
         self._table['_empty_flag'] = (col_as_str.isna() | (col_as_str == '')).astype(int)
+        self._table['_row'] = range(len(self._table))
 
         self._table.sort_values(
             by=['_empty_flag', col_name],
@@ -967,6 +969,12 @@ class MTSignalsModel(QAbstractItemModel):
         )
 
         self._table.drop(columns=['_empty_flag'], inplace=True)
+        # Where each row was before the sort.
+        rows = self._table.pop('_row').to_numpy()
+        self._table_fails = self._table_fails.iloc[rows].reset_index(drop=True)
+        moved = {int(old): new for new, old in enumerate(rows)}
+        indexes = self.persistentIndexList()
+        self.changePersistentIndexList(indexes, [self.index(moved[index.row()], index.column()) for index in indexes])
         self.layoutChanged.emit()
 
     def export_information(self):
