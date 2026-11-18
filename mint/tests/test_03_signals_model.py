@@ -164,6 +164,38 @@ class TestStatusErrorInfo(unittest.TestCase):
                 self.assertEqual(None if brush is None else brush.color(), None if text is None else QColor(text))
 
 
+class TestFailedRowMarksItsCell(unittest.TestCase):
+    """The cell a row fails at turns red: the variable when it can't be read or processed, the x, y or z expression
+    that can't be evaluated otherwise."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def _red_cells(self, stage, expression):
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1'],
+                                          'y': ['${self}.data[::0]']}))
+        signal = mock.Mock(uid=model.get_dataframe().at[0, 'uid'], isDownsampled=False, y_data=None)
+
+        def read():
+            signal.status_info = StatusInfo(result=Result.FAIL, stage=stage)
+            signal.status_info.expression = expression
+
+        signal.get_data.side_effect = read
+        model.update_signal_data(0, signal, fetch_data=True)
+        fails = model._table_fails.loc[0]
+        return [column for column in fails.index if fails[column]]
+
+    def test_an_expression_that_fails_marks_its_cell(self):
+        self.assertEqual(self._red_cells(Stage.PROC, 'y'), ['y'])
+
+    def test_a_variable_that_fails_marks_its_cell(self):
+        self.assertEqual(self._red_cells(Stage.DA, ''), ['Variable'])
+        self.assertEqual(self._red_cells(Stage.PROC, ''), ['Variable'])
+
+
 class TestRowLevelRelativePulse(unittest.TestCase):
     """Row-level relative pulse ids (0 = last, -N = N-th previous) must resolve
     to the explicit pulse for that row, instead of being misrouted into the
