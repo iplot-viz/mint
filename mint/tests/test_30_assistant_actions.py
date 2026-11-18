@@ -766,7 +766,8 @@ class FileReadingTest(unittest.TestCase):
         broken = self.path("broken.pdf")
         with open(broken, "wb") as f:
             f.write(b"not a pdf")
-        # pypdf comes with the assistant's extra, which not every environment has: then that is what it says.
+        # pypdf comes with MINT, but an installation that leaves its dependencies out can lack it: then that is what
+        # it says.
         said = "can't read broken.pdf as a PDF" if importlib.util.find_spec("pypdf") else "needs pypdf"
         with self.assertRaisesRegex(files.FileError, said):
             files.read(broken)

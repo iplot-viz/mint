@@ -367,7 +367,7 @@ It runs on this computer, without network. Closing the panel frees the memory th
 | `MINT_ASSISTANT_SHA256` | SHA-256 of a model file MINT does not know yet, optional |
 | `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card (up to 1 MB), to retrain the assistant with, optional |
 
-The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler. It also brings what reads Excel (openpyxl) and PDF (pypdf) files.
+The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
 
 ## 3. ITER environment {#iter-environment}
 
