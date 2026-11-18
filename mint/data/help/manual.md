@@ -94,7 +94,7 @@ MINT always assumes UTC time, regardless of the host time zone. Timestamps follo
 
 Data can be queried by:
 
-- Absolute time range (From time / To time, ISO 8601).
+- Absolute time range (From time / To time, ISO 8601). The calendar next to them picks whole days: click the first day, then the last, and the range goes from 00:00:00 on the first to 23:59:59.999999999 on the last; one day alone is two clicks on it.
 - Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. `ITER:CWS-SCSU-BASIN-FILL-TESTS/130125`. On SDCC, IMAS pulses use `pulse/run`, e.g. `135011/7`, or an Access Layer URI such as `imas:hdf5?path=/home/ITER/.../3/105027/32`.
 - Relative time range, with an optional refresh interval (minimum 5 minutes).
 

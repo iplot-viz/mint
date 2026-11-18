@@ -122,7 +122,7 @@ $ mint
 <p>MINT always assumes UTC time, regardless of the host time zone. Timestamps follow ISO 8601. On the time axis the part of the timestamp shared by the whole view sits in the corner (<code>UTC:2026-08-13T05:52:</code>) and each tick shows only what changes; a tick reduced to a bare number carries its unit, e.g. <code>06s</code>, <code>20min</code>, <code>500ms</code>.</p>
 <p>Data can be queried by:</p>
 <ul>
-<li>Absolute time range (From time / To time, ISO 8601).</li>
+<li>Absolute time range (From time / To time, ISO 8601). The calendar next to them picks whole days: click the first day, then the last, and the range goes from 00:00:00 on the first to 23:59:59.999999999 on the last; one day alone is two clicks on it.</li>
 <li>Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. <code>ITER:CWS-SCSU-BASIN-FILL-TESTS/130125</code>. On SDCC, IMAS pulses use <code>pulse/run</code>, e.g. <code>135011/7</code>, or an Access Layer URI such as <code>imas:hdf5?path=/home/ITER/.../3/105027/32</code>.</li>
 <li>Relative time range, with an optional refresh interval (minimum 5 minutes).</li>
 </ul>
