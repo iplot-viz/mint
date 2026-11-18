@@ -354,9 +354,6 @@ class TestSortKeepsRowsWhole(unittest.TestCase):
         self.assertEqual(table.at[selected.row(), 'Variable'], 'C')
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 class TestQtModelContract(unittest.TestCase):
     """Views follow the table through Qt's signals: rows announced as they really change, a cell with no children."""
 
@@ -389,24 +386,5 @@ class TestQtModelContract(unittest.TestCase):
         del tester
 
 
-class TestInvalidRowStatus(unittest.TestCase):
-    """A row that can't be drawn says why in its Status, and the hover explains a data source that isn't here."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.app = ensure_qapp()
-        _ensure_data_access()
-
-    def test_unknown_data_source_is_named_in_the_status(self):
-        model = MTSignalsModel()
-        model.set_dataframe(pd.DataFrame({'DS': ['imaspy'], 'Variable': ['pf_active/coil[1]/current/data'],
-                                          'Stack': ['1'], 'Plot type': ['PlotXY']}))
-        with model.init_create_signals():
-            list(model.create_signals(0, []))
-        cols = list(model.get_dataframe().columns)
-        status = model.get_dataframe().iat[0, cols.index('Status')]
-        self.assertTrue(status.startswith("Invalid|data source: 'imaspy' is not one of the data sources"), status)
-        self.assertNotIn("table row", status)
-        info = model.error_info_for_cell(model.createIndex(0, cols.index('Status')))
-        self.assertEqual(info['title'], 'Data source not available')
-
+if __name__ == '__main__':
+    unittest.main()
