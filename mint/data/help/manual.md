@@ -277,6 +277,8 @@ NumPy is available via the `np.` prefix. The X/Y columns can also be used to plo
 
 In the *x*, *y* and *z* columns, `${self}` is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. `${Bus1}.data - ${self}.data`.
 
+Expressions can also use `${startTime}` and `${endTime}`, the start and end of the row's time range (its own, or the one of the time configuration), and `${pulseID}`, its pulse. They are in the units of the time vectors and do not change with a zoom: `(${self}.time-${startTime})/1e9` keeps its origin, where `${self}.time[0]` is the first time read, which a zoom moves.
+
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 ### 2.10 Data Sources {#data-sources}
@@ -439,7 +441,7 @@ MINT can't reach the server, can't find the variable, or finds no data in the ti
 
 #### Processing {#cat-processing}
 
-An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The Status cell shows the message; hover it for an explanation.
+An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell shows the message; hover it for an explanation.
 
 #### Export {#cat-export}
 

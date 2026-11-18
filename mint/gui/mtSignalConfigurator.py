@@ -147,8 +147,9 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
             continue
         try:
             p.set_expression(expression)
-            # Check if the expression only uses the row's alias or 'self'
-            expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            # Whether the expression uses no alias of another row: 'self', the row's own alias or a value of the row
+            # as ${startTime} make it depend on no other row.
+            expr = all(var == alias or var not in aliases for var in p.var_map)
             is_simple &= expr
             if not expr:
                 result_dependencies = p.get_var_expression(expression)
