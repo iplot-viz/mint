@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import numpy as np
@@ -524,11 +525,13 @@ class ReadAheadTest(_MainWindowTestCase):
         self.assertEqual(win.canvasStack.currentWidget()._parser.pending_places, {})
         self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
 
-    def test_an_import_that_fails_while_its_rows_are_read_says_why(self):
+    def _import_of_a_row_out_of_the_grid(self, failure: Exception = None):
+        """A window that imported, reading in the background, a workspace with a row added to the table after its
+        Draw, out of the grid of the canvas saved with it; and the message box it may have shown. With `failure`,
+        checking the rows raises it."""
         AccessHelper.pool = None
         source = self._two_plots()
         source.draw_clicked()
-        # A row added to the table after the Draw, out of the grid of the canvas saved with it.
         source.sigCfgWidget.model.set_dataframe(pd.DataFrame({'DS': ['csv'] * 3, 'Variable': [VAR1, VAR2, VAR1],
                                                               'Stack': ['1.1', '1.2', '2.1'],
                                                               'Plot type': ['PlotXY'] * 3}))
@@ -536,13 +539,26 @@ class ReadAheadTest(_MainWindowTestCase):
 
         AccessHelper.pool = _PoolStub()
         win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
-        with patch('mint.gui.mtMainWindow.QMessageBox') as box:
+        with patch('mint.gui.mtMainWindow.QMessageBox') as box, ExitStack() as stack:
+            if failure is not None:
+                stack.enter_context(patch.object(win, '_import_row', side_effect=failure))
             win.import_json(path)
             _drawn_when_done(win)
+        return win, box
+
+    def test_an_import_that_fails_while_its_rows_are_read_says_why(self):
+        win, box = self._import_of_a_row_out_of_the_grid(ValueError("a row that cannot be read"))
 
         self.assertIn("cannot import workspace", box.return_value.setText.call_args.args[0])
         box.return_value.exec_.assert_called_once()
         self.assertIsNone(win._drawing)
+
+    def test_a_row_out_of_the_grid_of_the_canvas_saved_is_imported_into_the_table(self):
+        win, box = self._import_of_a_row_out_of_the_grid()
+
+        box.return_value.exec_.assert_not_called()
+        self.assertEqual(win.sigCfgWidget.model.get_dataframe()['Variable'].tolist()[:3], [VAR1, VAR2, VAR1])
+        self.assertEqual(sorted(_drawn_data(win)), [VAR1, VAR2])
 
     def test_the_copy_of_a_duplicate_is_read_ahead(self):
         AccessHelper.pool = pool = _PoolStub()

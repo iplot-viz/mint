@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QSettings, QStandardPaths, Qt
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QSettings, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QMouseEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractItemView, QApplication
@@ -29,7 +29,7 @@ from mint.gui.mtMainWindow import MTMainWindow, _stack_place, apply_remembered_l
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 from mint.models.mtSignalsModel import MAX_SPAN
 from mint.models.utils import mtBlueprintParser
-from mint.tests.fixtures import write_csv_datasource_config
+from mint.tests.fixtures import SettingsInTempDir, write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 
 try:
@@ -801,35 +801,18 @@ class ArrangePlotsTest(unittest.TestCase):
 
 @unittest.skipUnless(layout is not None and hasattr(IplotQtCanvas, 'plotsArranged'),
                      "the installed iplotlib does not lay plots out")
-class RememberedLayoutTest(unittest.TestCase):
-    """The grid picked with the Layout tool is the one a new session starts with. QSettings is redirected to a
-    temporary directory so the tests never read or write a real user configuration file."""
+class RememberedLayoutTest(SettingsInTempDir, unittest.TestCase):
+    """The grid picked with the Layout tool is the one a new session starts with."""
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.app = ensure_qapp()
+        super().setUpClass()
         write_csv_datasource_config()
         AppDataAccess.initialize()
         AccessHelper.da = AppDataAccess.get_data_access()
-        cls._tmp = tempfile.TemporaryDirectory()
-        cls._format = QSettings.defaultFormat()
-        QSettings.setDefaultFormat(QSettings.Format.IniFormat)
-        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls._tmp.name)
-        cls._org, cls._name = cls.app.organizationName(), cls.app.applicationName()
-        cls.app.setOrganizationName("ITER-tests")
-        cls.app.setApplicationName("MINT-tests")
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.app.setOrganizationName(cls._org)
-        cls.app.setApplicationName(cls._name)
-        QSettings.setDefaultFormat(cls._format)
-        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
-                          QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation))
-        cls._tmp.cleanup()
 
     def setUp(self):
-        QSettings().clear()
+        super().setUp()
         self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
         AccessHelper.pool = None
 
