@@ -93,6 +93,28 @@ class MainWindowExportDictTest(unittest.TestCase):
         finally:
             win.close()
 
+    def test_a_workspace_saved_before_a_draw_imports_its_table(self):
+        from unittest.mock import patch
+        from mint.tests.test_28_read_ahead import _PoolStub, _drawn_when_done
+        self.addCleanup(setattr, AccessHelper, 'pool', AccessHelper.pool)
+        for pool in (None, _PoolStub()):
+            with self.subTest(in_background=pool is not None):
+                AccessHelper.pool = pool
+                win = _build_main_window()
+                _populate(win)
+                workspace = win.export_dict()
+                win.close()
+                session = _build_main_window()
+                self.addCleanup(session.close)
+
+                with patch.object(session, '_tell_import_failed') as failed:
+                    session.import_dict(workspace)
+                    _drawn_when_done(session)
+
+                failed.assert_not_called()
+                self.assertEqual(session.sigCfgWidget.model.get_dataframe()['Variable'].tolist(),
+                                 ['MAG-MCTB-F1:VAR1', 'MAG-MCTB-F1:VAR2'])
+
     def test_signal_cfg_roundtrip_preserves_row_count(self):
         """Export then feed signal_cfg.model back into a new signals model."""
         from mint.models.mtSignalsModel import MTSignalsModel

@@ -94,7 +94,7 @@ MINT always assumes UTC time, regardless of the host time zone. Timestamps follo
 
 Data can be queried by:
 
-- Absolute time range (From time / To time, ISO 8601).
+- Absolute time range (From time / To time, ISO 8601). The calendar next to them picks whole days: click the first day, then the last, and the range goes from 00:00:00 on the first to 23:59:59.999999999 on the last; one day alone is two clicks on it.
 - Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. `ITER:CWS-SCSU-BASIN-FILL-TESTS/130125`. On SDCC, IMAS pulses use `pulse/run`, e.g. `135011/7`, or an Access Layer URI such as `imas:hdf5?path=/home/ITER/.../3/105027/32`.
 - Relative time range, with an optional refresh interval (minimum 5 minutes).
 
@@ -110,7 +110,7 @@ Multiple pulse IDs can be overlaid by separating them with commas. Use the *Sear
 
 #### 2.4.1 Icons and buttons
 
-The toolbar above the variable table provides import / save / append actions, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing.
+The toolbar above the variable table provides import / save / append actions, which open where the last signal set was opened or saved, in the next sessions too, a *Hide/Show columns* menu, a *Search Vars* button (browse variables per data source), and *Load new module* to register an extra Python module for processing. Selecting a module in that window shows what it offers, from its documentation: its submodules and their functions, how each is called and what it does; click a function for its whole documentation.
 
 In the variable search window, the *Synoptic variables* check box lists the variables visible on HMI; each entry shows the unit between square brackets, the data type and the description. When checked, the search also matches the description and the unit; type a unit between square brackets (e.g. `[K]`) to select only the variables measured in that unit, alone or together with more text (`[K] temperature`). The number of variables found is shown next to the search bar. Double-click a node to expand all its children, or to collapse it again. It is only shown for data sources with a controls metadata server configured (`controlsmetadata` key in the data sources file). Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).
 
@@ -157,7 +157,7 @@ Draw and workspace import lay the plots out at once, each saying how many of its
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 
-Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON files.
+Use *File > Import Workspace* or *File > Export workspace*. Workspaces are JSON files. Both open where the last workspace was imported or exported, in the next sessions too. A workspace exported before *Draw* imports its table, to draw.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
@@ -182,7 +182,6 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: rubber-band a region (cover both X and Y); left double-click to reset.
 - **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y or X, in seconds along a time axis, or with *Duplicate signal* adds a shifted copy of it next to the original; in SELECT mode, dragging a signal shifts it too.
-- **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
 - Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
@@ -276,6 +275,8 @@ The *x* column rewrites the time vector; *y* rewrites the data vector. Example -
 NumPy is available via the `np.` prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.
 
 In the *x*, *y* and *z* columns, `${self}` is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. `${Bus1}.data - ${self}.data`.
+
+Expressions can also use `${startTime}` and `${endTime}`, the start and end of the row's time range (its own, or the one of the time configuration), and `${pulseID}`, its pulse. They are in the units of the time vectors and do not change with a zoom: `(${self}.time-${startTime})/1e9` keeps its origin, where `${self}.time[0]` is the first time read, which a zoom moves.
 
 <p style="text-align:center;margin:14px 0;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
@@ -379,7 +380,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 11. **Specify a start/end time for pulse IDs?** Use Start/End Time with shared X axis off. See `CustomizedPulsesPlotsWithStartEnd.json`.
 12. **Compare signals with two different time ranges?** Yes (untick shared X). See `WeekComparison.json`.
 13. **Different time ranges on the same plot, no pulses?** See `WeekComparisonSamePlot.json`.
-14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`.
+14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`; select it in the list to read its functions.
 15. **Examples of self-written modules?** See Advanced Exercises [RD5].
 16. **Add my own data source?** See Advanced Exercises [RD6].
 17. **Where are the workspaces?**
@@ -409,7 +410,7 @@ Raised when MINT asks a data source for a signal and either cannot reach the ser
 
 #### Processing {#cat-processing}
 
-Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
+Raised while MINT evaluates an expression or aligns signals before plotting. The two most common variants are arrays of incompatible shapes (signals with different sample counts that NumPy cannot broadcast) and expressions that return a scalar instead of an array. Mixing envelope and non-envelope signals also lives here. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell carries the underlying NumPy or parser message; hover it for the human-readable explanation.
 
 #### Export {#cat-export}
 
