@@ -326,6 +326,7 @@ $ mint
 </table>
 <p>NumPy is available via the <code>np.</code> prefix. The X/Y columns can also be used to plot one signal against another. Note: time vectors are nanoseconds since Unix epoch in absolute mode, or relative seconds in pulse mode.</p>
 <p>In the <em>x</em>, <em>y</em> and <em>z</em> columns, <code>${self}</code> is the row's own signal. Use it instead of the row's own alias when the expression also uses other aliases, e.g. <code>${Bus1}.data - ${self}.data</code>.</p>
+<p>Expressions can also use <code>${startTime}</code> and <code>${endTime}</code>, the start and end of the row's time range (its own, or the one of the time configuration), and <code>${pulseID}</code>, its pulse. They are in the units of the time vectors and do not change with a zoom: <code>(${self}.time-${startTime})/1e9</code> keeps its origin, where <code>${self}.time[0]</code> is the first time read, which a zoom moves.</p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_17.png" alt="X and Y columns in a complex processing example" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 14. Using X and Y columns in a complex processing.</i></p>
 
 <h3 id="data-sources">2.10 Data Sources</h3>
@@ -495,7 +496,7 @@ $ mint
 <h4 id="cat-data-access">Data access</h4>
 <p>MINT can't reach the server, can't find the variable, or finds no data in the time range. The Status cell shows <code>Data-Access | 0 points</code> or a network or timeout message, the row turns red, and other rows of the same plot may turn orange. Widen the time range, check the variable name, or check that the data source is reachable.</p>
 <h4 id="cat-processing">Processing</h4>
-<p>An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The Status cell shows the message; hover it for an explanation.</p>
+<p>An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The row isn't drawn, and the cell of the expression that fails turns red: <em>Variable</em>, <em>x</em>, <em>y</em> or <em>z</em>. The Status cell shows the message; hover it for an explanation.</p>
 <h4 id="cat-export">Export</h4>
 <p>The export writes the raw data of the data source, so per-signal time overrides, x/y/z processing and expressions in the <em>Variable</em> column are left out, and a warning lists the aliases left out. If the export fails, for example in a folder you can't write to, a red <em>Export failed</em> popup gives the reason and a <em>Learn more</em> button.</p>
 <h4 id="cat-configuration">Configuration</h4>
