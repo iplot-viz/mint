@@ -302,6 +302,11 @@ def _code_letters(word: str) -> str:
     return match.group(1) if match else ""
 
 
+def _unpadded(code: str) -> str:
+    """A code without the zeros its letters are followed by before a number: "mft0111" is "mft111"."""
+    return re.sub(r"(?<=[a-z])0+(?=\d)", "", code)
+
+
 def _contains(words: List[str], part: List[str]) -> bool:
     return bool(part) and any(words[i:i + len(part)] == part for i in range(len(words) - len(part) + 1))
 
@@ -347,6 +352,10 @@ def named(snap: Snapshot, request: str, meanings: bool = True) -> List[Tuple[Row
         hits = [r for r in rows if any(low in WORD.findall(n) for n in names[r.id])]
         if not hits and len(low) >= 4 and CODE_LIKE.search(low):
             hits = [r for r in rows if any(low in n for n in names[r.id])]
+        if not hits and len(low) >= 4 and CODE_LIKE.search(low):
+            # A code with the zeros before its number left out, as people write it: "MFT111" for MFT0111.
+            bare = _unpadded(low)
+            hits = [r for r in rows if any(bare in _unpadded(n) for n in names[r.id])]
         if not hits and low.isalpha():
             # The letters of a code, as people shorten it ("mlt" for MLT1000): the signal before its copies.
             hits = [r for r in rows if any(_code_letters(w) == low for n in names[r.id] for w in WORD.findall(n))]

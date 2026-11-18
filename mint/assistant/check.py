@@ -1,4 +1,7 @@
 """What MINT reads in a request by itself, to complete or question the model's answer."""
+import dataclasses
+import difflib
+import itertools
 import re
 from typing import List, Optional
 
@@ -47,6 +50,198 @@ ARTICLE = re.compile(r"^the\s+", re.IGNORECASE)
 NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 # "2 signals", "two pressure signals".
 COUNT = re.compile(r"\b(\d{1,2}|" + "|".join(NUMBERS) + r")\s+(?:\w+\s+)?(?:signals?|variables?)\b", re.IGNORECASE)
+# "The third plot", "the last graph", "plot 3": counted as MINT lays the plots out, down each column and then right,
+# so that the third plot of a grid is the one of Stack 3.1. "Plot 3.1" is the plot of Stack 3.1.
+ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4, "fifth": 5,
+            "5th": 5, "sixth": 6, "6th": 6, "seventh": 7, "7th": 7, "eighth": 8, "8th": 8, "ninth": 9, "9th": 9,
+            "tenth": 10, "10th": 10}
+NTH_PLOT = re.compile(r"\b(" + "|".join(ORDINALS) + r"|last)\s+(?:plot|graph)\b|"
+                      r"\b(?:plot|graph)\s+(?:number\s+|n[o°]\.?\s*)?(\d{1,2})\b(?![.,]\d)", re.IGNORECASE)
+STACK_PLOT = re.compile(r"\b(?:plot|graph|stack)\s+(\d{1,2})\.(\d{1,2})\b", re.IGNORECASE)
+# The verbs whose ids are rows that a plot named by its place stands for.
+ROW_VERBS = {"process", "hide", "show", "envelope", "style", "remove", "shift", "source"}
+# "All of them", "every row": a data source for the whole table, not for the rows the model could list.
+THEM_ALL = re.compile(r"\b(?:all|every|each|whole)\b", re.IGNORECASE)
+# "Different colours for each signal", "each plot should have different signal colors" (typos of "different"
+# included): every signal in a colour of its own, in matplotlib's order of colours, seen alike on light and dark.
+APART = re.compile(r"\b\w*(?:differ|distinct|separat|uniqu)\w*\s+(?:\w+\s+){0,2}?colou?rs?\b|"
+                   r"\bcolou?rs?\s+(?:\w+\s+){0,2}?(?:\w*differ\w*|distinct|apart)\b|\bown\s+colou?rs?\b", re.IGNORECASE)
+EACH = re.compile(r"\b(?:each|every|all)\b", re.IGNORECASE)
+OF_SIGNALS = re.compile(r"\b(?:signals?|plots?|graphs?|curves?|lines?|traces?|variables?)\b", re.IGNORECASE)
+APART_COLOURS = ("blue", "orange", "green", "red", "purple", "brown", "pink", "grey", "olive", "cyan", "navy", "teal",
+                 "maroon", "magenta")
+
+
+# "Zoom around 10:30 +/- 1 min" ("aroun", "1mn" too): that much on each side of the time, not from it on.
+AROUND = re.compile(r"\b(?:aroun\w*|about|near|at|cent(?:er|re)d?\s+on)\s+(\d{1,2})[:h](\d{2})(?::(\d{2}))?\s*"
+                    r"(?:\+\s*/?\s*-|±|plus\s+or\s+minus)\s*(\d+(?:\.\d+)?)\s*"
+                    r"(ms|milliseconds?|s|secs?|seconds?|mn|mins?|minutes?|h|hrs?|hours?)\b", re.IGNORECASE)
+# "A plot with variables from MAG-MCTB": a system to look for, which the model can't name in a table without it.
+OF_SYSTEM = re.compile(r"\b(?:variables?|signals?)\s+(?:from|of|in|for|containing|with)\s+(?:the\s+)?"
+                       r"([A-Z][A-Z0-9]+(?:[-:][A-Z0-9]+)+|[A-Z]{2,}\d*)\b")
+# "A canvas layout 1x1", "a 2 by 3 grid": the grid of the canvas, which only its Layout menu changes.
+LAYOUT = re.compile(r"\b(?:layout|grid)\b.{0,20}?\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\b|"
+                    r"\b(\d{1,2})\s*(?:x|by|×)\s*(\d{1,2})\s+(?:layout|grid)\b", re.IGNORECASE)
+
+
+def _clock(seconds: float) -> str:
+    whole = int(round(seconds))
+    hours, rest = divmod(whole, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours:02d}:{minutes:02d}" + (f":{secs:02d}" if secs else "")
+
+
+def _around(request: str, cmds: List[Command]) -> List[Command]:
+    """A zoom from a time to another, for a request that zooms around a time give or take a span."""
+    found = AROUND.search(request or "")
+    if not found:
+        return cmds
+    hours, minutes, secs, amount, unit = found.groups()
+    centre = int(hours) * 3600 + int(minutes) * 60 + int(secs or 0)
+    unit = unit.lower()
+    span = float(amount) * (0.001 if unit.startswith("ms") or unit.startswith("milli") else
+                            1 if unit.startswith("s") else 3600 if unit.startswith("h") else 60)
+    if not 0 <= centre - span < centre + span < 86400:
+        return cmds
+    return _each(cmds, lambda cmd: dataclasses.replace(cmd, words=[_clock(centre - span), _clock(centre + span)])
+                 if cmd.verb == "zoom" and len(cmd.words) == 2 and cmd.words[0] != "last" else cmd)
+
+
+def _beyond(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
+    """What the model only talks about, when the request is plain: a search for the system whose variables a request
+    wants plotted; how to change the grid of the canvas, which only its Layout menu does."""
+    grid = LAYOUT.search(request or "")
+    if grid and not any(cmd.verb in ("move", "split") for cmd in cmds):
+        rows, cols = [n for n in grid.groups() if n][:2]
+        return [Command("say", text=f"I can't change the grid myself: pick {rows}x{cols} in Layout, the grid button "
+                                    f"above the plots, and the plots fill it column after column.")]
+    system = OF_SYSTEM.search(request or "")
+    if system and all(cmd.verb in ("say", "ask") for cmd in cmds) and not prompt.named(snap, request):
+        return [Command("find", words=[system.group(1)])]
+    return cmds
+
+
+def plot_named(snap: Snapshot, request: str) -> Optional[str]:
+    """The plot the request points at by its Stack ("plot 3.1"), or by its place in MINT's order of the plots, down each
+    column and then right ("the third plot", "plot 3"); None if it doesn't, or names no plot there is."""
+    found = STACK_PLOT.search(request or "")
+    if found:
+        stack = (int(found.group(1)), int(found.group(2)))
+        return next((plot.id for plot in snap.plots if (plot.row, plot.col) == stack), None)
+    found = NTH_PLOT.search(request or "")
+    if not found or not snap.plots:
+        return None
+    order = sorted(snap.plots, key=lambda plot: (plot.col, plot.row))
+    word, number = found.group(1), found.group(2)
+    n = len(order) if word and word.lower() == "last" else ORDINALS[word.lower()] if word else int(number)
+    return order[n - 1].id if 0 < n <= len(order) else None
+
+
+def _to_plot_named(snap: Snapshot, request: str, cmd: Command, plot_id: str) -> Command:
+    """A command for the plot the request names (see plot_named) when the model took another: on that plot, on its
+    signal, or on the signals of it the request names; a question when it has several and the request names none."""
+    if not cmd.ids or cmd.ids == ["all"]:
+        return cmd
+    if all(i.startswith("p") for i in cmd.ids):
+        return cmd if plot_id in cmd.ids else dataclasses.replace(cmd, ids=[plot_id])
+    rows = [snap.row(i) for i in cmd.ids]
+    if cmd.verb not in ROW_VERBS or any(row is not None and row.plot == plot_id for row in rows):
+        return cmd
+    members = [row for row in snap.rows if row.plot == plot_id]
+    named = [row for row, _ in prompt.named(snap, request) if row.plot == plot_id]
+    chosen = named or members
+    if len(chosen) == 1 or named:
+        return dataclasses.replace(cmd, ids=[row.id for row in chosen])
+    if not chosen:
+        return cmd
+    names = [row.alias or row.variable for row in chosen]
+    return Command("ask", text=f"Sure, which one: {', '.join(names[:-1])} or {names[-1]}?")
+
+
+# A short correction of the change just proposed or made: "not this one but the MFT111", "I asked for plot 3.1".
+CORRECTING = re.compile(r"^\s*(?:no\b|nope\b|not\b|i\s+(?:meant?|ask(?:ed)?\s+for|said|wanted|want)\b|"
+                        r"(?:this|that)\s+one\b|the\s+other\b|rather\b|actually\b)|\binstead\b", re.IGNORECASE)
+MAX_CORRECTION_WORDS = 10
+
+
+def corrects(text: str) -> bool:
+    """Whether a text is a short correction of the change just proposed or made, rather than a new request."""
+    return 0 < len((text or "").split()) <= MAX_CORRECTION_WORDS and bool(CORRECTING.search(text or ""))
+
+
+def retarget(snap: Snapshot, text: str, cmds: List[Command]) -> Optional[List[Command]]:
+    """The commands of a card again, on the signal or plot a correction names instead (see corrects): a question
+    when it names a plot of several signals and not which; `cmds` itself when it names what they are for already;
+    None when it names nothing."""
+    plot_id = plot_named(snap, text)
+    rows = [row for row, _ in prompt.named(snap, text)]
+    if plot_id is None and not rows:
+        return None
+    moved = []
+    for cmd in cmds:
+        if cmd.ids and cmd.ids != ["all"] and all(i.startswith("p") for i in cmd.ids):
+            plots = [plot_id] if plot_id else sorted({row.plot for row in rows if row.plot})
+            moved.append(dataclasses.replace(cmd, ids=plots or cmd.ids))
+        elif cmd.verb in ROW_VERBS and cmd.ids:
+            chosen = [row for row in rows if plot_id is None or row.plot == plot_id] or \
+                     [row for row in snap.rows if row.plot == plot_id]
+            # A name in two rows, one drawn and one not, as Lana's table had: the one drawn.
+            chosen = [row for row in chosen if row.plot] or chosen
+            if not chosen:
+                return None
+            if len(chosen) > 1 and not rows:
+                names = [row.alias or row.variable for row in chosen]
+                return [Command("ask", text=f"Sure, which one: {', '.join(names[:-1])} or {names[-1]}?")]
+            moved.append(dataclasses.replace(cmd, ids=[row.id for row in chosen]))
+        else:
+            moved.append(cmd)
+    return cmds if moved == cmds else moved
+
+
+def _names_source(request: str, source: str) -> bool:
+    """Whether the request names a data source, typos of it included ("codacudaanl")."""
+    words = re.findall(r"[\w-]+", (request or "").lower())
+    return any(word == source.lower() or (len(word) > 4 and difflib.SequenceMatcher(None, word, source.lower()).ratio()
+                                          >= 0.9) for word in words)
+
+
+def _source_rows(snap: Snapshot, request: str, cmd: Command) -> Command:
+    """A data source change for the rows the request means, which the model can't list past a few: those of the data
+    source it names to change from ("codacudaanal to codacuda"), or every row ("set all of them to codacuda")."""
+    if cmd.verb != "source" or not cmd.words:
+        return cmd
+    target = cmd.words[0]
+    rows = snap.rows + snap.unlisted
+    named = {row.data_source for row in rows if row.data_source and row.data_source != target
+             and _names_source(request, row.data_source)}
+    if len(named) == 1:
+        source = named.pop()
+        ids = [row.id for row in rows if row.data_source == source]
+    elif not named and THEM_ALL.search(request or ""):
+        ids = [row.id for row in rows if row.data_source != target]
+    else:
+        return cmd
+    return dataclasses.replace(cmd, ids=ids) if ids else cmd
+
+
+def _each(cmds: List[Command], change) -> List[Command]:
+    """The commands, each changed by `change`: the same list when none changes."""
+    changed = [change(cmd) for cmd in cmds]
+    return cmds if all(new is old for new, old in zip(changed, cmds)) else changed
+
+
+def _colours_apart(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
+    """Each signal drawn in a colour of its own, in the order of the table, for a request that asks so when the model
+    did something else: plots each start their colours anew, so signals of different plots share the first."""
+    text = request or ""
+    if not (APART.search(text) and EACH.search(text) and OF_SIGNALS.search(text)) or \
+            any(cmd.verb == "style" and "color" in cmd.params for cmd in cmds):
+        return cmds
+    rows = [row for row in snap.rows if row.plot]
+    if len(rows) < 2:
+        return cmds
+    return [Command("style", ids=[row.id], params={"color": colour})
+            for row, colour in zip(rows, itertools.cycle(APART_COLOURS))]
 
 
 def places(snap: Snapshot, request: str) -> List[str]:
@@ -303,6 +498,7 @@ def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
     # A switch the request names is evidence for what it wants; one it doesn't name is dropped only against such
     # evidence, or beside other settings: a typo or "the same" are no evidence.
     said = {key for key, words in SWITCH_WORDS.items() if words.search(request or "")}
+    cmds = _each(cmds, lambda cmd: _source_rows(snap, request, cmd))
     for cmd in cmds:
         if cmd.verb == "source" and cmd.words:
             cmd.words = [_source_meant(snap, request, cmd)]
@@ -318,6 +514,15 @@ def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
                                 "goes, markers, line style and width, font size, background, the y axis limits and "
                                 "label, and the title; and on a signal its colour, line and markers.")]
     cmds = _zoom_to_the_end(snap, request, cmds)
+    cmds = _around(request, cmds)
+    cmds = _beyond(snap, request, cmds)
+    cmds = _colours_apart(snap, request, cmds)
+    named_plot = plot_named(snap, request)
+    if named_plot:
+        cmds = _each(cmds, lambda cmd: _to_plot_named(snap, request, cmd, named_plot))
+        asked = [cmd for cmd in cmds if cmd.verb == "ask"]
+        if asked:
+            return asked[:1]
     made_up = _made_up(request, cmds)
     if made_up:
         return [Command("ask", text=TEXT_QUESTIONS[made_up])]
