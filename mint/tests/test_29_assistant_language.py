@@ -842,9 +842,9 @@ class WorkspaceTextTest(unittest.TestCase):
     def test_markers_asked_for_are_kept_and_others_dropped(self):
         from mint.assistant.check import review
         snap = two_by_two()
-        self.assertEqual([str(c) for c in review(snap, "enable the marker on the second plot",
+        self.assertEqual([str(c) for c in review(snap, "enable the marker on the top right plot",
                                                  commands.parse("plot p2 marker=on"))], ["plot p2 marker=on"])
-        self.assertEqual([str(c) for c in review(snap, "grid on the second plot",
+        self.assertEqual([str(c) for c in review(snap, "grid on the top right plot",
                                                  commands.parse("plot p2 grid=on marker=on"))], ["plot p2 grid=on"])
 
 
@@ -910,6 +910,19 @@ class InsightTest(unittest.TestCase):
         pulse = {"count": 3, "unit": "A", "last": (1.5, 42.0)}
         self.assertTrue(Voice.data_summary([("I_main", pulse)], ["last"]).startswith("I_main: last 1.5 A at 42 s."))
 
+    def test_the_unit_of_a_signal_is_told_from_its_data(self):
+        from mint.assistant import insight as i
+        from mint.assistant.voice import Voice
+        # Lana's question (18-nov), which the model could only say it couldn't see.
+        self.assertEqual(i.asked("what's the unitof the variabe?"), [i.UNIT])
+        self.assertEqual(i.asked("what's the unit of the variabe?"), [i.UNIT])
+        self.assertEqual(i.asked("what unit is the flow in?"), [i.UNIT])
+        self.assertEqual(i.asked("what units does the export use?"), [])
+        text = Voice.data_summary([("MFT0111", {"count": 3, "unit": "kg/s"}), ("MPD0112", {"count": 3, "unit": ""})],
+                                  ["unit"])
+        self.assertEqual(text.splitlines()[:2], ["MFT0111 is in kg/s.",
+                                                 "MPD0112: the data source gives no unit for it."])
+
 
 class FeaturesTest(unittest.TestCase):
     """MINT's own tools asked for in a user's words, which gave a search for "stats" or the grid turned on."""
@@ -919,6 +932,7 @@ class FeaturesTest(unittest.TestCase):
         cases = {
             "can you open the stats table?": (f.STATISTICS, f.OPEN),
             "the statistics": (f.STATISTICS, f.OPEN),
+            "can you share the stats": (f.STATISTICS, f.OPEN),  # Lana, 18-nov: Export opened instead
             "can you enable the mini-map": (f.MINIMAP, f.OPEN),
             "turn off the minimap": (f.MINIMAP, f.CLOSE),
             "what is the mini-map?": (f.MINIMAP, f.ABOUT),
@@ -1239,6 +1253,131 @@ class RecipesTest(unittest.TestCase):
         self.assertEqual(recipes.number(30.0), "30")
         self.assertEqual(recipes.number(0.25), "0.25")
         self.assertEqual(recipes.number(-273.15), "-273.15")
+
+
+def _lanas_grid() -> Snapshot:
+    """Five rows of two plots, as the assistant numbers them, left to right and then down; and some of their signals
+    (Lana's workspace of 18-nov)."""
+    plots = [PlotInfo(id=f"p{2 * (r - 1) + c}", row=r, col=c) for r in range(1, 6) for c in (1, 2)]
+    rows = [RowInfo(id="r7", index=6, variable="FLOW:MFT1700-AA-IN", stack="2.1", plot="p3"),
+            RowInfo(id="r12", index=11, variable="VAC-TKM-PPC-CVB:MFT0111-FTCB00-XI0", stack="3.1", plot="p5"),
+            RowInfo(id="r17", index=16, variable="VAC-TKM-PPC-CVB:MPD0111-PTCB00-XI0", stack="4.1", plot="p7"),
+            RowInfo(id="r18", index=17, variable="VAC-TKM-PPC-CVB:MPD0112-PTCB00-XI0", stack="4.1", plot="p7")]
+    return Snapshot(rows=rows, plots=plots)
+
+
+class PlotsCountedAsMintTest(unittest.TestCase):
+    """A plot named by its Stack, or by its place as MINT counts the plots, down each column and then right."""
+
+    def test_the_third_plot_is_the_third_down_the_first_column_and_plot_3_1_is_its_stack(self):
+        from mint.assistant import check
+        snap = _lanas_grid()
+        self.assertEqual(check.plot_named(snap, "the third plot has a noisy signal"), "p5")
+        self.assertEqual(check.plot_named(snap, "i ask for the plot 3.1"), "p5")
+        self.assertEqual(check.plot_named(snap, "zoom plot 2"), "p3")
+        self.assertEqual(check.plot_named(snap, "the last plot"), "p10")
+        self.assertIsNone(check.plot_named(snap, "merge plots 1 and 2"))
+        self.assertIsNone(check.plot_named(snap, "merge the first two plots"))
+        self.assertIsNone(check.plot_named(snap, "plot 6.1"))
+        self.assertEqual(check.plot_named(two_by_two(), "the second plot"), "p3", "Stack 2.1, under the first")
+
+    def test_a_change_of_a_plot_named_by_its_place_is_made_on_its_signal(self):
+        from mint.assistant import check
+        snap = _lanas_grid()
+        got = check.review(snap, "the third plot has a noisy signal, how cna i smooth it",
+                           commands.parse("process r7 moving_average"))
+        self.assertEqual([str(cmd) for cmd in got], ["process r12 moving_average"])
+        asked = check.review(snap, "smooth the signal of the fourth plot", commands.parse("process r7 moving_average"))
+        self.assertEqual(asked[0].verb, "ask")
+        self.assertIn("MPD0111", asked[0].text)
+        self.assertIn("MPD0112", asked[0].text)
+
+    def test_a_correction_after_a_card_names_the_signal_or_the_plot_its_change_is_for(self):
+        from mint.assistant import check
+        snap = _lanas_grid()
+        card = commands.parse("process r7 moving_average")
+        for text in ("not this one but the MFT111", "i ask for the plot 3.1", "this one VAC-TKM-PPC-CVB:MFT0111-FTCB00-XI0"):
+            with self.subTest(text=text):
+                self.assertTrue(check.corrects(text))
+                self.assertEqual([str(cmd) for cmd in check.retarget(snap, text, card)], ["process r12 moving_average"])
+        self.assertFalse(check.corrects("smooth the pressure of the third plot over 30 s"))
+        self.assertIsNone(check.retarget(snap, "no thanks", card))
+        right = commands.parse("process r12 moving_average")
+        self.assertIs(check.retarget(snap, "i ask for the plot 3.1", right), right, "what the card is for already")
+        # Her table had MFT0111 in a row not drawn too: the correction means the one drawn.
+        snap.rows.append(RowInfo(id="r72", index=71, variable="VAC-TKM-PPC-CVB:MFT0111-FTCB00-XI0"))
+        self.assertIs(check.retarget(snap, "not this one but the MFT111", right), right)
+
+
+class DataSourceOfEveryRowTest(unittest.TestCase):
+    """A data source for every row, or for those of the data source named, past the few rows the model can list."""
+
+    @staticmethod
+    def _table() -> Snapshot:
+        rows = [RowInfo(id=f"r{i}", index=i - 1, variable=f"VAC:MT{i:04d}",
+                        data_source="codacuda" if i % 3 == 0 else "codacudaanal",
+                        stack=f"{i}.1" if i < 5 else "", plot=f"p{i}" if i < 5 else "") for i in range(1, 21)]
+        return Snapshot(rows=rows, plots=[PlotInfo(id=f"p{i}", row=i, col=1) for i in range(1, 5)],
+                        data_sources=["codacuda", "codacudaanal"])
+
+    def test_all_of_them_is_every_row_and_the_reverse_the_rows_of_the_source_named(self):
+        from mint.assistant import check
+        snap = self._table()
+        twelve = " ".join(f"r{i}" for i in range(1, 13))
+        got = check.review(snap, "can you update the data source and have all of them set to codacudaanal",
+                           commands.parse(f"source {twelve} to codacudaanal"))
+        self.assertEqual(got[0].ids, [row.id for row in snap.rows if row.data_source != "codacudaanal"])
+        anal = [row.id for row in snap.rows if row.data_source == "codacudaanal"]
+        for request in ("no the reverse codacudaanl to codacuda", "hmm i still see datasource set to codacudaanal"):
+            with self.subTest(request=request):
+                back = check.review(snap, request, commands.parse(f"source {twelve} to codacuda"))
+                self.assertEqual(back[0].ids, anal)
+        one = check.review(snap, "read MT0003 from codacudaanal", commands.parse("source r3 to codacudaanal"))
+        self.assertEqual(one[0].ids, ["r3"])
+
+
+class LanasSessionTest(unittest.TestCase):
+    """Requests of Lana's session of 18-nov (her record.txt) that the model answered wrong."""
+
+    def test_a_zoom_around_a_time_takes_the_span_on_each_side(self):
+        from mint.assistant import check
+        snap = snapshot_one_row()
+        got = check.review(snap, "can you zoom aroun 10:30 +/- 1mn",
+                           commands.parse('zoom all from "10:30" to "10:31"'))
+        self.assertEqual([str(cmd) for cmd in got], ['zoom all from "10:29" to "10:31"'])
+        kept = commands.parse('zoom all from "10:30" to "10:31"')
+        self.assertIs(check.review(snap, "zoom from 10:30 to 10:31", kept), kept)
+
+    def test_variables_of_a_system_are_looked_for_and_the_grid_is_told_how_to_pick(self):
+        from mint.assistant import check
+        got = check.review(Snapshot(), "i want to make a plot with variables from MAG-MCTB",
+                           commands.parse('say "I can\'t do that here."'))
+        self.assertEqual([str(cmd) for cmd in got], ["find MAG-MCTB"])
+        for answer in ("canvas shared_time=off", "focus off"):  # the second the model gave in MINT
+            with self.subTest(answer=answer):
+                grid = check.review(snapshot_one_row(), "no i mean make a canvas layout 1x1", commands.parse(answer))
+                self.assertEqual([cmd.verb for cmd in grid], ["say"])
+                self.assertIn("pick 1x1 in Layout", grid[0].text)
+
+
+class ColourOfEachSignalTest(unittest.TestCase):
+    """Each signal in a colour of its own, as Paulo asked twice (mint#251): plots each start their colours anew."""
+
+    def test_different_colours_for_each_signal_give_each_one_its_own(self):
+        from mint.assistant import check
+        snap = Snapshot(rows=[RowInfo(id=f"r{i}", index=i - 1, variable=f"pf_active/coil[{i}]/current/data",
+                                      stack=f"{i}.1", plot=f"p{i}") for i in range(1, 5)],
+                        plots=[PlotInfo(id=f"p{i}", row=i, col=1) for i in range(1, 5)])
+        for request in ("each plot uses the same color for each signal. chose different colors for each signal.",
+                        "no. each plot should hav edifferent signal colors"):
+            with self.subTest(request=request):
+                got = check.review(snap, request, commands.parse("plot all marker=on"))
+                self.assertEqual([str(cmd) for cmd in got], ["style r1 color=blue", "style r2 color=orange",
+                                                             "style r3 color=green", "style r4 color=red"])
+        kept = check.review(snap, "make the second signal red", commands.parse("style r2 color=red"))
+        self.assertEqual([str(cmd) for cmd in kept], ["style r2 color=red"])
+        said = check.review(snap, "the different colours are nice", commands.parse('say "Thanks."'))
+        self.assertEqual([cmd.verb for cmd in said], ["say"])
 
 
 if __name__ == "__main__":

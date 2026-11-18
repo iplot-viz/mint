@@ -443,6 +443,19 @@ class AssistantFlowTest(unittest.TestCase):
         self.ask("12 s", 'say "Sure."')
         self.assertEqual(len(self.engine.prompts), calls + 1, "nothing applied any more: a request for the model")
 
+    def test_a_correction_after_a_card_makes_its_change_on_the_signal_or_plot_it_names(self):
+        self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
+        calls = len(self.engine.prompts)
+        cards = self.ask("not this one but MT01", 'say "no model here"')
+        self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["process r3 moving_average window=30s"])
+        # Naming the one the card is for already keeps the card, as Lana's "i ask for the plot 3.1" should have.
+        self.assertEqual(self.ask("I asked for plot 2", 'move r1 to new'), [])
+        self.assertEqual(self.said[-1], "The card is for that one already: click Apply when it looks right.")
+        # The first plot holds two signals: which one is asked, as the model would have.
+        self.assertEqual(self.ask("I asked for plot 1", 'say "no model here"'), [])
+        self.assertEqual(self.said[-1], "Sure, which one: pirani or MAG-MCTB-F1:VAR2?")
+        self.assertEqual(len(self.engine.prompts), calls)
+
     def test_a_number_alone_changes_the_processing_on_screen_rather_than_the_one_applied(self):
         cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
         self.ctl.panel.cardActionTriggered.emit(cards[0], ctl.APPLY, [])

@@ -19,7 +19,8 @@ NAMES = {
                        r"tree|browser|button)?\s*[?.!]?$|\bvariables? (?:browser|tree)\b", re.IGNORECASE),
 }
 OPENING = re.compile(
-    r"\b(?:open|show|display|enable|activate|turn on|switch on|bring up|see|view|give me)\b", re.IGNORECASE)
+    r"\b(?:open|show|display|enable|activate|turn on|switch on|bring up|see|view|give me|share|pull up|get me)\b",
+    re.IGNORECASE)
 CLOSING = re.compile(r"\b(?:close|hide|disable|deactivate|turn off|switch off|get rid of|remove)\b", re.IGNORECASE)
 ASKING = re.compile(r"^\s*(?:what|where|how|which|why|is there|are there)\b", re.IGNORECASE)
 

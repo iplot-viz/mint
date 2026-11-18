@@ -3,8 +3,8 @@ many samples. The model never sees the values, so these never reach it."""
 import re
 from typing import List
 
-LAST, FIRST, MAX, MIN, MEAN, COUNT = "last", "first", "max", "min", "mean", "count"
-ORDER = (LAST, FIRST, MAX, MIN, MEAN, COUNT)
+LAST, FIRST, MAX, MIN, MEAN, COUNT, UNIT = "last", "first", "max", "min", "mean", "count", "unit"
+ORDER = (UNIT, LAST, FIRST, MAX, MIN, MEAN, COUNT)
 _THING = r"(?:values?|samples?|points?|readings?|data)"
 WHAT = {
     LAST: re.compile(rf"\b(?:last|latest|newest|most recent|current|final)\s+{_THING}\b|\bvalues? (?:right )?now\b|"
@@ -17,6 +17,8 @@ WHAT = {
     MEAN: re.compile(r"(?<!moving )(?<!rolling )(?<!running )(?<!you )(?<!i )(?<!does )(?<!do )(?<!it )"
                      r"\b(?:mean|average|avg)\b(?!.*\bover\b)", re.IGNORECASE),
     COUNT: re.compile(r"\b(?:how many|number of|count of)\s+(?:samples|points|values|data points)\b", re.IGNORECASE),
+    # "The unit of the variable" ("unitof" too), "what unit is it in": not "what units does the export use".
+    UNIT: re.compile(r"\bunits?\s*(?:of|for)\b|\bwhat\s+units?\s+(?:is|are)\b|\bmeasured in\b", re.IGNORECASE),
 }
 # A question, not a request to do something: "what's the max of X?", "tell me the last values".
 QUESTION = re.compile(r"\?|^\s*(?:what|which|how|when|is|are|tell|give me|do we)\b|"

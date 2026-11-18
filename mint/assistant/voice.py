@@ -130,12 +130,19 @@ class Voice:
         lines = []
         days = {_day(s[what][1]) for _, s in found for what in ("first", "last", "max", "min") if s.get(what)}
         for name, s in found:
+            if "unit" in asked:
+                lines.append(f"{name} is in {s['unit']}." if s.get("unit") else
+                             f"{name}: the data source gives no unit for it.")
+                if len(asked) == 1:
+                    continue
             if not s.get("count"):
                 lines.append(f"{name}: no sample with a value in what is drawn.")
                 continue
             unit = f" {s['unit']}" if s.get("unit") else ""
             parts = []
             for what in asked:
+                if what == "unit":
+                    continue
                 if what == "count":
                     parts.append(f"{s['count']} samples")
                 elif what == "mean":
@@ -279,6 +286,12 @@ class Voice:
         # After one question the user answered, asking again would go round in circles.
         return ("I'm still not sure what you mean, sorry. Select the signals in the table and tell me what "
                 "to do with them, and I'll use the selected ones.")
+
+    @staticmethod
+    def already_for_it(applied: bool) -> str:
+        """A correction naming the signal or plot the last card is for already."""
+        return "That's the one I changed." if applied else \
+            "The card is for that one already: click Apply when it looks right."
 
     @staticmethod
     def still_missing_number() -> str:

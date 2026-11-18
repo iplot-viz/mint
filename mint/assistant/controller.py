@@ -671,6 +671,8 @@ class AssistantController(QObject):
                 return
         if question is None and self._again_with(text, pending):
             return
+        if question is None and self._retarget(text, pending):
+            return
         if answering:
             rewritten = check.chosen(self.workspace.snapshot(), question.request, text) and \
                 check.in_place_of_it(question.request, text)
@@ -811,6 +813,34 @@ class AssistantController(QObject):
         cmds[0].params[params[0]] = recipes.number(value)
         request = followup.with_answer(followup.OpenQuestion(entry.get("request") or "", entry["snap"]), text)
         self._plan_with_number(cmds, entry["snap"], request)
+        return True
+
+    def _retarget(self, text: str, pending) -> bool:
+        """A short correction right after a card, on screen or just applied ("not this one but the MFT111", "I asked
+        for plot 3.1"): that card's change again, on the signal or plot it names instead (see check.retarget)."""
+        entry = self._cards[pending] if pending in self._cards else self._last_applied
+        if entry is None or entry.get("snap") is None or not check.corrects(text):
+            return False
+        try:
+            cmds = commands.parse("\n".join(entry["proposal"].commands))
+        except commands.CommandError:
+            return False
+        snap = self._snapshot(self._last_action)
+        moved = check.retarget(snap, text, cmds)
+        if moved is None:
+            return False
+        self._record_turn(text, [str(cmd) for cmd in moved], by="MINT")
+        asked = entry.get("request") or ""
+        if moved is cmds:
+            # It names what the card is for: the card stays as it is, still the one Enter applies.
+            self.panel.add_assistant_message(self.voice.already_for_it(applied=pending not in self._cards))
+            if pending in self._cards:
+                self._set_pending(pending)
+        elif moved[0].verb == "ask":
+            # Its answer names the signal of the card's request (see check.chosen).
+            self._present(Planner(self.workspace, snap).plan(moved), asked, snap, answering=False)
+        else:
+            self._plan_with_number(moved, snap, f"{asked.rstrip(' .?!')}. {text.strip()}")
         return True
 
     def _answer_with_number(self, question, value: float, answer: str):
