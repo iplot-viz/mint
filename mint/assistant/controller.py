@@ -12,7 +12,7 @@ from iplotLogging import setupLogger
 from mint.assistant import (check, commands, diagnose, doubt, features, files, followup, insight, manual, prompt,
                             recipes, record, when)
 from mint.assistant.actions import MAX_ADDED, ActionError, ApplyContext, MissingValue, Planner, Proposal, added_rows
-from mint.assistant.config import AssistantConfig, prompt_cache_dir, runtime_available, state_dir
+from mint.assistant.config import AssistantConfig, prompt_cache_dir, record_place, runtime_available, state_dir
 from mint.assistant.engine import BUSY, FAILED, LOADING, READY, ModelEngine
 from mint.assistant.models import KNOWN_MODELS, chat_format, few_shot, reads_files
 from mint.assistant.voice import Voice
@@ -205,6 +205,9 @@ class AssistantController(QObject):
         self.panel.emptySubmitted.connect(self._apply_pending)  # Enter with nothing typed applies the card
         self.panel.fileAttached.connect(self.on_file_attached)
         self.panel.attachmentRemoved.connect(self.on_attachment_removed)
+        if hasattr(self.panel, "newConversationRequested"):
+            self.panel.newConversationRequested.connect(self.new_conversation)
+            self.panel.set_new_conversation(True)
         self.fileRead.connect(self._on_file_read)
         self._pending_card = None
         self.toggle_action = None
@@ -231,7 +234,7 @@ class AssistantController(QObject):
         self._last_action = ""
         self._last_applied = None  # the card entry of the last change applied and not undone
         self._sized = False
-        self._session = f"{os.getpid()}-{id(self):x}"  # tells the cards of two MINT sessions apart in the record
+        self._conversation = None  # its record, from its first entry (see _recorded)
         self._model_name = ""
         self._primed = True
         self._few_shot = True
@@ -257,13 +260,45 @@ class AssistantController(QObject):
         else:
             self._fit_in_splitter()
         if not self.panel.message_count():
-            try:
-                self.panel.set_suggestions(suggestions(self.workspace.snapshot()) or SUGGESTIONS)
-            except Exception as e:  # the fixed ones are fine too
-                logger.debug(f"Assistant: no suggestions from the table: {e}")
+            self._start()
         self.panel.input.setFocus()
         self._ensure_engine()
         self._tell_problems(on_open=True)
+
+    def _start(self):
+        """What an empty conversation begins with: the suggestions from the table, and that it is kept when it is."""
+        try:
+            self.panel.set_suggestions(suggestions(self.workspace.snapshot()) or SUGGESTIONS)
+        except Exception as e:  # the fixed ones are fine too
+            logger.debug(f"Assistant: no suggestions from the table: {e}")
+        if self.config.record:
+            self.panel.add_assistant_message(self.voice.RECORDED)
+
+    def new_conversation(self):
+        """Start again: an empty panel, and nothing said before carried into the next answers. The changes applied
+        stay, and the record goes on in a file of its own."""
+        if self.engine is not None and self._inflight is not None:
+            self.engine.cancel()  # its answer, once cancelled, finds no request waiting for it
+        self._inflight = self._queued = None
+        self.panel.set_busy(False)
+        self._set_pending(None)
+        self.panel.clear()
+        self.on_attachment_removed()
+        self._open_question = self._last_search = self._last_applied = None
+        self._cards, self._searches, self._planned, self._help_offer = {}, {}, {}, {}
+        self._fix_offer = self._told_problems = self._search_source = self._last_action = ""
+        self._turns = 0
+        self._conversation = None
+        self._start()
+        self._tell_problems(on_open=True)
+        self.panel.input.setFocus()
+
+    def _recorded(self) -> record.Conversation:
+        """The record of this conversation, made at its first entry, when where it goes is known."""
+        if self._conversation is None:
+            folder, shared = record_place(self.config)
+            self._conversation = record.Conversation(folder, self.config.record_key, shared)
+        return self._conversation
 
     def _release_model(self):
         """Closing the panel frees the memory the model takes; opening it again loads it in a few seconds."""
@@ -782,7 +817,8 @@ class AssistantController(QObject):
         except Exception as e:
             logger.debug(f"Assistant: no snapshot for the record: {e}")
             return
-        record.write_turn(f"{self._session}-t{self._turns}", request, snap, list(answer), by)
+        conversation = self._recorded()
+        conversation.write_turn(f"{conversation.id}-t{self._turns}", request, snap, list(answer), by)
 
     def _answer_card(self, card, text: str) -> bool:
         """"ok" or "no" to the card on screen, as its Apply or Dismiss; False when the text says something else."""
@@ -1166,8 +1202,9 @@ class AssistantController(QObject):
 
     def _record(self, card_id, entry, outcome):
         if self.config.record and entry.get("request"):
-            record.write(f"{self._session}-{card_id}", outcome, entry["request"], entry["snap"],
-                         entry["proposal"].commands)
+            conversation = self._recorded()
+            conversation.write(f"{conversation.id}-{card_id}", outcome, entry["request"], entry["snap"],
+                               entry["proposal"].commands)
 
     def _apply(self, card_id, entry):
         proposal = entry["proposal"]

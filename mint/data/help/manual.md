@@ -332,7 +332,7 @@ See also: [Reference - Supported data source types](#datasource-types) for the l
 
 ### 2.11 Assistant {#assistant}
 
-Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
+Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back, and the one before it starts a new conversation: the panel empties, and the next answers don't follow from what was said before. The changes applied stay.
 
 - *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
 - *put the second plot in log scale*, *no grid anywhere*, *markers on the second plot*.
@@ -364,7 +364,10 @@ It runs on this computer, without network. Closing the panel frees the memory th
 | `MINT_ASSISTANT_MODEL` | path to the model file (`.gguf`) |
 | `MINT_ASSISTANT_THREADS` | CPU threads, optional (up to 4 by default) |
 | `MINT_ASSISTANT_SHA256` | SHA-256 of a model file MINT does not know yet, optional |
-| `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card (up to 1 MB), to retrain the assistant with, optional |
+| `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card, to retrain the assistant with; a folder of the team to keep them there, encrypted; optional |
+| `MINT_ASSISTANT_RECORD_KEY` | the public key of the team (`.pem`) the records are encrypted with; needed for a folder of the team, optional |
+
+With the record on, the panel says so at the start of each conversation. Each conversation goes to a file of its own, up to 1 MB, named by when it started and a random id, with neither the name of the user nor their folders in it.
 
 The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
 

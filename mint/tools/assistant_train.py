@@ -3,7 +3,9 @@
     python -m mint.tools.assistant_train data --out data.jsonl WORKSPACE.json ...
     python -m mint.tools.assistant_train data --from-snapshots data_workspaces.json --kinds hide,split --out new.jsonl
     python -m mint.tools.assistant_train paraphrase --teacher HF_DIR --data data.jsonl --out data_p.jsonl
-    python -m mint.tools.assistant_train feedback --out feedback.jsonl RECORD.jsonl ...
+    python -m mint.tools.assistant_train feedback --out feedback.jsonl [--key PRIVATE.pem] RECORD.jsonl ...
+    python -m mint.tools.assistant_train record-key FOLDER
+    python -m mint.tools.assistant_train record-read [--key PRIVATE.pem] RECORD.jsonl ...
     python -m mint.tools.assistant_train train --base HF_DIR --data data_p.jsonl --workspaces data_workspaces.json --out DIR
     python -m mint.tools.assistant_train merge --gguf BASE-BF16.gguf --adapter DIR --out merged-F16.gguf
     python -m mint.tools.assistant_train quantize --gguf merged-F16.gguf --out mint-assistant-Q4_K_M.gguf
@@ -19,7 +21,7 @@ import sys
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
-from mint.assistant import commands, files, prompt, recipes, settings
+from mint.assistant import commands, files, prompt, recipes, record, settings
 from mint.assistant.snapshot import FileInfo, FileVariable, RowInfo, build as build_snapshot
 
 FORMAT = "qwen3-nothink"
@@ -1713,14 +1715,9 @@ def cmd_feedback(args):
     """The cards operators applied and did not undo, as training cases with the workspace they saw."""
     last = {}
     for path in args.records:
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    entry = json.loads(line)
-                except ValueError:
-                    continue
-                if "card" in entry:  # requests and answers ("turn") say nothing of what was kept
-                    last[entry["card"]] = entry  # its final outcome: applied, then maybe undone
+        for entry in record.read(path, getattr(args, "key", None)):
+            if "card" in entry:  # requests and answers ("turn") say nothing of what was kept
+                last[entry["card"]] = entry  # its final outcome: applied, then maybe undone
     workspaces, cases, outcomes = {}, [], {}
     for entry in last.values():
         outcomes[entry.get("outcome")] = outcomes.get(entry.get("outcome"), 0) + 1
@@ -1740,6 +1737,18 @@ def cmd_feedback(args):
         json.dump(workspaces, f)
     print(json.dumps({"cards": len(last), "outcomes": outcomes, "cases": len(cases)}))
 
+
+
+def cmd_record_key(args):
+    """The key pair of the team: the public key goes in MINT_ASSISTANT_RECORD_KEY, the private one reads the records."""
+    private, public = record.new_key(args.folder)
+    print(json.dumps({"private": private, "public": public}))
+
+
+def cmd_record_read(args):
+    for path in args.records:
+        for entry in record.read(path, getattr(args, "key", None)):
+            print(json.dumps(entry))
 
 
 def render(case, workspaces):
@@ -1959,7 +1968,13 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=7)
     p = sub.add_parser("feedback")
     p.add_argument("--out", required=True)
-    p.add_argument("records", nargs="+", help="record.jsonl files (see mint.assistant.record)")
+    p.add_argument("--key", help="the private key of the team, for the encrypted records")
+    p.add_argument("records", nargs="+", help="record files (see mint.assistant.record)")
+    p = sub.add_parser("record-key", help="make the key pair of the team the records are encrypted with")
+    p.add_argument("folder", help="where to write it: keep the private key out of any shared folder")
+    p = sub.add_parser("record-read", help="print the entries of record files, one JSON line each")
+    p.add_argument("--key", help="the private key of the team, for the encrypted records")
+    p.add_argument("records", nargs="+")
     p = sub.add_parser("superseded", help="drop the cases of earlier data whose answer the assistant no longer gives")
     p.add_argument("--data", required=True)
     p.add_argument("--out", required=True)
@@ -1987,7 +2002,8 @@ def main(argv=None):
     p.add_argument("--threads", type=int, default=8)
     args = ap.parse_args(argv)
     {"data": cmd_data, "files": cmd_files, "paraphrase": cmd_paraphrase, "feedback": cmd_feedback, "train": cmd_train,
-     "merge": cmd_merge, "quantize": cmd_quantize, "superseded": cmd_superseded}[args.cmd](args)
+     "merge": cmd_merge, "quantize": cmd_quantize, "superseded": cmd_superseded, "record-key": cmd_record_key,
+     "record-read": cmd_record_read}[args.cmd](args)
 
 
 if __name__ == "__main__":
