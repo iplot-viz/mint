@@ -146,7 +146,7 @@ Complex layouts can be built by manipulating *Stack*, *Row span* and *Col span*,
 
 Once the time range or pulse IDs are set and the table populated, click **Draw** to plot, or **Stream** to subscribe to incoming data. Streaming requires a time window, entered in seconds, minutes, hours or days (up to 7 days); the number is kept as typed when the unit changes. The window seeds itself with past data from the archive before live samples arrive. Each signal retains up to 10000 samples (set through the `MINT_MAX_STREAMING_POINTS` environment variable); once exceeded, older samples are downsampled preserving their extremes while the most recent two minutes stay at full resolution. If the connection to the streaming server drops (a network change, a server restart), the subscription is reopened by itself and the missing stretch is filled from the archive; a feed silent for more than 60 s counts as dropped (set `IPLOT_STREAM_READ_TIMEOUT`, in seconds, to change it).
 
-A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why.
+A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why. A row with a value MINT can't use, shown in red, isn't drawn, and its *Status* says why too (*Invalid|The end time isn't after the start time*); hovering it tells what to do.
 
 Draw and workspace import lay the plots out at once, each saying how many of its data are read (*Retrieving data (2/5) ..*), and draw each plot as soon as they all are; the window keeps answering meanwhile, and the status bar shows how many reads are done (*Retrieving data (3/8)*). Rows whose alias another row uses in x, y or z are read first, and clicks wait until those reads finish, as they do while the relative-time refresh reads. Zoom, pan, undo, redo and Stream also read in the background, and the plots keep showing the data they have until the new ones arrive, while the status bar says *Retrieving data...*. *Ready.* shows once the plots are drawn. UDA reads run two at a time; set the `MINT_DATA_ACCESS_WORKERS` environment variable to change that (up to 8; 0 turns the background reading off, and the window then reads the data itself, freezing while it does).
 
@@ -396,7 +396,7 @@ This section is auto-generated from the code at build time. Do not edit by hand 
 
 ## 6. Error reference {#errors}
 
-MINT reports two kinds of feedback. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) are written to the log when you edit the table; they are self-explanatory and not duplicated here. *Conceptual errors* (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.
+MINT reports two kinds of feedback. *Validation messages* (e.g. *The start time isn't a date like 2026-01-31T08:00:00*, *Another row already uses the alias B*) appear in the Status cell of the row when you Draw, and in the log; they are self-explanatory and not duplicated here. *Conceptual errors* (network problems, mismatched signal shapes, permission issues) are the ones that benefit from extra context — those are catalogued below and are reachable from popups, the Status column tooltip and the Help menu.
 
 ### Error categories {#error-categories}
 
@@ -420,7 +420,7 @@ Raised at startup or while loading workspaces. Examples: `no data sources found,
 
 #### Table validation {#cat-validation}
 
-Raised when MINT rejects a value typed in the signals table — invalid date formats, duplicated aliases, non-numeric stack identifiers, out-of-range values. These messages already describe both the problem and the remedy, so they only appear in the log; no further explanation is needed.
+Raised when MINT rejects a value typed in the signals table — invalid date formats, duplicated aliases, non-numeric stack identifiers, out-of-range values. These messages already describe both the problem and the remedy: the Status cell of the row shows the first one, after `Invalid`, and the log keeps them all with the number of the row. A data source that isn't available here is catalogued below.
 
 #### Streaming {#cat-streaming}
 
