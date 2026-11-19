@@ -58,6 +58,11 @@ ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3, "
 NTH_PLOT = re.compile(r"\b(" + "|".join(ORDINALS) + r"|last)\s+(?:plot|graph)\b|"
                       r"\b(?:plot|graph)\s+(?:number\s+|n[o°]\.?\s*)?(\d{1,2})\b(?![.,]\d)", re.IGNORECASE)
 STACK_PLOT = re.compile(r"\b(?:plot|graph|stack)\s+(\d{1,2})\.(\d{1,2})\b", re.IGNORECASE)
+# "The second signal in the top plot", "the last curve of plot 2": a signal by its place among those of a plot, in the
+# order of the table, which is that of its legend.
+NTH_SIGNAL = re.compile(r"\b(" + "|".join(ORDINALS) + r"|last)\s+(?:signal|curve|line|trace|row|variable)\s+"
+                        r"(?:in|of|on|from)\s+(?:the\s+)?"
+                        r"([\w\s.]{0,30}?\b(?:plot|graph)\b(?:\s+\d{1,2}(?:\.\d{1,2})?)?)", re.IGNORECASE)
 # The verbs whose ids are rows that a plot named by its place stands for.
 ROW_VERBS = {"process", "hide", "show", "envelope", "style", "remove", "shift", "source"}
 # "All of them", "every row": a data source for the whole table, not for the rows the model could list.
@@ -156,6 +161,44 @@ def _to_plot_named(snap: Snapshot, request: str, cmd: Command, plot_id: str) -> 
         return cmd
     names = [row.alias or row.variable for row in chosen]
     return Command("ask", text=f"Sure, which one: {', '.join(names[:-1])} or {names[-1]}?")
+
+
+def signal_placed(snap: Snapshot, request: str) -> Optional[str]:
+    """The row the request points at by its place among the signals of a plot ("the second signal in the top plot"),
+    or None if it doesn't, or names no signal there is."""
+    found = NTH_SIGNAL.search(request or "")
+    if not found:
+        return None
+    where = found.group(2)
+    plot = plot_named(snap, where)
+    if plot is None:
+        hits = places(snap, where)
+        plot = hits[0] if len(hits) == 1 else None
+    members = sorted((row for row in snap.rows if plot and row.plot == plot), key=lambda row: row.index)
+    word = found.group(1).lower()
+    n = len(members) if word == "last" else ORDINALS[word]
+    return members[n - 1].id if 0 < n <= len(members) else None
+
+
+def placed_as_it(snap: Snapshot, request: str):
+    """The workspace and the request the model is asked with: a signal named by its place in a plot ("shift the second
+    signal in the top plot") becomes "it", with its row selected, which is how the model reads "it"."""
+    placed = signal_placed(snap, request)
+    if not placed:
+        return snap, request
+    found = NTH_SIGNAL.search(request)
+    start = found.start()
+    article = re.search(r"\bthe\s+$", request[:start], re.IGNORECASE)
+    if article:
+        start = article.start()
+    return dataclasses.replace(snap, selected=[placed]), request[:start] + "it" + request[found.end():]
+
+
+def _to_signal_placed(cmd: Command, row_id: str) -> Command:
+    """A change of one row made on the row the request points at by its place in a plot, when the model took another."""
+    if cmd.verb in ROW_VERBS and len(cmd.ids) == 1 and cmd.ids[0].startswith("r") and cmd.ids != [row_id]:
+        return dataclasses.replace(cmd, ids=[row_id])
+    return cmd
 
 
 # A short correction of the change just proposed or made: "not this one but the MFT111", "I asked for plot 3.1".
@@ -517,6 +560,9 @@ def review(snap: Snapshot, request: str, cmds: List[Command]) -> List[Command]:
     cmds = _around(request, cmds)
     cmds = _beyond(snap, request, cmds)
     cmds = _colours_apart(snap, request, cmds)
+    placed = signal_placed(snap, request)
+    if placed:
+        cmds = _each(cmds, lambda cmd: _to_signal_placed(cmd, placed))
     named_plot = plot_named(snap, request)
     if named_plot:
         cmds = _each(cmds, lambda cmd: _to_plot_named(snap, request, cmd, named_plot))

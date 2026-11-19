@@ -1309,6 +1309,57 @@ class PlotsCountedAsMintTest(unittest.TestCase):
         self.assertIs(check.retarget(snap, "not this one but the MFT111", right), right)
 
 
+def _paulos_coils() -> Snapshot:
+    """The current of a coil in two pulses, in the top plot, and its voltage in each of the two plots below (Paulo's
+    workspace of 19-nov)."""
+    test = "imas:hdf5?path=/home/ITER/<user>/public/imasdb/test/105027/pf_active_5k"
+    plots = [PlotInfo(id=f"p{i}", row=i, col=1) for i in range(1, 4)]
+    rows = [RowInfo(id="r1", index=0, variable="pf_active/coil[1]/current/data", stack="1.1", plot="p1", pulse=test),
+            RowInfo(id="r2", index=1, variable="pf_active/coil[10]/voltage/data", stack="2.1", plot="p2", pulse=test),
+            RowInfo(id="r3", index=2, variable="pf_active/coil[1]/current/data", stack="1.1", plot="p1"),
+            RowInfo(id="r4", index=3, variable="pf_active/coil[10]/voltage/data", stack="3.1", plot="p3")]
+    return Snapshot(rows=rows, plots=plots)
+
+
+class SignalPlacedInAPlotTest(unittest.TestCase):
+    """A signal named by its place among those of a plot, in the order of the table, which is that of the legend."""
+
+    def test_the_second_signal_in_the_top_plot_is_the_second_row_of_that_plot(self):
+        from mint.assistant import check
+        snap = _paulos_coils()
+        got = check.review(snap, "shift the second signal in the top plot by 1000 along the y axis",
+                           commands.parse("shift r2 value 1000"))
+        self.assertEqual([str(cmd) for cmd in got], ["shift r3 value 1000"], "not the second plot")
+        for text, row in (("the first signal of the top plot", "r1"), ("the last signal in the first plot", "r3"),
+                          ("the first curve on plot 3", "r4"), ("the second signal of plot 1.1", "r3"),
+                          ("the first signal in the bottom plot", "r4")):
+            with self.subTest(text=text):
+                self.assertEqual(check.signal_placed(snap, text), row)
+        for text in ("the third signal in the top plot", "the second signal", "the second plot", "a signal in plot 9"):
+            with self.subTest(text=text):
+                self.assertIsNone(check.signal_placed(snap, text))
+
+    def test_the_model_is_asked_about_it_with_its_row_selected(self):
+        from mint.assistant import check
+        snap = _paulos_coils()
+        asked_snap, asked = check.placed_as_it(snap, "make the first signal of the top plot red")
+        self.assertEqual((asked, asked_snap.selected), ("make it red", ["r1"]))
+        self.assertEqual(snap.selected, [], "the workspace itself stays as it is")
+        self.assertEqual(check.placed_as_it(snap, "Shift second signal in plot 1 by 5")[1], "Shift it by 5")
+        same_snap, same = check.placed_as_it(snap, "smooth the second plot")
+        self.assertIs(same_snap, snap)
+        self.assertEqual(same, "smooth the second plot")
+
+    def test_a_change_of_several_rows_or_of_a_plot_is_left_as_it_is(self):
+        from mint.assistant import check
+        snap = _paulos_coils()
+        for answer in ("style r1 r3 color=red", "plot p1 grid=on"):
+            with self.subTest(answer=answer):
+                got = check.review(snap, "make the second signal in the top plot and the other one red",
+                                   commands.parse(answer))
+                self.assertEqual([str(cmd) for cmd in got], [answer])
+
+
 class DataSourceOfEveryRowTest(unittest.TestCase):
     """A data source for every row, or for those of the data source named, past the few rows the model can list."""
 

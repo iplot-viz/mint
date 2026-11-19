@@ -813,6 +813,16 @@ class AssistantFlowTest(unittest.TestCase):
             with open(self.ctl._conversation.path, encoding="utf-8") as f:
                 self.assertEqual(len(f.readlines()), 10, "off: nothing more is kept")
 
+    def test_a_signal_named_by_its_place_in_a_plot_is_asked_about_as_it(self):
+        from mint.assistant import check
+        text = "make the second signal in the top plot red"
+        row = check.signal_placed(self.ctl.workspace.snapshot(), text)
+        self.assertIsNotNone(row)
+        self.ask(text, f"style {row} color=red")
+        prompt_sent = self.engine.prompts[-1][0]
+        self.assertIn("make it red", prompt_sent)
+        self.assertIn(f"Selected: {row}", prompt_sent)
+
     def test_undo_in_words_undoes_the_last_card_without_the_model(self):
         self.ask("undo", 'say "no model here"')
         self.assertEqual(self.said[-1], "There's nothing to undo yet.")
