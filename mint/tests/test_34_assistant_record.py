@@ -143,6 +143,31 @@ class ConversationRecordTest(unittest.TestCase):
         conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         self.assertFalse(os.path.exists(self.folder))
 
+    def test_a_file_put_in_place_of_the_record_gets_nothing(self):
+        os.makedirs(self.folder)
+        conversation = record.Conversation(self.folder)
+        conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
+        os.remove(conversation.path)
+        with open(conversation.path, "w", encoding="utf-8") as f:
+            f.write("someone else's\n")
+        conversation.write_turn("t2", "abs of the pirani", Snap(), ["process r1 abs"], "model")
+        with open(conversation.path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "someone else's\n")
+
+    @unittest.skipUnless(hasattr(os, "getuid"), "links of POSIX")
+    def test_a_link_put_in_place_of_the_record_is_not_followed(self):
+        os.makedirs(self.folder)
+        victim = os.path.join(self.tmp.name, "profile")
+        with open(victim, "w", encoding="utf-8") as f:
+            f.write("mine\n")
+        conversation = record.Conversation(self.folder)
+        conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
+        os.remove(conversation.path)
+        os.symlink(victim, conversation.path)
+        conversation.write_turn("t2", "abs of the pirani", Snap(), ["process r1 abs"], "model")
+        with open(victim, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "mine\n")
+
     def test_a_long_conversation_stops_being_kept(self):
         conversation = record.Conversation(self.folder)
         with mock.patch.object(record, "MAX_BYTES", 2000):
