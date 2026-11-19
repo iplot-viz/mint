@@ -6,6 +6,7 @@
     python -m mint.tools.assistant_train feedback --out feedback.jsonl [--key PRIVATE.pem] RECORD.jsonl ...
     python -m mint.tools.assistant_train record-key FOLDER
     python -m mint.tools.assistant_train record-read [--key PRIVATE.pem] RECORD.jsonl ...
+    python -m mint.tools.assistant_train record-collect --key PRIVATE.pem --out FOLDER [HOST:]RECORDS_FOLDER
     python -m mint.tools.assistant_train train --base HF_DIR --data data_p.jsonl --workspaces data_workspaces.json --out DIR
     python -m mint.tools.assistant_train merge --gguf BASE-BF16.gguf --adapter DIR --out merged-F16.gguf
     python -m mint.tools.assistant_train quantize --gguf merged-F16.gguf --out mint-assistant-Q4_K_M.gguf
@@ -13,11 +14,18 @@
 Workspaces, requests and weights stay on the machine that runs this. Training needs torch, transformers and peft; merging needs gguf.
 """
 import argparse
+import io
 import json
 import math
+import os
 import random
 import re
+import shlex
+import subprocess
 import sys
+import tarfile
+import tempfile
+import time
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
@@ -1751,6 +1759,100 @@ def cmd_record_read(args):
             print(json.dumps(entry))
 
 
+def cmd_record_collect(args):
+    """The records of a folder, read into --out and then taken out of it: what the team keeps has no owner, and the
+    folder only what may still be written, a file changed in the last --idle hours. HOST:FOLDER is reached with ssh."""
+    host, folder = _host_folder(args.folder)
+    ssh = args.ssh.split() + [host] if host else None
+    ages = _record_ages(ssh, folder)
+    ready = sorted(name for name, age in ages.items() if age >= args.idle * 3600)
+    os.makedirs(args.out, exist_ok=True)
+    collected, entries, unreadable = [], 0, []
+    with tempfile.TemporaryDirectory() as copies:
+        for names in _batches(ready):
+            paths = _copied(ssh, folder, names, copies) if ssh else {name: os.path.join(folder, name) for name in names}
+            for name in (name for name in names if name in paths):  # one gone meanwhile is someone else's to take
+                try:
+                    found = record.read(paths[name], args.key)
+                except Exception as e:  # not a record, or of another key: it stays where it is
+                    print(f"{name}: {e!r}", file=sys.stderr)
+                    unreadable.append(name)
+                    continue
+                if found:
+                    _keep(found, os.path.join(args.out, name))
+                collected.append(name)
+                entries += len(found)
+    for names in _batches(collected):
+        if ssh:
+            _ssh(ssh, f"cd {shlex.quote(folder)} && rm -f -- {' '.join(names)}")
+            continue
+        for name in names:
+            try:
+                os.remove(os.path.join(folder, name))
+            except OSError as e:  # in use: the next collection takes it again
+                print(f"{name}: {e!r}", file=sys.stderr)
+    print(json.dumps({"collected": len(collected), "entries": entries, "left": len(ages) - len(ready),
+                      "unreadable": unreadable}))
+
+
+def _host_folder(where: str):
+    """(host, folder) of HOST:FOLDER, as scp writes it; ("", where) for a folder of this machine, C:\\ ones too."""
+    host, colon, folder = where.partition(":")
+    if colon and len(host) > 1 and not set(host) & set("/\\"):
+        return host, folder
+    return "", where
+
+
+def _ssh(ssh, command: str) -> bytes:
+    done = subprocess.run(ssh + [command], capture_output=True)
+    if done.returncode:
+        raise SystemExit(f"{' '.join(ssh)} {command!r} failed: {done.stderr.decode(errors='replace').strip()}")
+    return done.stdout
+
+
+# A line of the files find lists on another machine: when one last changed, in seconds since 1970, and its name.
+_LISTED = re.compile(rf"(\d+(?:\.\d*)?) ({record.NAME.pattern})")
+
+
+def _record_ages(ssh, folder):
+    """How long ago, in seconds, each record file of the folder last changed."""
+    if ssh:
+        lines = _ssh(ssh, f"find {shlex.quote(folder)} -maxdepth 1 -type f -name '*.jsonl' -printf '%T@ %f\\n'")
+        listed = (_LISTED.fullmatch(line) for line in lines.decode(errors="replace").splitlines())
+        stamps = {m.group(2): float(m.group(1)) for m in listed if m}
+    else:
+        stamps = {entry.name: entry.stat().st_mtime for entry in os.scandir(folder) if entry.is_file()}
+    now = time.time()
+    return {name: now - stamp for name, stamp in stamps.items() if record.NAME.fullmatch(name)}
+
+
+def _copied(ssh, folder, names, into):
+    """The record files ``names`` of a folder on another machine, copied into ``into`` in one go: their paths."""
+    paths = {}
+    copy = _ssh(ssh, f"cd {shlex.quote(folder)} && tar -cf - -- {' '.join(names)}")
+    with tarfile.open(fileobj=io.BytesIO(copy)) as tar:
+        for member in tar:
+            if member.isfile() and member.name in names:
+                paths[member.name] = os.path.join(into, member.name)
+                with open(paths[member.name], "wb") as f:
+                    f.write(tar.extractfile(member).read())
+    return paths
+
+
+def _keep(entries, path):
+    """The entries, one JSON line each as record-read prints them, in a file that is there whole or not at all."""
+    with open(path + ".part", "w", encoding="utf-8") as f:
+        f.writelines(json.dumps(entry) + "\n" for entry in entries)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(path + ".part", path)
+
+
+def _batches(names, size=200):
+    """The names a few at a time: a command line naming them all may be longer than Windows takes."""
+    return [names[i:i + size] for i in range(0, len(names), size)]
+
+
 def render(case, workspaces):
     from mint.tools.assistant_eval import snapshot_from_dict
     ws = workspaces[case["ws"]]
@@ -1975,6 +2077,13 @@ def main(argv=None):
     p = sub.add_parser("record-read", help="print the entries of record files, one JSON line each")
     p.add_argument("--key", help="the private key of the team, for the encrypted records")
     p.add_argument("records", nargs="+")
+    p = sub.add_parser("record-collect", help="read the records of a folder into another and take them out of it")
+    p.add_argument("--key", help="the private key of the team, for the encrypted records")
+    p.add_argument("--out", required=True, help="where the entries go, a file for each record as record-read prints it")
+    p.add_argument("--idle", type=float, default=24,
+                   help="hours a file must be left unchanged to be taken: a MINT still open may write to it again")
+    p.add_argument("--ssh", default="ssh", help='the ssh command for HOST:FOLDER, with its options ("ssh -J gateway")')
+    p.add_argument("folder", help="the folder of the records, or HOST:FOLDER on another machine")
     p = sub.add_parser("superseded", help="drop the cases of earlier data whose answer the assistant no longer gives")
     p.add_argument("--data", required=True)
     p.add_argument("--out", required=True)
@@ -2003,7 +2112,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     {"data": cmd_data, "files": cmd_files, "paraphrase": cmd_paraphrase, "feedback": cmd_feedback, "train": cmd_train,
      "merge": cmd_merge, "quantize": cmd_quantize, "superseded": cmd_superseded, "record-key": cmd_record_key,
-     "record-read": cmd_record_read}[args.cmd](args)
+     "record-read": cmd_record_read, "record-collect": cmd_record_collect}[args.cmd](args)
 
 
 if __name__ == "__main__":

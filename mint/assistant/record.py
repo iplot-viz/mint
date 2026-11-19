@@ -22,6 +22,8 @@ logger = setupLogger.get_logger(__name__)
 FORMAT = "mint-assistant-record-1"
 # Past this a conversation is no longer kept: a long one adds little, and a shared folder stays small.
 MAX_BYTES = 1024 * 1024
+# The name of a record file: when its conversation started and a random id (see Conversation).
+NAME = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{32}\.jsonl")
 USER = "<user>"
 # Folders named after a person: their home, on Linux, at ITER and on Windows.
 _HOME_FOLDERS = re.compile(r"((?:^|[\s\"'=:(,])(?:/home/ITER|/home|/mnt/ITER|/Users|[A-Za-z]:\\Users)[/\\])"

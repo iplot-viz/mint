@@ -205,9 +205,6 @@ class AssistantController(QObject):
         self.panel.emptySubmitted.connect(self._apply_pending)  # Enter with nothing typed applies the card
         self.panel.fileAttached.connect(self.on_file_attached)
         self.panel.attachmentRemoved.connect(self.on_attachment_removed)
-        if hasattr(self.panel, "newConversationRequested"):
-            self.panel.newConversationRequested.connect(self.new_conversation)
-            self.panel.set_new_conversation(True)
         self.fileRead.connect(self._on_file_read)
         self._pending_card = None
         self.toggle_action = None
@@ -260,38 +257,15 @@ class AssistantController(QObject):
         else:
             self._fit_in_splitter()
         if not self.panel.message_count():
-            self._start()
+            try:
+                self.panel.set_suggestions(suggestions(self.workspace.snapshot()) or SUGGESTIONS)
+            except Exception as e:  # the fixed ones are fine too
+                logger.debug(f"Assistant: no suggestions from the table: {e}")
+            if self.config.record:
+                self.panel.add_assistant_message(self.voice.RECORDED)
         self.panel.input.setFocus()
         self._ensure_engine()
         self._tell_problems(on_open=True)
-
-    def _start(self):
-        """What an empty conversation begins with: the suggestions from the table, and that it is kept when it is."""
-        try:
-            self.panel.set_suggestions(suggestions(self.workspace.snapshot()) or SUGGESTIONS)
-        except Exception as e:  # the fixed ones are fine too
-            logger.debug(f"Assistant: no suggestions from the table: {e}")
-        if self.config.record:
-            self.panel.add_assistant_message(self.voice.RECORDED)
-
-    def new_conversation(self):
-        """Start again: an empty panel, and nothing said before carried into the next answers. The changes applied
-        stay, and the record goes on in a file of its own."""
-        if self.engine is not None and self._inflight is not None:
-            self.engine.cancel()  # its answer, once cancelled, finds no request waiting for it
-        self._inflight = self._queued = None
-        self.panel.set_busy(False)
-        self._set_pending(None)
-        self.panel.clear()
-        self.on_attachment_removed()
-        self._open_question = self._last_search = self._last_applied = None
-        self._cards, self._searches, self._planned, self._help_offer = {}, {}, {}, {}
-        self._fix_offer = self._told_problems = self._search_source = self._last_action = ""
-        self._turns = 0
-        self._end_record()
-        self._start()
-        self._tell_problems(on_open=True)
-        self.panel.input.setFocus()
 
     def _recorded(self) -> record.Conversation:
         """The record of this conversation, made at its first entry, when where it goes is known."""
@@ -439,13 +413,9 @@ class AssistantController(QObject):
     def shutdown(self):
         if self.engine is not None:
             self.engine.shutdown()
-        self._end_record()
-
-    def _end_record(self):
-        """The record of this conversation ends; the next one goes to a file of its own."""
-        if self._conversation is not None:
+        if self._conversation is not None:  # its record ends: whatever comes after goes to a file of its own
             self._conversation.close()
-        self._conversation = None
+            self._conversation = None
 
     def _on_engine_state(self, state: str):
         if state == LOADING:
