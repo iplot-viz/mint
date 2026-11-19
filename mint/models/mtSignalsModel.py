@@ -103,10 +103,11 @@ class MTSignalsModel(QAbstractItemModel):
         return QModelIndex()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.index.size
+        # A table: its cells have no children of their own. Find & Replace asks with None.
+        return 0 if parent is not None and parent.isValid() else self._table.index.size
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.columns.size
+        return 0 if parent is not None and parent.isValid() else self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
@@ -243,6 +244,7 @@ class MTSignalsModel(QAbstractItemModel):
                     Qt.ItemFlag.ItemIsDragEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
+        return Qt.ItemFlag.NoItemFlags
 
     def mimeTypes(self) -> typing.List[str]:
         return ['text/plain']
@@ -255,7 +257,10 @@ class MTSignalsModel(QAbstractItemModel):
         return mime
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginInsertRows(parent, row, row + count)
+        # Qt's last row is inclusive; one more, or a layout change while the rows go in, can leave views behind.
+        # A layout change follows once they are in, not while they go in: what waits for a complete table (the
+        # data access workers) listens to it.
+        self.beginInsertRows(parent, row, row + count - 1)
 
         for new_row in range(row, row + count):
             # Create empty row
@@ -276,24 +281,27 @@ class MTSignalsModel(QAbstractItemModel):
             self._table_fails = pd.concat(
                 [self._table_fails.iloc[:new_row], empty_row_fails, self._table_fails.iloc[new_row:]]).reset_index(
                 drop=True)
-        self.layoutChanged.emit()
 
         self.endInsertRows()
+        self.layoutAboutToBeChanged.emit()
+        self.layoutChanged.emit()
 
         return super().insertRows(row, count, parent=parent)
 
     def removeRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginRemoveRows(parent, row, row + count)
+        self.beginRemoveRows(parent, row, row + count - 1)
 
         try:
             self._table = self._table.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
             self._table_fails = self._table_fails.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
-            self.layoutChanged.emit()
             success = True
         except KeyError:
             success = False
 
         self.endRemoveRows()
+        if success:
+            self.layoutAboutToBeChanged.emit()
+            self.layoutChanged.emit()
 
         return success
 

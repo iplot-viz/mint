@@ -8,7 +8,8 @@ import os
 from argparse import ArgumentParser, Namespace
 from iplotlib.core.display import apply_hidpi_policy
 from iplotLogging import setupLogger
-from mint._version import get_versions
+# Computed once at import: from a checkout, every get_versions() call runs git.
+from mint import __version__
 
 logger = setupLogger.get_logger(__name__)
 
@@ -83,7 +84,7 @@ def create_app(argv=None) -> (QApplication, Namespace):
                         help='Print the detected screen metrics and the resolved UI scale, '
                              'then exit. Use this when reporting a rendering problem.')
     parser.add_argument('--version', action='version',
-                        version=f"{parser.prog} - {get_versions()['version']}")
+                        version=f"{parser.prog} - {__version__}")
     args = parser.parse_args()
 
     # Both of these are read once, when the QApplication is constructed, so
@@ -93,7 +94,7 @@ def create_app(argv=None) -> (QApplication, Namespace):
 
     qApp = QApplication(argv)
     qApp.setApplicationName("MINT")
-    qApp.setApplicationVersion(get_versions()['version'])
+    qApp.setApplicationVersion(__version__)
     qApp.setOrganizationDomain("www.iter.org")
     qApp.setOrganizationName("ITER")
 

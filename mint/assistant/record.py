@@ -1,0 +1,44 @@
+"""Each request, its answer and what the user did with each card, kept on this machine to retrain the model on."""
+import json
+import os
+from dataclasses import asdict
+from datetime import datetime, timezone
+
+from iplotLogging import setupLogger
+from mint.assistant.config import state_dir
+
+logger = setupLogger.get_logger(__name__)
+
+FILE = "record.jsonl"
+# Past this the file starts again and the previous one is kept as record.jsonl.1: at most twice this on disk.
+MAX_BYTES = 512 * 1024
+
+
+def path() -> str:
+    return os.path.join(state_dir(), FILE)
+
+
+def write(card: str, outcome: str, request: str, snap, commands) -> None:
+    """Appends one outcome ("applied", "dismissed", "undone") of a card; never raises."""
+    _append({"card": card, "outcome": outcome, "request": request, "commands": list(commands)}, snap)
+
+
+def write_turn(turn: str, request: str, snap, answer, by: str) -> None:
+    """Appends a request and its answer: the model's commands, or what MINT did itself (``by``); never raises."""
+    _append({"turn": turn, "request": request, "answer": list(answer), "by": by}, snap)
+
+
+def _append(entry: dict, snap) -> None:
+    try:
+        target = path()
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if os.path.exists(target) and os.path.getsize(target) > MAX_BYTES:
+            os.replace(target, target + ".1")
+        workspace = asdict(snap)
+        workspace.pop("unlisted", None)
+        workspace["now"] = snap.now.isoformat()
+        line = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **entry, "workspace": workspace}
+        with open(target, "a", encoding="utf-8") as f:
+            f.write(json.dumps(line) + "\n")
+    except Exception as e:
+        logger.warning(f"Assistant: could not write to the record: {e}")
