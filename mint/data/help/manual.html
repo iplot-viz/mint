@@ -124,7 +124,7 @@ $ mint
 <p>All times are UTC, whatever the time zone of the computer, and written in ISO 8601 (<code>2026-08-13T05:52:06</code>). On the time axis, the part common to the whole view is shown once in the corner (<code>UTC:2026-08-13T05:52:</code>) and each tick shows only the rest, with its unit when it is a single number: <code>06s</code>, <code>20min</code>, <code>500ms</code>.</p>
 <p>Data can be queried by:</p>
 <ul>
-<li>Absolute time range (From time / To time, ISO 8601).</li>
+<li>Absolute time range (From time / To time, ISO 8601). The calendar next to them picks whole days: click the first day, then the last, and the range goes from 00:00:00 on the first to 23:59:59.999999999 on the last; one day alone is two clicks on it.</li>
 <li>Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. <code>ITER:CWS-SCSU-BASIN-FILL-TESTS/130125</code>. On SDCC, IMAS pulses use <code>pulse/run</code>, e.g. <code>135011/7</code>, or an Access Layer URI such as <code>imas:hdf5?path=/home/ITER/.../3/105027/32</code>.</li>
 <li>Relative time range, with an optional refresh interval (minimum 5 minutes).</li>
 </ul>
@@ -137,7 +137,7 @@ $ mint
 <p>To overlay several pulses, separate their IDs with commas. <em>Search</em>, next to the Pulse ID field, browses the pulses. Its <em>Selected</em> column marks the pulses the plots use (this field, the pulse the time range was taken from, and the <em>PulseId</em> column of the table), and stays up to date while the window is open; sort by it to bring them to the top. Click a page number next to the <code>&lt;</code> <code>&gt;</code> arrows to jump to that page. <em>Started between</em> keeps only the pulses that started between two UTC times, alone or with a search pattern; it is greyed out when the pulses of the data source have no times.</p>
 <h3 id="table">2.4 Table</h3>
 <h4>2.4.1 Icons and buttons</h4>
-<p>Above the variable table: <em>Open</em>, <em>Append</em> and <em>Save Signal Sets</em> (the table as a file); <em>Hide/Show columns</em>; <em>Search Vars</em> to browse the variables of each data source; <em>Load new module</em> to add a Python module for use in expressions.</p>
+<p>Above the variable table: <em>Open</em>, <em>Append</em> and <em>Save Signal Sets</em> (the table as a file), which open where the last signal set was opened or saved, in the next sessions too; <em>Hide/Show columns</em>; <em>Search Vars</em> to browse the variables of each data source; <em>Load new module</em> to add a Python module for use in expressions. Selecting a module in that window shows what it offers, from its documentation: its submodules and their functions, how each is called and what it does; click a function for its whole documentation. After changing the file of a module of yours, select it there and click <em>Reload selected module</em>: MINT imports it again, with your other modules, as their files are now, without restarting, and the next <em>Draw</em> computes the signals with the new code. <em>Clear selected module</em> takes a module out of MINT the same way.</p>
 <p>In the variable search window, the number of variables found is shown next to the search bar; double-click a node to expand all its children, or to collapse it again. For data sources with a controls metadata server (<code>controlsmetadata</code> key in the data sources file), the <em>Synoptic variables</em> check box lists the variables shown on the HMI, each with its unit in square brackets, data type and description. With it checked, the search also looks in the description and the unit: several words find the variables that have them all, in any order (<code>magnet temperature [K]</code>); a unit in square brackets (<code>[K]</code>) keeps only the variables in that unit, alone or with more words (<code>[K] temperature</code>); a word in capitals is matched as written, so <code>mass flow VAC</code> finds the mass flows of the VAC variables, not those that only mention a vacuum. Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).</p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_06.png" alt="Icons and buttons above the variable table" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 6. Icons / buttons above the variable table.</i></p>
 
@@ -225,7 +225,7 @@ $ mint
 <div class="note">Preferences cannot be changed while streaming: set them and press <em>Draw</em> before starting the stream. <em>Draw</em> stays disabled until the stream is stopped.</div>
 
 <h3 id="export-import-workspace">2.6 Export/Import workspace</h3>
-<p>A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use <em>File &gt; Export Workspace</em>; to open one, <em>File &gt; Import Workspace</em>.</p>
+<p>A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use <em>File &gt; Export Workspace</em>; to open one, <em>File &gt; Import Workspace</em>. Both open where the last workspace was imported or exported, in the next sessions too. A workspace exported before <em>Draw</em> imports its table, to draw.</p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
 <h3 id="export-data">2.7 Export data</h3>
@@ -245,7 +245,6 @@ $ mint
 <li><strong>PAN</strong>: drag to pan; left double-click to reset.</li>
 <li><strong>ZOOM</strong>: drag a box to zoom into it, in X and Y; left double-click to reset.</li>
 <li><strong>DIST</strong>: click two points to measure the distance between them; the window that opens can also shift a signal by that distance in X (in seconds on a time axis) or Y, or add a shifted copy with <em>Duplicate signal</em>. In SELECT mode, dragging a signal shifts it too.</li>
-<li><strong>MARKER</strong>: precise distance by selecting points (only with &lt; 100 points per plot).</li>
 <li><strong>RULER</strong>: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the mouse until then. It stays on that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it; right-click it → <em>Remove ruler</em> to delete it. With shared time on, it appears on every plot, has a row per plot in the <em>Rulers window</em>, and is removed from all of them at once. Rulers are listed in the <em>Rulers window</em> (below) and saved with the workspace.</li>
 <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> <strong>Statistics</strong>: min/avg/max, first and last value and time, and sample count of each signal; <em>Hide/Show columns</em> hides the ones you don't need.</li>
 <li>Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. <em>Draw</em>, and each auto-refresh in relative time, clear this history.</li>
@@ -480,7 +479,7 @@ $ mint
 <li><strong>Specify a start/end time for pulse IDs?</strong> Use <em>StartTime</em>/<em>EndTime</em> with <em>Shared time</em> off. See <code>CustomizedPulsesPlotsWithStartEnd.json</code>.</li>
 <li><strong>Compare signals with two different time ranges?</strong> Yes, with <em>Shared time</em> off. See <code>WeekComparison.json</code>.</li>
 <li><strong>Different time ranges on the same plot, no pulses?</strong> See <code>WeekComparisonSamePlot.json</code>.</li>
-<li><strong>Load a new Python module?</strong> Click <em>Load new module</em> and import e.g. <code>scipy.fft as sfft</code>.</li>
+<li><strong>Load a new Python module?</strong> Click <em>Load new module</em> and import e.g. <code>scipy.fft as sfft</code>; select it in the list to read its functions.</li>
 <li><strong>Examples of self-written modules?</strong> See [RD5].</li>
 <li><strong>Add my own data source?</strong> See [RD6].</li>
 <li><strong>Where are the example workspaces?</strong> On CODAC, <code>ls $(rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1)</code>; on SDCC, <code>ls "$(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces"</code>.</li>

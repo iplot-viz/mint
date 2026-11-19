@@ -95,7 +95,7 @@ All times are UTC, whatever the time zone of the computer, and written in ISO 86
 
 Data can be queried by:
 
-- Absolute time range (From time / To time, ISO 8601).
+- Absolute time range (From time / To time, ISO 8601). The calendar next to them picks whole days: click the first day, then the last, and the range goes from 00:00:00 on the first to 23:59:59.999999999 on the last; one day alone is two clicks on it.
 - Pulse ID. On CCS, a pulse identifier is a string with location, category and number, e.g. `ITER:CWS-SCSU-BASIN-FILL-TESTS/130125`. On SDCC, IMAS pulses use `pulse/run`, e.g. `135011/7`, or an Access Layer URI such as `imas:hdf5?path=/home/ITER/.../3/105027/32`.
 - Relative time range, with an optional refresh interval (minimum 5 minutes).
 
@@ -111,7 +111,7 @@ To overlay several pulses, separate their IDs with commas. *Search*, next to the
 
 #### 2.4.1 Icons and buttons
 
-Above the variable table: *Open*, *Append* and *Save Signal Sets* (the table as a file); *Hide/Show columns*; *Search Vars* to browse the variables of each data source; *Load new module* to add a Python module for use in expressions.
+Above the variable table: *Open*, *Append* and *Save Signal Sets* (the table as a file), which open where the last signal set was opened or saved, in the next sessions too; *Hide/Show columns*; *Search Vars* to browse the variables of each data source; *Load new module* to add a Python module for use in expressions. Selecting a module in that window shows what it offers, from its documentation: its submodules and their functions, how each is called and what it does; click a function for its whole documentation. After changing the file of a module of yours, select it there and click *Reload selected module*: MINT imports it again, with your other modules, as their files are now, without restarting, and the next *Draw* computes the signals with the new code. *Clear selected module* takes a module out of MINT the same way.
 
 In the variable search window, the number of variables found is shown next to the search bar; double-click a node to expand all its children, or to collapse it again. For data sources with a controls metadata server (`controlsmetadata` key in the data sources file), the *Synoptic variables* check box lists the variables shown on the HMI, each with its unit in square brackets, data type and description. With it checked, the search also looks in the description and the unit: several words find the variables that have them all, in any order (`magnet temperature [K]`); a unit in square brackets (`[K]`) keeps only the variables in that unit, alone or with more words (`[K] temperature`); a word in capitals is matched as written, so `mass flow VAC` finds the mass flows of the VAC variables, not those that only mention a vacuum. Drag variables from the tree, or from the list on its right, onto the canvas to plot them where you drop them (see <a href="#plotting-area">Plotting area</a>).
 
@@ -156,7 +156,7 @@ A row whose data cannot be read, as when there are none in the range, draws its 
 
 ### 2.6 Export/Import workspace {#export-import-workspace}
 
-A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use *File > Export Workspace*; to open one, *File > Import Workspace*.
+A workspace is a JSON file holding the table, the time settings and the plots, to reopen or share them. To save the workspace on screen, use *File > Export Workspace*; to open one, *File > Import Workspace*. Both open where the last workspace was imported or exported, in the next sessions too. A workspace exported before *Draw* imports its table, to draw.
 
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_10.png" alt="File menu with workspace import / export options" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 10. Export / Import workspace.</i></p>
 
@@ -181,7 +181,6 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **PAN**: drag to pan; left double-click to reset.
 - **ZOOM**: drag a box to zoom into it, in X and Y; left double-click to reset.
 - **DIST**: click two points to measure the distance between them; the window that opens can also shift a signal by that distance in X (in seconds on a time axis) or Y, or add a shifted copy with *Duplicate signal*. In SELECT mode, dragging a signal shifts it too.
-- **MARKER**: precise distance by selecting points (only with &lt; 100 points per plot).
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the mouse until then. It stays on that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it; right-click it → *Remove ruler* to delete it. With shared time on, it appears on every plot, has a row per plot in the *Rulers window*, and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> **Statistics**: min/avg/max, first and last value and time, and sample count of each signal; *Hide/Show columns* hides the ones you don't need.
 - Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
@@ -419,7 +418,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 11. **Specify a start/end time for pulse IDs?** Use *StartTime*/*EndTime* with *Shared time* off. See `CustomizedPulsesPlotsWithStartEnd.json`.
 12. **Compare signals with two different time ranges?** Yes, with *Shared time* off. See `WeekComparison.json`.
 13. **Different time ranges on the same plot, no pulses?** See `WeekComparisonSamePlot.json`.
-14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`.
+14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`; select it in the list to read its functions.
 15. **Examples of self-written modules?** See [RD5].
 16. **Add my own data source?** See [RD6].
 17. **Where are the example workspaces?** On CODAC, `ls $(rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1)`; on SDCC, `ls "$(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces"`.

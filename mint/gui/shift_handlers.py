@@ -565,7 +565,6 @@ class ShiftHandlerMixin:
             w.signalShiftApplied.emit(signal_uid, dx, dy, 'dist')
 
         self.canvasStack.refreshLinks()
-        w.check_markers(self.canvas)
         w.stats(self.canvas)
 
     def _handle_dist_duplicate(self, model, original_signal, signal_uid: str, dx: float, dy: float):
@@ -678,7 +677,6 @@ class ShiftHandlerMixin:
 
     def _refresh_after_copy(self, w):
         self.canvasStack.refreshLinks()
-        w.check_markers(self.canvas)
         w.stats(self.canvas)
 
     def _find_row_by_uid(self, df, signal_uid: str):

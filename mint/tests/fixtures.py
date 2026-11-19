@@ -40,3 +40,38 @@ def write_csv_datasource_config() -> str:
     os.environ['IPLOT_SOURCES_CONFIG'] = tmp.name
     atexit.register(_unlink_quiet, tmp.name)
     return tmp.name
+
+
+class SettingsInTempDir:
+    """QSettings in a temporary directory while the tests of a class run, so they never read or write a real user
+    configuration file; each test starts with none."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from PySide6.QtCore import QSettings
+        from mint.tests.qAppSingleton import ensure_qapp
+        super().setUpClass()
+        cls.app = ensure_qapp()
+        cls._settings_dir = tempfile.TemporaryDirectory()
+        cls._format = QSettings.defaultFormat()
+        QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, cls._settings_dir.name)
+        cls._org, cls._name = cls.app.organizationName(), cls.app.applicationName()
+        cls.app.setOrganizationName("ITER-tests")
+        cls.app.setApplicationName("MINT-tests")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        from PySide6.QtCore import QSettings, QStandardPaths
+        cls.app.setOrganizationName(cls._org)
+        cls.app.setApplicationName(cls._name)
+        QSettings.setDefaultFormat(cls._format)
+        QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope,
+                          QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation))
+        cls._settings_dir.cleanup()
+        super().tearDownClass()
+
+    def setUp(self):
+        from PySide6.QtCore import QSettings
+        super().setUp()
+        QSettings().clear()
