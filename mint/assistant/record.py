@@ -41,7 +41,9 @@ class Conversation:
         started = datetime.now(timezone.utc)
         self.path = os.path.join(folder, f"{started:%Y%m%dT%H%M%SZ}-{self.id}.jsonl")
         self._seal = None  # (line) -> what is written for it, once the file is made
-        self._made = None  # (device, inode) of the file made
+        # The file made, open until the conversation ends: others can write in a shared folder, and an entry must reach
+        # this file whatever is put in its place under its name.
+        self._file = None
         self._size = 0
         self._stopped = False
 
@@ -62,24 +64,31 @@ class Conversation:
             workspace["now"] = snap.now.isoformat()
             line = json.dumps(anonymous({"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), **entry,
                                          "workspace": workspace}))
-            if self._seal is None:
+            if self._file is None:
                 self._make()
             text = self._seal(line) + "\n"
             if self._size + len(text) > MAX_BYTES:
                 self._stopped = True
                 logger.info(f"Assistant: this conversation reached {MAX_BYTES} bytes of record; the rest isn't kept")
+                self.close()
                 return
-            # Others can write in a shared folder: never through a link, and only to the file made here.
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0))
-            with os.fdopen(fd, "a", encoding="utf-8") as f:
-                info = os.fstat(fd)
-                if (info.st_dev, info.st_ino) != self._made:
-                    raise RecordError(f"{self.path} isn't the file made for it any more")
-                f.write(text)
+            self._file.write(text)
+            self._file.flush()
             self._size += len(text)
         except Exception as e:
             self._stopped = True
             logger.warning(f"Assistant: this conversation isn't recorded: {e}")
+            self.close()
+
+    def close(self):
+        """Ends the record of the conversation: nothing more is written to it."""
+        self._stopped = True
+        if self._file is not None:
+            try:
+                self._file.close()
+            except OSError as e:
+                logger.warning(f"Assistant: could not close the record of this conversation: {e}")
+            self._file = None
 
     def _make(self):
         if self.key_path:
@@ -91,13 +100,13 @@ class Conversation:
             header, seal = "", (lambda line: line)
         if not self.shared:  # a shared one is made by its admins: a mistyped name makes none
             os.makedirs(self.folder, exist_ok=True)
-        # In a shared folder the team reads the files, which only its private key opens.
+        # In a shared folder the team reads the files, which only its private key opens. O_EXCL: a new file, never one
+        # or a link someone put there first.
         fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644 if self.shared else 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            info = os.fstat(fd)
-            self._made = (info.st_dev, info.st_ino)
-            if header:
-                f.write(header + "\n")
+        self._file = os.fdopen(fd, "w", encoding="utf-8")
+        if header:
+            self._file.write(header + "\n")
+            self._file.flush()
         self._size = len(header) + 1 if header else 0
         self._seal = seal
 

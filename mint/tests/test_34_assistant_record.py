@@ -72,8 +72,14 @@ class ConversationRecordTest(unittest.TestCase):
     def keys(self):
         return record.new_key(os.path.join(self.tmp.name, "keys"))
 
+    def conversation(self, *args, **kwargs) -> record.Conversation:
+        """A conversation whose file closes before its folder goes."""
+        conversation = record.Conversation(*args, **kwargs)
+        self.addCleanup(conversation.close)
+        return conversation
+
     def test_a_file_for_each_conversation_named_by_its_start_and_a_random_id(self):
-        first, second = record.Conversation(self.folder), record.Conversation(self.folder)
+        first, second = self.conversation(self.folder), self.conversation(self.folder)
         self.assertEqual(os.listdir(self.tmp.name), [], "nothing before the first entry")
         first.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         second.write_turn("t1", "zoom on the last hour", Snap(), ["range last 1 hours"], "model")
@@ -88,7 +94,7 @@ class ConversationRecordTest(unittest.TestCase):
                  "pulse": "imas:hdf5?path=/home/ITER/someone/public/imasdb/test/105027/pf_active_5k"},
                 {"variable": "pf_active/coil[1]/current/data", "file": "C:\\Users\\someone\\Documents\\coils.csv"},
                 {"variable": "CRYO:JDOE01-XI", "file": "pressures_jdoe.xlsx"}]
-        conversation = record.Conversation(self.folder)
+        conversation = self.conversation(self.folder)
         with mock.patch.object(record.getpass, "getuser", return_value="jdoe"):
             conversation.write_turn("t1", "plot what jdoe asked for", Snap(rows=rows), ["add r1"], "model")
         with open(conversation.path, encoding="utf-8") as f:
@@ -108,7 +114,7 @@ class ConversationRecordTest(unittest.TestCase):
     def test_only_the_team_reads_a_record_encrypted_with_its_key(self):
         private, public = self.keys()
         os.makedirs(self.folder)
-        conversation = record.Conversation(self.folder, public, shared=True)
+        conversation = self.conversation(self.folder, public, shared=True)
         conversation.write_turn("c1-t1", "smooth the pirani 30s", Snap(), ["process r1 moving_average window=30s"],
                                 "model")
         conversation.write("c1-1", "applied", "smooth the pirani 30s", Snap(), ["process r1 moving_average window=30s"])
@@ -132,20 +138,21 @@ class ConversationRecordTest(unittest.TestCase):
 
     def test_a_shared_folder_gets_nothing_unencrypted(self):
         os.makedirs(self.folder)
-        conversation = record.Conversation(self.folder, "", shared=True)
+        conversation = self.conversation(self.folder, "", shared=True)
         conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         self.assertEqual(os.listdir(self.folder), [])
 
     @unittest.skipIf(cryptography is None, "cryptography is not installed")
     def test_a_shared_folder_that_isnt_there_is_not_made(self):
         _, public = self.keys()
-        conversation = record.Conversation(self.folder, public, shared=True)
+        conversation = self.conversation(self.folder, public, shared=True)
         conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         self.assertFalse(os.path.exists(self.folder))
 
+    @unittest.skipUnless(hasattr(os, "getuid"), "Windows keeps a file in use from being removed or replaced")
     def test_a_file_put_in_place_of_the_record_gets_nothing(self):
         os.makedirs(self.folder)
-        conversation = record.Conversation(self.folder)
+        conversation = self.conversation(self.folder)
         conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         os.remove(conversation.path)
         with open(conversation.path, "w", encoding="utf-8") as f:
@@ -160,7 +167,7 @@ class ConversationRecordTest(unittest.TestCase):
         victim = os.path.join(self.tmp.name, "profile")
         with open(victim, "w", encoding="utf-8") as f:
             f.write("mine\n")
-        conversation = record.Conversation(self.folder)
+        conversation = self.conversation(self.folder)
         conversation.write_turn("t1", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
         os.remove(conversation.path)
         os.symlink(victim, conversation.path)
@@ -169,7 +176,7 @@ class ConversationRecordTest(unittest.TestCase):
             self.assertEqual(f.read(), "mine\n")
 
     def test_a_long_conversation_stops_being_kept(self):
-        conversation = record.Conversation(self.folder)
+        conversation = self.conversation(self.folder)
         with mock.patch.object(record, "MAX_BYTES", 2000):
             for turn in range(40):
                 conversation.write_turn(f"t{turn}", "smooth the pirani", Snap(), ["process r1 smooth"], "model")
@@ -203,6 +210,7 @@ class NewConversationTest(unittest.TestCase):
         self.ctl.panel.add_assistant_message = lambda text: (self.said.append(text), show(text))[1]
 
     def tearDown(self):
+        self.ctl.shutdown()  # the record ends, and its file closes before its folder goes
         self.ctl.panel.deleteLater()
         self.win.close()
 
