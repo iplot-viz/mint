@@ -8,6 +8,7 @@ It does not use Qt.
 import inspect
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 import pandas as pd
@@ -18,6 +19,48 @@ logger = setupLogger.get_logger(__name__)
 
 #: The type of the data sources whose data can be exported.
 EXPORTED_SOURCE_TYPE = "CODAC_UDA"
+
+
+class ExportCancelled(Exception):
+    """Stops the export script before its next variable, once the export is cancelled (see ExportStop)."""
+
+
+class ExportStop:
+    """Cancels an export from another thread: the read in progress stops where the UDA client can (cancelAPI), and
+    the export stops before its next variable."""
+
+    def __init__(self):
+        self._stopped = threading.Event()
+        self._lock = threading.Lock()
+        self._readers = []
+
+    @property
+    def stopped(self) -> bool:
+        return self._stopped.is_set()
+
+    def reads_with(self, reader):
+        """The export reads with this UDA reader: a stop stops its read in progress."""
+        with self._lock:
+            self._readers.append(reader)
+        if self.stopped:
+            self._cancel(reader)
+
+    def stop(self):
+        self._stopped.set()
+        with self._lock:
+            readers = list(self._readers)
+        for reader in readers:
+            self._cancel(reader)
+
+    @staticmethod
+    def _cancel(reader):
+        cancel = getattr(reader, 'cancelAPI', None)
+        if cancel is None:
+            return
+        try:
+            cancel()
+        except Exception:
+            logger.exception("Cannot stop the read of the export")
 
 
 def accepts_kwarg(func, name: str) -> bool:
@@ -41,10 +84,11 @@ def reports_progress() -> bool:
 
 def export_data_source(data_access, data_s_name: str, variables, export_format: str, chunks: int, output_path: str,
                        pulses=None, ts=None, te=None, relative_time: bool = False, resample_freq=None,
-                       progress=None) -> dict:
+                       progress=None, stop: ExportStop = None) -> dict:
     """Export the `variables`, pairs of a name and a description, of the data source `data_s_name` of
     `data_access` to a file next to `output_path` for each pulse of `pulses`, or for the time range from `ts`
-    to `te`. `progress`, if given, is told the name of each variable as its export starts.
+    to `te`. `progress`, if given, is told the name of each variable as its export starts. `stop`, if given, cancels
+    the export (see ExportStop): the file it was writing is left as far as it got.
 
     Gives the number of files it tried to write ('attempts'), of those it wrote ('exported'), and the reasons
     why the others failed ('errors').
@@ -53,8 +97,18 @@ def export_data_source(data_access, data_s_name: str, variables, export_format: 
 
     conn = data_access.ds_list[data_s_name]
     gen_kwargs = {}
-    if progress is not None and accepts_kwarg(generateData, 'progressCallback'):
-        gen_kwargs['progressCallback'] = progress
+
+    def report(name):
+        if stop is not None and stop.stopped:
+            raise ExportCancelled()
+        if progress is not None:
+            progress(name)
+
+    if (progress is not None or stop is not None) and accepts_kwarg(generateData, 'progressCallback'):
+        gen_kwargs['progressCallback'] = report
+    # cancelAPI() stops only the chunk being read: the export script stops before the next one.
+    if stop is not None and accepts_kwarg(generateData, 'stopRequested'):
+        gen_kwargs['stopRequested'] = lambda: stop.stopped
 
     # Relative time only applies to time-range exports; pulse exports
     # keep absolute timestamps.
@@ -83,6 +137,8 @@ def export_data_source(data_access, data_s_name: str, variables, export_format: 
             return dict(attempts=0, exported=0, errors=[reason])
     else:
         export_conn = conn
+    if stop is not None and getattr(export_conn, 'UCR', None) is not None:
+        stop.reads_with(export_conn.UCR)
 
     attempts, exported, errors = 0, 0, []
     original_path = Path(output_path)
@@ -95,6 +151,8 @@ def export_data_source(data_access, data_s_name: str, variables, export_format: 
         # Pulse mode: a file for each pulse, named after its start.
         windows = []
         for pulse in pulses or ():
+            if stop is not None and stop.stopped:
+                break
             attempts += 1
             try:
                 result = conn.get_pulse_info(pulse)
@@ -113,6 +171,8 @@ def export_data_source(data_access, data_s_name: str, variables, export_format: 
             windows.append((f"{ts}", f"{te}", f"{data_s_name}_{original_path.stem}{original_path.suffix}", ""))
 
         for start, end, file_name, which in windows:
+            if stop is not None and stop.stopped:
+                break
             new_path = original_path.with_name(file_name)
             # Use of export data script
             valid, err_msg = generateData(logfile=None, conn=export_conn, csvfile=csv_file, formatType=export_format,
