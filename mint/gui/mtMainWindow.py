@@ -19,7 +19,7 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QMargins, QModelIndex, QSettings, QTimer, Qt, \
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QMargins, QModelIndex, QSettings, QTimer, Qt, \
     QItemSelectionModel, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
@@ -33,6 +33,7 @@ import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
+from iplotlib.qt.utils.palette import theme_colors
 from iplotWidgets.sizing import clamp_to_screen
 
 from mint.app.dirs import WORKSPACES_FOLDER_KEY, remember_folder, remembered_folder
@@ -59,6 +60,12 @@ from mint.gui.shift_handlers import ShiftHandlerMixin
 from iplotLogging import setupLogger as setupLog
 
 logger = setupLog.get_logger(__name__)
+
+
+def _plot_icon():
+    """The chart of Draw, Stream and Export. A dark theme hides the dark line of its picture: there it is drawn in the
+    grey of the icons, as those of the canvas tool bar are."""
+    return create_icon('plot', 'svg') if theme_colors() is not None else create_icon('plot')
 
 
 @dataclass
@@ -466,7 +473,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         file_menu.addAction(exit_action)
 
         self.drawBtn = QPushButton("Draw")
-        plot_icon = create_icon('plot')
+        plot_icon = _plot_icon()
+        self._icons_theme = theme_colors()
         self.drawBtn.setIcon(plot_icon)
         self.streamBtn = QPushButton("Stream")
         self.streamBtn.setIcon(plot_icon)
@@ -2122,6 +2130,15 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                 call.cancel()
             self._export = None
         return True
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        # A theme chosen in View > Appearance changes the palette: the chart of Draw, Stream and Export follows it.
+        if event.type() == QEvent.Type.PaletteChange and hasattr(self, "drawBtn") \
+                and theme_colors() != self._icons_theme:
+            self._icons_theme = theme_colors()
+            for button in (self.drawBtn, self.streamBtn, self.exportBtn):
+                button.setIcon(_plot_icon())
 
     def closeEvent(self, event: QCloseEvent) -> None:
         # An export in this thread cannot be stopped: it ends before MINT quits, as it always did.
