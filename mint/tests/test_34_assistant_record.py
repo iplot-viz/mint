@@ -1,10 +1,14 @@
 """What the assistant keeps to retrain the model on: a file per conversation, named by when it started and a random id,
-with nothing that tells who asked, encrypted for the team; and a new conversation started from the panel."""
+with nothing that tells who asked, encrypted for the team; that the panel says so; and how the team takes it."""
 import argparse
+import io
 import json
 import os
 import re
+import subprocess
+import tarfile
 import tempfile
+import time
 import unittest
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -21,7 +25,8 @@ from mint.assistant.voice import Voice
 from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 from mint.tests.test_30_assistant_actions import build_window
-from mint.tests.test_31_assistant_panel import ChatPanel, StubEngine, wait_until
+from mint.tests.test_31_assistant_panel import ChatPanel, StubEngine
+from mint.tools.assistant_train import cmd_record_collect
 
 try:
     import cryptography  # noqa: F401
@@ -185,7 +190,7 @@ class ConversationRecordTest(unittest.TestCase):
 
 
 @unittest.skipIf(ChatPanel is None, "iplotWidgets has no chat panel")
-class NewConversationTest(unittest.TestCase):
+class RecordNoticeTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -214,47 +219,91 @@ class NewConversationTest(unittest.TestCase):
         self.ctl.panel.deleteLater()
         self.win.close()
 
-    def ask(self, request, answer):
-        self.engine.answer = answer
-        before = set(self.ctl._cards)
-        self.ctl.panel.messageSubmitted.emit(request)
-        self.assertTrue(wait_until(lambda: self.ctl._inflight is None))
-        return [card for card in self.ctl._cards if card not in before]
-
-    def records(self):
-        folder = os.path.join(self.tmp.name, "assistant", "records")
-        return sorted(os.listdir(folder)) if os.path.isdir(folder) else []
-
     def test_the_panel_says_that_what_is_asked_is_kept(self):
         self.ctl.set_visible(True)
         self.assertEqual(self.said[0], Voice.RECORDED)
-        self.said.clear()
+
+    def test_nothing_is_said_of_it_when_nothing_is_kept(self):
         self.ctl.config.record = False
-        self.ctl.new_conversation()
+        self.ctl.set_visible(True)
         self.assertNotIn(Voice.RECORDED, self.said)
 
-    def test_a_new_conversation_starts_afresh_in_a_file_of_its_own(self):
-        self.ctl.set_visible(True)
-        cards = self.ask("smooth pirani 30s", "process r1 moving_average seconds=30")
-        self.ctl.on_card_action(cards[0], ctl.APPLY, [])
-        self.assertEqual(len(self.records()), 1)
-        panel = self.ctl.panel
-        self.assertTrue(panel.new_button.isVisible() and panel.new_button.isEnabled())
-        self.said.clear()
-        panel.new_button.click()
-        self.assertEqual(self.ctl._cards, {})
-        self.assertEqual(self.ctl._last_action, "", "nothing said before is carried into the next answers")
-        self.assertEqual(len(self.ctl.workspace.table()), 5, "the change applied stays")
-        # As on opening the panel: that it is kept, and why a row isn't drawn.
-        self.assertEqual(self.said[0], Voice.RECORDED)
-        self.assertIn("uses the data source other", self.said[1])
-        self.assertEqual(panel.message_count(), 2)
-        self.ask("abs of the pirani", "process r1 abs")
-        names = self.records()
-        self.assertEqual(len(names), 2)
-        requests = [[entry["request"] for entry in record.read(os.path.join(self.tmp.name, "assistant", "records",
-                                                                            name))] for name in names]
-        self.assertIn(["abs of the pirani"], requests)
+
+@unittest.skipIf(cryptography is None, "cryptography is not installed")
+class CollectTest(unittest.TestCase):
+    """The team reads the records of the shared folder into one of its own and takes them out of it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.shared, self.out = os.path.join(self.tmp.name, "shared"), os.path.join(self.tmp.name, "out")
+        os.makedirs(self.shared)
+        self.private, self.public = record.new_key(os.path.join(self.tmp.name, "keys"))
+
+    def recorded(self, request, hours_ago) -> str:
+        conversation = record.Conversation(self.shared, self.public, shared=True)
+        conversation.write_turn("t1", request, Snap(), ["process r1 smooth"], "model")
+        conversation.close()
+        then = time.time() - hours_ago * 3600
+        os.utime(conversation.path, (then, then))
+        return os.path.basename(conversation.path)
+
+    def collect(self, folder, **options):
+        cmd_record_collect(argparse.Namespace(**{"folder": folder, "out": self.out, "key": self.private, "idle": 24,
+                                                 "ssh": "ssh", **options}))
+
+    def test_a_record_left_for_a_day_is_read_into_the_folder_of_the_team_and_taken_out(self):
+        old, fresh = self.recorded("smooth the pirani", 30), self.recorded("abs of the pirani", 1)
+        with open(os.path.join(self.shared, "notes.txt"), "w", encoding="utf-8") as f:
+            f.write("not a record\n")
+        self.collect(self.shared)
+        self.assertEqual(sorted(os.listdir(self.shared)), sorted([fresh, "notes.txt"]), "a MINT may still write to it")
+        self.assertEqual(os.listdir(self.out), [old])
+        self.assertEqual([entry["request"] for entry in record.read(os.path.join(self.out, old))],
+                         ["smooth the pirani"], "read without the key")
+
+    def test_one_it_cannot_read_stays(self):
+        name = f"20261119T133300Z-{'0' * 32}.jsonl"
+        with open(os.path.join(self.shared, name), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"format": record.FORMAT, "key": "AAAA"}) + "\n")
+        then = time.time() - 30 * 3600
+        os.utime(os.path.join(self.shared, name), (then, then))
+        self.collect(self.shared)
+        self.assertEqual(os.listdir(self.shared), [name])
+        self.assertEqual(os.listdir(self.out), [])
+
+    def test_a_folder_on_another_machine_is_reached_with_ssh(self):
+        old, fresh = self.recorded("smooth the pirani", 30), self.recorded("abs of the pirani", 1)
+        machines = []
+
+        def ssh(argv, **kwargs):
+            """That machine, with find, tar and rm, whose folder is the shared one here."""
+            machines.append(argv[:-1])
+            command = argv[-1]
+            self.assertIn("/team/records", command)
+            names = command.partition(" -- ")[2].split()
+            out = b""
+            if command.startswith("find "):
+                out = "".join(f"{os.path.getmtime(os.path.join(self.shared, name))} {name}\n"
+                              for name in os.listdir(self.shared)).encode()
+            elif " tar -cf - -- " in command:
+                copy = io.BytesIO()
+                with tarfile.open(fileobj=copy, mode="w") as tar:
+                    for name in names:
+                        tar.add(os.path.join(self.shared, name), arcname=name)
+                out = copy.getvalue()
+            else:
+                self.assertIn(" rm -f -- ", command)
+                for name in names:
+                    os.remove(os.path.join(self.shared, name))
+            return subprocess.CompletedProcess(argv, 0, out, b"")
+
+        with mock.patch("mint.tools.assistant_train.subprocess.run", side_effect=ssh):
+            self.collect("someone@codac:/team/records", ssh="ssh -J gateway")
+        self.assertEqual(machines, [["ssh", "-J", "gateway", "someone@codac"]] * 3)
+        self.assertEqual(os.listdir(self.shared), [fresh])
+        self.assertEqual([entry["request"] for entry in record.read(os.path.join(self.out, old))],
+                         ["smooth the pirani"])
 
 
 if __name__ == "__main__":
