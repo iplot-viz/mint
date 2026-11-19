@@ -2,9 +2,10 @@
 
 import typing
 
-from PySide6.QtCore import QDate, QEvent, QLocale, QPoint, Qt, Signal
+from PySide6.QtCore import QDate, QEvent, QLocale, QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QFont, QGuiApplication, QPalette, QTextCharFormat
-from PySide6.QtWidgets import QAbstractItemView, QCalendarWidget, QFrame, QLabel, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QAbstractItemView, QCalendarWidget, QFrame, QLabel, QSizePolicy, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from mint.gui.mtAppearance import blend, secondary_text_color
 from mint.tools.icon_loader import create_icon
@@ -14,12 +15,14 @@ _ENGLISH = QLocale(QLocale.Language.English, QLocale.Country.UnitedKingdom)
 
 
 class MTCalendarButton(QToolButton):
-    """The calendar icon, in the grey of the palette."""
+    """The calendar icon, in the grey of the palette, on a button as tall as the rows it sets, so that it reads as
+    theirs: laid out over them, it takes their height."""
 
     def __init__(self, tooltip: str, parent: typing.Optional[QWidget] = None):
         super().__init__(parent)
         self.setIcon(create_icon('calendar', 'svg'))
-        self.setAutoRaise(True)
+        self.setIconSize(QSize(24, 24))
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self.setToolTip(tooltip)
 
     def changeEvent(self, event):
