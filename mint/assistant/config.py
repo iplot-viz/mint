@@ -11,6 +11,7 @@ ENV_MODEL = "MINT_ASSISTANT_MODEL"
 ENV_SHA256 = "MINT_ASSISTANT_SHA256"
 ENV_THREADS = "MINT_ASSISTANT_THREADS"
 ENV_RECORD = "MINT_ASSISTANT_RECORD"
+ENV_RECORD_KEY = "MINT_ASSISTANT_RECORD_KEY"
 
 MAX_DEFAULT_THREADS = 4
 
@@ -24,6 +25,10 @@ def _is_true(value: str) -> bool:
     return value.lower() in ("1", "true", "yes", "on")
 
 
+def _is_false(value: str) -> bool:
+    return value.lower() in ("", "0", "false", "no", "off")
+
+
 @dataclass
 class AssistantConfig:
     enabled: bool = False
@@ -31,6 +36,11 @@ class AssistantConfig:
     sha256: str = ""
     threads: int = 0
     record: bool = False
+    # Where the records go: a folder shared by everyone, or "" for one of this user on this computer (see record_place).
+    record_folder: str = ""
+    # The public key of the team (a PEM file) the records are encrypted with. Without it only those of this computer
+    # are kept, as they are.
+    record_key: str = ""
 
     @classmethod
     def from_environment(cls) -> "AssistantConfig":
@@ -39,10 +49,14 @@ class AssistantConfig:
             threads = max(0, int(_env(ENV_THREADS) or 0))
         except ValueError:
             pass
+        record = _env(ENV_RECORD)
+        # "1" keeps them on this computer; a folder, in that folder.
+        folder = "" if _is_true(record) or _is_false(record) else os.path.expanduser(record)
         return cls(enabled=_is_true(_env(ENV_ENABLED)),
                    model_path=os.path.expanduser(_env(ENV_MODEL)),
                    sha256=_env(ENV_SHA256).lower(),
-                   threads=threads or default_threads(), record=_is_true(_env(ENV_RECORD)))
+                   threads=threads or default_threads(), record=_is_true(record) or bool(folder), record_folder=folder,
+                   record_key=os.path.expanduser(_env(ENV_RECORD_KEY)))
 
 
 def runtime_available() -> bool:
@@ -90,6 +104,13 @@ def default_threads() -> int:
 def state_dir() -> str:
     base = os.environ.get("IPLOT_DUMP_PATH") or os.path.join(str(Path.home()), ".local", "1Dtool")
     return os.path.join(base, "assistant")
+
+
+def record_place(config: AssistantConfig):
+    """(folder, shared) of the records: the folder shared by everyone, or one of this user on this computer."""
+    if config.record_folder:
+        return config.record_folder, True
+    return os.path.join(state_dir(), "records"), False
 
 
 def prompt_cache_dir():

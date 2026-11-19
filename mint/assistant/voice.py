@@ -256,6 +256,7 @@ class Voice:
         return "I put back what I could, but not everything. " + " ".join(dict.fromkeys(problems))
 
     PENDING = "Press Enter to apply, or tell me what to change…"
+    RECORDED = "What you ask here is kept for a while, without your name, to improve me."
 
     @staticmethod
     def undid(title: str) -> str:
