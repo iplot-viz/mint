@@ -288,7 +288,7 @@ class AssistantController(QObject):
         self._cards, self._searches, self._planned, self._help_offer = {}, {}, {}, {}
         self._fix_offer = self._told_problems = self._search_source = self._last_action = ""
         self._turns = 0
-        self._conversation = None
+        self._end_record()
         self._start()
         self._tell_problems(on_open=True)
         self.panel.input.setFocus()
@@ -439,6 +439,13 @@ class AssistantController(QObject):
     def shutdown(self):
         if self.engine is not None:
             self.engine.shutdown()
+        self._end_record()
+
+    def _end_record(self):
+        """The record of this conversation ends; the next one goes to a file of its own."""
+        if self._conversation is not None:
+            self._conversation.close()
+        self._conversation = None
 
     def _on_engine_state(self, state: str):
         if state == LOADING:

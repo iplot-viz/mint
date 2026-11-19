@@ -812,6 +812,7 @@ class AssistantFlowTest(unittest.TestCase):
                 self.ctl.panel, "card_count") else max(self.ctl._cards), ctl.DISMISS, [])
             with open(self.ctl._conversation.path, encoding="utf-8") as f:
                 self.assertEqual(len(f.readlines()), 10, "off: nothing more is kept")
+            self.ctl.shutdown()  # the record ends, and its file closes before its folder goes
 
     def test_a_signal_named_by_its_place_in_a_plot_is_asked_about_as_it(self):
         from mint.assistant import check
