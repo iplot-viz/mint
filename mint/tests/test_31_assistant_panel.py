@@ -772,7 +772,6 @@ class AssistantFlowTest(unittest.TestCase):
 
     def test_what_was_asked_and_kept_is_recorded_to_learn_from(self):
         import argparse
-        from mint.assistant import record
         from mint.tools.assistant_train import cmd_feedback
         with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ, {"IPLOT_DUMP_PATH": folder}):
             self.ctl.config.record = True
@@ -787,7 +786,7 @@ class AssistantFlowTest(unittest.TestCase):
             filled = self.ask("2 Hz", "draw")
             self.ctl.panel.cardActionTriggered.emit(filled[0], ctl.APPLY, [])
             self.ask("what is the mini-map?", 'say "no model here"')
-            with open(record.path(), encoding="utf-8") as f:
+            with open(self.ctl._conversation.path, encoding="utf-8") as f:
                 lines = [json.loads(line) for line in f]
             self.assertEqual([line["outcome"] for line in lines if "card" in line],
                              ["applied", "applied", "undone", "dismissed", "applied"])
@@ -800,7 +799,7 @@ class AssistantFlowTest(unittest.TestCase):
                               ("low-pass the pirani", ["process r1 lowpass"], "model"),
                               ("what is the mini-map?", ["about minimap"], "MINT")])
             out = os.path.join(folder, "feedback.jsonl")
-            cmd_feedback(argparse.Namespace(records=[record.path()], out=out))
+            cmd_feedback(argparse.Namespace(records=[self.ctl._conversation.path], out=out))
             with open(out, encoding="utf-8") as f:
                 cases = [json.loads(line) for line in f]
             # Only what stayed applied, with the number the user gave in the request it fills.
@@ -811,8 +810,19 @@ class AssistantFlowTest(unittest.TestCase):
             self.ask("remove row 2", "remove r2")
             self.ctl.panel.cardActionTriggered.emit(self.ctl.panel.card_count() - 1 if hasattr(
                 self.ctl.panel, "card_count") else max(self.ctl._cards), ctl.DISMISS, [])
-            with open(record.path(), encoding="utf-8") as f:
+            with open(self.ctl._conversation.path, encoding="utf-8") as f:
                 self.assertEqual(len(f.readlines()), 10, "off: nothing more is kept")
+            self.ctl.shutdown()  # the record ends, and its file closes before its folder goes
+
+    def test_a_signal_named_by_its_place_in_a_plot_is_asked_about_as_it(self):
+        from mint.assistant import check
+        text = "make the second signal in the top plot red"
+        row = check.signal_placed(self.ctl.workspace.snapshot(), text)
+        self.assertIsNotNone(row)
+        self.ask(text, f"style {row} color=red")
+        prompt_sent = self.engine.prompts[-1][0]
+        self.assertIn("make it red", prompt_sent)
+        self.assertIn(f"Selected: {row}", prompt_sent)
 
     def test_undo_in_words_undoes_the_last_card_without_the_model(self):
         self.ask("undo", 'say "no model here"')

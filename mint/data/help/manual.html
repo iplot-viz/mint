@@ -417,10 +417,15 @@ $ mint
 </tr>
 <tr>
 <td><code>MINT_ASSISTANT_RECORD</code></td>
-<td><code>1</code> to keep on this computer what you ask, what it answers and whether you apply each card (up to 1 MB), to retrain the assistant with, optional</td>
+<td><code>1</code> to keep on this computer what you ask, what it answers and whether you apply each card, to retrain the assistant with; a folder of the team to keep them there, encrypted; optional</td>
+</tr>
+<tr>
+<td><code>MINT_ASSISTANT_RECORD_KEY</code></td>
+<td>the public key of the team (<code>.pem</code>) the records are encrypted with; needed for a folder of the team, optional</td>
 </tr>
 </tbody>
 </table>
+<p>With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it, and only the team to list them. The team takes the files out of it as it reads them.</p>
 <p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>
