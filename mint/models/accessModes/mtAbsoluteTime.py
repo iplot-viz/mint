@@ -2,11 +2,12 @@
 # Author: Jaswant Sai Panchumarti
 
 from PySide6.QtGui import QRegularExpressionValidator, QFontMetrics
-from PySide6.QtWidgets import QDateTimeEdit, QLabel, QLineEdit, QHBoxLayout, QSizePolicy, QPushButton
-from PySide6.QtCore import Qt, QRegularExpression, Signal, QDateTime
+from PySide6.QtWidgets import QDateTimeEdit, QGridLayout, QLabel, QLineEdit, QHBoxLayout, QSizePolicy, QPushButton
+from PySide6.QtCore import Qt, QDate, QRegularExpression, QTime, Signal, QDateTime
 
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from mint.gui.mtCreatePulseDialog import split_ns
+from mint.gui.mtDayRangeCalendar import MTCalendarButton, MTDayRangeCalendar
 from mint.models.accessModes.mtGeneric import MTGenericAccessMode
 
 
@@ -64,6 +65,10 @@ class MTAbsoluteTime(MTGenericAccessMode):
         self.toTime.adjustSize()
         self.toTime.setFixedWidth(self.toTime.width() + 2)
 
+        self.calendarBtn = MTCalendarButton("Pick the days on a calendar: from the start of the first to the end of "
+                                            "the last", parent=self.form)
+        self.calendarBtn.clicked.connect(lambda *_: self.pick_days())
+
         # Pulse search widgets
         self.pulseUsed = QLineEdit(parent=self.form)
         self.pulseUsed.setReadOnly(True)
@@ -93,26 +98,20 @@ class MTAbsoluteTime(MTGenericAccessMode):
         pulseLayout.addWidget(self.clearPulseBtn)
         pulseLayout.setAlignment(Qt.AlignLeft)
 
-        # Create layout for the "From time" row
-        fromTimeLayout = QHBoxLayout()
-        fromTimeLayout.addWidget(self.fromTime)
-        fromTimeLayout.addWidget(QLabel(".", parent=self.form))
-        fromTimeLayout.addWidget(self.fromTimeNs)
-        fromTimeLayout.addWidget(QLabel("ns", parent=self.form))
-        fromTimeLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        # Create layout for the "To time" row
-        toTimeLayout = QHBoxLayout()
-        toTimeLayout.addWidget(self.toTime)
-        toTimeLayout.addWidget(QLabel(".", parent=self.form))
-        toTimeLayout.addWidget(self.toTimeNs)
-        toTimeLayout.addWidget(QLabel("ns", parent=self.form))
-        toTimeLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Align items to the left
-
-        # Add the rows to the form layout
-        self.form.layout().addRow(QLabel("From time", parent=self.form), fromTimeLayout)
-        self.form.layout().addRow(QLabel("To time", parent=self.form), toTimeLayout)
-        self.form.layout().addRow(QLabel("From pulse", parent=self.form), pulseLayout)
+        # The rows of the times share the calendar: it sits between them, where they end.
+        grid = QGridLayout()
+        for row, (label, time, ns) in enumerate((("From time", self.fromTime, self.fromTimeNs),
+                                                 ("To time", self.toTime, self.toTimeNs))):
+            grid.addWidget(QLabel(label, parent=self.form), row, 0)
+            grid.addWidget(time, row, 1)
+            grid.addWidget(QLabel(".", parent=self.form), row, 2)
+            grid.addWidget(ns, row, 3)
+            grid.addWidget(QLabel("ns", parent=self.form), row, 4)
+        grid.addWidget(self.calendarBtn, 0, 5, 2, 1, Qt.AlignmentFlag.AlignVCenter)
+        grid.addWidget(QLabel("From pulse", parent=self.form), 2, 0)
+        grid.addLayout(pulseLayout, 2, 1, 1, 6)
+        grid.setColumnStretch(6, 1)
+        self.form.layout().addRow(grid)
 
     def properties(self):
         return {
@@ -121,6 +120,21 @@ class MTAbsoluteTime(MTGenericAccessMode):
             "ts_ns_start": self.model.stringList()[2],
             "ts_ns_end": self.model.stringList()[3]
         }
+
+    def pick_days(self) -> MTDayRangeCalendar:
+        """The calendar, under the times, on the days of the range."""
+        calendar = MTDayRangeCalendar(self.fromTime.date(), self.toTime.date(), parent=self.form)
+        calendar.rangePicked.connect(self.set_days)
+        calendar.show_under(self.toTime)
+        return calendar
+
+    def set_days(self, first: QDate, last: QDate):
+        """The range of the days picked on the calendar: from the first instant of the first to the last of the last."""
+        self.fromTime.setDateTime(QDateTime(first, QTime(0, 0)))
+        self.fromTimeNs.setText("0" * 9)
+        self.toTime.setDateTime(QDateTime(last, QTime(23, 59, 59)))
+        self.toTimeNs.setText("9" * 9)
+        self.mapper.submit()
 
     def set_valid_date(self, valid: bool):
         # A valid time looks as the other fields do; an invalid one is red, with text readable on it in any palette.

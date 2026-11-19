@@ -5,7 +5,7 @@
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
 import weakref
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field, fields
 from datetime import datetime
 from functools import partial
@@ -29,13 +29,13 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
-from iplotlib.core.signal import SignalXY
 import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
 from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
+from mint.app.dirs import WORKSPACES_FOLDER_KEY, remember_folder, remembered_folder
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtAppearance import MTAppearanceMenu, register_scale_listener
@@ -205,8 +205,6 @@ class _Build:
     x_axis_date: bool
     x_axis_follow: bool
     x_axis_window: typing.Optional[int]
-    # The signals of the canvas built before, by uid: the new ones keep their markers.
-    previous_signals: dict
     # What build_canvas() draws, by column and row of the plots.
     plan: dict = field(default_factory=dict)
     rows: typing.Optional[_TableRows] = None
@@ -225,6 +223,8 @@ class _Import:
     file: typing.Optional[str] = None
     # The places of the plots of the canvas drawn, or left empty, from (column, row) from 0.
     done: set = field(default_factory=set)
+    # The ids of the signals of rows that stand where the workspace saved none (see _align_imported_signals).
+    own: set = field(default_factory=set)
 
 
 @dataclass
@@ -297,7 +297,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                                  data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
-        self._data_dir = os.path.join(data_dir, 'workspaces')
+        self._data_dir = remembered_folder(WORKSPACES_FOLDER_KEY, os.path.join(data_dir, 'workspaces'))
         self._data_export_dir = os.path.join(data_dir, 'data_signals')
         self._progressBar = QProgressBar()
         self._statusBar = MTStatusBar()
@@ -871,7 +871,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             else:
                 file_name = file[0]
             self.export_json(file_name)
-            self._data_dir = os.path.dirname(file_name)
+            self._picked_workspace(file_name)
+
+    def _picked_workspace(self, file_name: str):
+        """The next dialogs of a workspace, in this session and the next ones, open in the folder of `file_name`."""
+        self._data_dir = os.path.dirname(file_name)
+        remember_folder(WORKSPACES_FOLDER_KEY, self._data_dir)
 
     def on_export_data(self):
         directory = self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -893,7 +898,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             # into the new canvas.
             if self.streamerCfgWidget.is_activated():
                 self.streamerCfgWidget.stop()
-            self._data_dir = os.path.dirname(file[0])
+            self._picked_workspace(file[0])
             self.import_json(file[0])
 
     def on_minimap_toggled(self, checked: bool):
@@ -1079,12 +1084,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             yield from batch
         return True
 
-    def _old_signals(self, path: list) -> list:
-        """The signals of the imported canvas at the places of the waypoints (see import_dict)."""
-        return [signal for signal in map(self._old_signal, path) if signal is not None]
+    def _old_signals(self, path: list, own: typing.Collection[int] = ()) -> list:
+        """The signals of the imported canvas at the places of the waypoints (see import_dict), but those of the ids
+        in `own`."""
+        return [signal for signal in (self._old_signal(waypt, own) for waypt in path) if signal is not None]
 
-    def _old_signal(self, waypt):
-        """The signal of the imported canvas at the place of the waypoint, if any (see import_dict)."""
+    def _old_signal(self, waypt, own: typing.Collection[int] = ()):
+        """The signal of the imported canvas at the place of the waypoint, if any and its id is not in `own` (see
+        import_dict)."""
         if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
             return None
         try:
@@ -1092,7 +1099,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         except IndexError:
             return None
         stack_signals = plot.signals.get(waypt.stack_num, []) if plot else []
-        return stack_signals[waypt.signal_stack_id] if waypt.signal_stack_id < len(stack_signals) else None
+        signal = stack_signals[waypt.signal_stack_id] if waypt.signal_stack_id < len(stack_signals) else None
+        return None if signal is None or id(signal) in own else signal
 
     def _report_read_progress(self, done: int, total: int):
         self._progressBar.setRange(0, total)
@@ -1207,14 +1215,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.begin_build()
         self.sigCfgWidget.set_progress(0)
 
-        # Clear markers table before importing new signals
-        self.qtcanvas._marker_window.clear_info()
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
         imported = _Import(path, [waypt.func(*waypt.args, **waypt.kwargs) for waypt in path], file=file_path)
+        self._align_imported_signals(imported)
         if self._draws_in_background():
             self._import_in_background(imported)
             return
@@ -1222,7 +1228,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # The loop below reads each workspace signal again, with the range it was saved with.
         read_ahead = self._read_ahead(
             [signal for waypt, signal in zip(path, imported.signals) if self.sigCfgWidget.model.fetches_row(waypt.idx)]
-            + self._old_signals(path))
+            + self._old_signals(path, imported.own))
         if read_ahead is None:
             return
 
@@ -1247,6 +1253,42 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
+    def _align_imported_signals(self, imported: _Import):
+        """Put the signals of each stack of the imported canvas at the places of the rows that make them, by uid and
+        name. A workspace keeps no signal for a row that couldn't be drawn when it was saved: by place, that row would
+        take the signal of the next one, and leave the next one out. Such a row stands there with the signal it makes,
+        as a Draw does. A stack with a saved signal that none of its rows makes, as in workspaces saved without uids,
+        keeps its places."""
+        rows = defaultdict(dict)  # (column, row, stack) of the canvas -> {place in the stack: signal of the row}
+        for waypt, signal in zip(imported.path, imported.signals):
+            place = self._imported_place(waypt)
+            if place is not None:
+                rows[place + (waypt.stack_num,)][waypt.signal_stack_id] = signal
+        for (col, row, stack), by_place in rows.items():
+            plot = self.canvas.plots[col - 1][row - 1]
+            saved = plot.signals.get(stack, [])
+            made = Counter((signal.uid, signal.name) for signal in by_place.values())
+            if sorted(by_place) != list(range(len(by_place))) or Counter(
+                    (signal.uid, signal.name) for signal in saved) - made:
+                continue
+            by_key = defaultdict(list)
+            for signal in saved:
+                by_key[(signal.uid, signal.name)].append(signal)
+            aligned = []
+            for k in range(len(by_place)):
+                signal = by_place[k]
+                matches = by_key.get((signal.uid, signal.name))
+                if matches:
+                    aligned.append(matches.pop(0))
+                    continue
+                # In the next colour of the plot, rather than in one of those its saved signals have.
+                signal.parent = weakref.ref(plot)
+                if signal.color is None and isinstance(plot, PlotXY):
+                    signal.color = signal.original_color = plot.get_next_color()
+                imported.own.add(id(signal))
+                aligned.append(signal)
+            plot.signals[stack] = aligned
+
     def _import_row(self, imported: _Import, i: int):
         """Check the row of the i-th waypoint of an import with its data, and put the signal it makes at the place of
         the workspace signal, read again with the range it was saved with (see import_dict())."""
@@ -1262,11 +1304,16 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # Check if signal name is valid (Correct signal name and signal has data)
         self._update_row(row_idx, signal_valid)
         if _left_out(signal_valid):
+            if id(signal_valid) in imported.own:  # it stood where the workspace saved no signal: it goes
+                self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1].signals[waypt.stack_num][
+                    waypt.signal_stack_id] = None
             return
 
-        plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-        if not plot:
+        # A workspace saved before a Draw has no plot at the place of its rows.
+        place = self._imported_place(waypt)
+        if place is None:
             return
+        plot = self.canvas.plots[place[0] - 1][place[1] - 1]  # type: Plot
         plot.parent = weakref.ref(self.canvas)
         # Stored positions can exceed the built canvas when sibling
         # signals failed to load; skip them instead of aborting the import.
@@ -1276,19 +1323,22 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                            f"position {waypt.signal_stack_id}: canvas has {len(stack_signals)} signals there")
             return
         old_signal = stack_signals[waypt.signal_stack_id]
+        if old_signal is signal_valid:
+            # The row stands where the workspace saved no signal (see _align_imported_signals).
+            new_signal = signal_valid
+        else:
+            params = dict()
+            for f in fields(old_signal):
+                if f.name == 'children':  # Don't copy children.
+                    continue
+                else:
+                    params.update({f.name: getattr(old_signal, f.name)})
 
-        params = dict()
-        for f in fields(old_signal):
-            if f.name == 'children':  # Don't copy children.
-                continue
-            else:
-                params.update({f.name: getattr(old_signal, f.name)})
+            # Propagate uid from row to signal for workspace without it
+            if 'uid' not in params or params['uid'] is None:
+                params['uid'] = waypt.kwargs['uid']
 
-        # Propagate uid from row to signal for workspace without it
-        if 'uid' not in params or params['uid'] is None:
-            params['uid'] = waypt.kwargs['uid']
-
-        new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
         new_signal.parent = weakref.ref(plot)
 
         self._update_row(row_idx, new_signal)
@@ -1302,10 +1352,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Replace signal
         plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
-
-        # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
-        if isinstance(new_signal, SignalXY) and new_signal.markers_list:
-            self.qtcanvas._marker_window.import_table(new_signal)
 
     def _signals_updated(self):
         """Show in the table the status of the rows that an import updated."""
@@ -1346,7 +1392,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             waypt = imported.path[i]
             if self.sigCfgWidget.model.fetches_row(waypt.idx):
                 requests[read] += AccessHelper.data_requests(imported.signals[i])
-            old_signal = self._old_signal(waypt)
+            old_signal = self._old_signal(waypt, imported.own)
             if old_signal is not None:
                 requests[read] += AccessHelper.data_requests(old_signal)
         self._read_and_draw(_Drawing(rows, imported.rows, functools.partial(self._import_row, imported),
@@ -1535,7 +1581,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.canvasStack.currentWidget().check_markers(self.canvas)
         self.canvasStack.currentWidget().stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -1770,7 +1815,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             canvas_widget.set_canvas(self.canvas)
         # It listed the plots drawn when the Draw began.
         self.canvasStack.refreshLinks()
-        canvas_widget.check_markers(self.canvas)
         canvas_widget.stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -2162,16 +2206,13 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.canvas.auto_refresh = refresh_interval
 
-        # Get signals in order to preserve markers
-        previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
         return _Build(stream=stream, valid=valid, ts=ts, te=te,
                       da_params=dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number), x_axis_date=x_axis_date,
-                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window, previous_signals=previous_signals)
+                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window)
 
     def _build_row(self, build: _Build, waypt, signal):
         """Read the data of the signal of a waypoint of the table, show the status of its row and add the signal to
@@ -2203,11 +2244,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         if _left_out(signal):
             return
-
-        # Preserve markers
-        prev_signal = build.previous_signals.get(signal.uid)
-        if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
-            signal.markers_list = prev_signal.markers_list
 
         plan = build.plan
         if waypt.col_num not in plan:
