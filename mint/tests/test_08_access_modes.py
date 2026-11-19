@@ -14,7 +14,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from PySide6.QtCore import QDate, QDateTime, QEvent, QPointF, Qt
+from PySide6.QtCore import QDate, QDateTime, QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QAbstractItemView, QApplication
 from shiboken6 import isValid
@@ -141,6 +141,17 @@ class AbsoluteTimeCalendarTest(unittest.TestCase):
                                                             Qt.KeyboardModifier.NoModifier))
         self.assertEqual(self.calendar.summary.text(), "3 Nov → 18 Nov 2026 · 16 days")
         self.assertEqual(self._times()[2], '2026-11-03T23:59:59')  # the fields wait for the click
+
+    def test_its_button_spans_from_and_to(self):
+        self.mode.form.show()
+        self.addCleanup(self.mode.form.close)
+        QApplication.processEvents()
+        button = self.mode.calendarBtn
+        top = self.mode.fromTime.mapTo(self.mode.form, QPoint(0, 0)).y()
+        bottom = self.mode.toTime.mapTo(self.mode.form, QPoint(0, self.mode.toTime.height())).y()
+        self.assertLessEqual(abs(button.geometry().top() - top), 2)
+        self.assertLessEqual(abs(button.geometry().top() + button.height() - bottom), 2)
+        self.assertFalse(button.autoRaise(), "a button with its frame, not a bare icon")
 
     def test_the_icon_takes_the_grey_of_a_dark_palette(self):
         icon_grey = {}
