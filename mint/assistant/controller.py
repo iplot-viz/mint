@@ -906,11 +906,11 @@ class AssistantController(QObject):
             self.panel.add_assistant_message(self.voice.still_busy())
             return
         try:
-            snap = self._snapshot(self._last_action)
+            snap, asked = check.placed_as_it(self._snapshot(self._last_action), text)
             shown = prompt.visible(snap)
-            _, full = prompt.build(self.format, shown, text, self._few_shot)
-            grammar = commands.build_grammar(*prompt.answer_ids(shown, text), recipes.load(),
-                                             *prompt.file_ids(shown, text), data_sources=prompt.source_ids(shown))
+            _, full = prompt.build(self.format, shown, asked, self._few_shot)
+            grammar = commands.build_grammar(*prompt.answer_ids(shown, asked), recipes.load(),
+                                             *prompt.file_ids(shown, asked), data_sources=prompt.source_ids(shown))
         except Exception:
             logger.exception("Assistant: could not prepare the request")
             self.panel.add_assistant_message(self.voice.could_not_work_out())

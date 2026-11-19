@@ -128,8 +128,11 @@ def main(argv=None):
     failures = []
     asked = {}  # (asked instead, was right) -> cases
     for case in cases:
-        snap = prompt.visible(snapshot_from_dict(dict(case["workspace"], file=case.get("file"))))
-        warm, full = prompt.build(fmt, snap, case["request"], few)
+        # As MINT does: a signal named by its place in a plot is asked about as "it", with its row selected.
+        snap, question = check.placed_as_it(snapshot_from_dict(dict(case["workspace"], file=case.get("file"))),
+                                         case["request"])
+        snap = prompt.visible(snap)
+        warm, full = prompt.build(fmt, snap, question, few)
         # Same as MINT: the workspace is evaluated while the user types, the request after Enter.
         tokens = llm.tokenize(warm.encode("utf-8"), special=True)
         workspace_tokens.append(len(tokens) - len(head_tokens))
@@ -144,9 +147,9 @@ def main(argv=None):
             llm.eval(tokens[common:])
         warm_s.append(time.perf_counter() - t0)
 
-        row_ids, plot_ids = prompt.answer_ids(snap, case["request"])
+        row_ids, plot_ids = prompt.answer_ids(snap, question)
         grammar = LlamaGrammar.from_string(commands.build_grammar(row_ids, plot_ids, recipes.load(),
-                                                                  *prompt.file_ids(snap, case["request"]),
+                                                                  *prompt.file_ids(snap, question),
                                                                   data_sources=prompt.source_ids(snap)),
                                            verbose=False)
         t0 = time.perf_counter()
