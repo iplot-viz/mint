@@ -1341,7 +1341,10 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
         new_signal.parent = weakref.ref(plot)
 
-        self._update_row(row_idx, new_signal)
+        # The row's own signal was read above: updated again, its Status would start anew and say Ready, as a read
+        # that failed over this range is not made again.
+        if new_signal is not signal_valid:
+            self._update_row(row_idx, new_signal)
         # Check if new signal is valid
         if _left_out(new_signal):
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = None

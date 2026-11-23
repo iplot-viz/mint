@@ -147,7 +147,7 @@ Click **Draw** to plot, or **Stream** to follow live data. Streaming needs a tim
 
 Data is read in the background, so the window keeps responding. After *Draw* or a workspace import, all plots appear at once, each showing its progress (*Retrieving data (2/5) ..*), and each is drawn as soon as its data is in; the status bar shows the overall count (*Retrieving data (3/8)*), then *Ready.* once the plots are drawn. Zoom, pan, undo, redo and *Stream* also read in the background: the plots keep their current data, and the status bar says *Retrieving data...*, until the new data arrives. Signals used in another row's x, y or z are read first, and clicks wait until they are in, as during a relative-time refresh. UDA reads run two at a time; `MINT_DATA_ACCESS_WORKERS` changes that (up to 8; 0 turns background reading off, and the window freezes while it reads).
 
-A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why.
+A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why. A row with a value MINT can't use, shown in red, isn't drawn, and its *Status* says why too (*Invalid|The end time isn't after the start time*); hovering it tells what to do.
 
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
@@ -203,7 +203,7 @@ Right-click a plot for per-plot actions:
 
 #### Legend
 
-Click a signal's line or name in the legend to hide the signal; click again to show it. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and legend changes are kept by *Draw* and saved with the workspace.
+Click a signal's line or name in the legend to hide the signal; click again to show it. With *Auto scale* on in the preferences, the Y axis then fits the signals shown; *Autoscale* and *Autoscale All* in the menu of a plot leave hidden signals out. Right-click either for its preferences. Drag the legend to move it, or drag its left or right side to make it narrower or wider: names that no longer fit are cut in the middle, and hovering one shows it in full. Click <img src="image_20.png" class="inline-icon" alt="Eye icon" /> in the top right corner of the plot to fold the legend away, and the closed eye to bring it back. Choosing a legend position in the preferences, or *Reset*, puts the legend back. Hidden signals and legend changes are kept by *Draw* and saved with the workspace.
 
 #### Reading tick labels with very large values
 
@@ -433,7 +433,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 
 ## 6. Error reference {#errors}
 
-MINT reports two kinds of problems. *Validation messages* (e.g. `Invalid date format`, `Alias already in use`) appear in the Status cell of the row when you Draw, and in the log; they say what to fix, so they are not repeated here. Other errors (network problems, signals that don't match, permissions) are explained below; popups, the Status cell tooltip and the Help menu link here.
+MINT reports two kinds of problems. *Validation messages* (e.g. *The start time isn't a date like 2026-01-31T08:00:00*, *Another row already uses the alias B*) appear in the Status cell of the row when you Draw, and in the log; they say what to fix, so they are not repeated here. Other errors (network problems, signals that don't match, permissions) are explained below; popups, the Status cell tooltip and the Help menu link here.
 
 ### Error categories {#error-categories}
 
@@ -455,7 +455,7 @@ At startup or while loading a workspace. Examples: `no data sources found, exiti
 
 #### Table validation {#cat-validation}
 
-MINT rejects a value typed in the table: a wrong date format, a repeated alias, a stack that isn't a number, a value out of range. The message says what is wrong and how to fix it: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all. A data source that isn't available here is explained below.
+MINT rejects a value typed in the table: a wrong date format, a repeated alias, a stack that isn't a number, a value out of range. The message says what is wrong and how to fix it: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all, with the number of the row. A data source that isn't available here is explained below.
 
 #### Streaming {#cat-streaming}
 

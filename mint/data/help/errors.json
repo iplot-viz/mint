@@ -4,15 +4,15 @@
         {
             "id": "invalid-data-source",
             "patterns": [
-                "^Invalid\\|data source"
+                "^Invalid\\|The data source \\S+ isn't available here"
             ],
             "title": "Data source not available",
             "manual_anchor": "errors-invalid-data-source",
-            "summary": "The DS cell of this row names a data source that MINT can't use here: it isn't in this machine's data sources, or it didn't connect. The row isn't drawn until it uses one that is available.",
+            "summary": "The DS cell of this row names a data source that MINT can't use here: it isn't one of the data sources of this computer, or it didn't connect. The row isn't drawn until it uses one that is.",
             "what_to_do": [
                 "Pick a data source from the list in the DS cell, or ask the AI Assistant to change it.",
                 "If the data source was renamed (imaspy is now imas, for example), use the new name.",
-                "If it should be available on this machine, check its data sources configuration."
+                "If it should be here, check the data sources configuration of this computer."
             ],
             "if_it_persists": "Contact MINT support and share the latest mint_*.log file in .local/1Dtool/logs inside your home directory."
         },
