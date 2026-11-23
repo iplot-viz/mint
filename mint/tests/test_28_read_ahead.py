@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import numpy as np
@@ -524,11 +525,13 @@ class ReadAheadTest(_MainWindowTestCase):
         self.assertEqual(win.canvasStack.currentWidget()._parser.pending_places, {})
         self.assertEqual(win.statusBar().currentMessage(), 'Ready.')
 
-    def test_an_import_that_fails_while_its_rows_are_read_says_why(self):
+    def _import_of_a_row_out_of_the_grid(self, failure: Exception = None):
+        """A window that imported, reading in the background, a workspace with a row added to the table after its
+        Draw, out of the grid of the canvas saved with it; and the message box it may have shown. With `failure`,
+        checking the rows raises it."""
         AccessHelper.pool = None
         source = self._two_plots()
         source.draw_clicked()
-        # A row added to the table after the Draw, out of the grid of the canvas saved with it.
         source.sigCfgWidget.model.set_dataframe(pd.DataFrame({'DS': ['csv'] * 3, 'Variable': [VAR1, VAR2, VAR1],
                                                               'Stack': ['1.1', '1.2', '2.1'],
                                                               'Plot type': ['PlotXY'] * 3}))
@@ -536,13 +539,26 @@ class ReadAheadTest(_MainWindowTestCase):
 
         AccessHelper.pool = _PoolStub()
         win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
-        with patch('mint.gui.mtMainWindow.QMessageBox') as box:
+        with patch('mint.gui.mtMainWindow.QMessageBox') as box, ExitStack() as stack:
+            if failure is not None:
+                stack.enter_context(patch.object(win, '_import_row', side_effect=failure))
             win.import_json(path)
             _drawn_when_done(win)
+        return win, box
+
+    def test_an_import_that_fails_while_its_rows_are_read_says_why(self):
+        win, box = self._import_of_a_row_out_of_the_grid(ValueError("a row that cannot be read"))
 
         self.assertIn("cannot import workspace", box.return_value.setText.call_args.args[0])
         box.return_value.exec_.assert_called_once()
         self.assertIsNone(win._drawing)
+
+    def test_a_row_out_of_the_grid_of_the_canvas_saved_is_imported_into_the_table(self):
+        win, box = self._import_of_a_row_out_of_the_grid()
+
+        box.return_value.exec_.assert_not_called()
+        self.assertEqual(win.sigCfgWidget.model.get_dataframe()['Variable'].tolist()[:3], [VAR1, VAR2, VAR1])
+        self.assertEqual(sorted(_drawn_data(win)), [VAR1, VAR2])
 
     def test_the_copy_of_a_duplicate_is_read_ahead(self):
         AccessHelper.pool = pool = _PoolStub()
@@ -606,6 +622,27 @@ class ReadAheadTest(_MainWindowTestCase):
         self.assertEqual(set(drawn), set(reference))
         for name in reference:
             np.testing.assert_array_equal(drawn[name], reference[name])
+
+    def test_a_workspace_saved_without_the_signal_of_a_row_imports_each_row_with_its_own(self):
+        # A workspace keeps no signal for a row that couldn't be drawn when it was saved. Matched by place, the row
+        # took the signal of the next one, with its name, and the next one was left out (mint#233).
+        AccessHelper.pool = None
+        source = self._main_window({'DS': ['csv', 'csv'], 'Variable': [VAR1, VAR2], 'Alias': ['first', 'second'],
+                                    'Stack': ['1.1', '1.1'], 'Plot type': ['PlotXY', 'PlotXY']})
+        source.draw_clicked()
+        workspace = source.export_dict()
+        del next(iter(workspace['main_canvas']['plots'][0][0]['signals'].values()))[0]
+        path = self._workspace_file(workspace)
+        for pool in (None, _PoolStub()):
+            with self.subTest(pool=pool):
+                AccessHelper.pool = pool
+                win = self._main_window({'DS': [], 'Variable': [], 'Stack': [], 'Plot type': []})
+                win.import_json(path)
+                _drawn_when_done(win)
+                signals = win.canvasStack.currentWidget().get_signals(win.canvas)
+                self.assertEqual([(signal.label, signal.name) for signal in signals],
+                                 [(f'first:{PULSE_ID}', VAR1), (f'second:{PULSE_ID}', VAR2)])
+                self.assertEqual(len({signal.color for signal in signals}), 2)
 
     def test_the_status_bar_says_ready_once_the_import_is_done(self):
         AccessHelper.pool = None
@@ -739,8 +776,9 @@ class ReadAheadContractTest(_MainWindowTestCase):
                                       'Stack': ['', '1.1']},
     }
 
-    # Tables whose only plot fails on purpose.
-    NOT_DRAWN = {'an expression of a variable that does not exist', 'y on an alias that failed'}
+    # Tables whose only plot is left out on purpose: a row whose y uses an alias that failed draws nothing, while one
+    # whose data cannot be read draws its plot empty.
+    NOT_DRAWN = {'y on an alias that failed'}
 
     @classmethod
     def setUpClass(cls) -> None:

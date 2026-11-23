@@ -18,8 +18,8 @@ from typing import List
 
 from PySide6.QtCore import QCoreApplication, QEvent, QMargins, QModelIndex, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QContextMenuEvent, QShortcut, QKeySequence, QPalette, QGuiApplication
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, QPushButton, QStyle, \
-    QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
+from PySide6.QtWidgets import QAbstractItemView, QFileDialog, QMainWindow, QMenu, QMessageBox, QProgressBar, \
+    QPushButton, QStyle, QTabWidget, QTableView, QVBoxLayout, QWidget, QDialog, QTextEdit, QDialogButtonBox
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.interface.iplotSignalAdapter import Result, StatusInfo
@@ -29,6 +29,7 @@ from iplotWidgets.variableBrowser.variableBrowser import VariableBrowser
 from iplotWidgets.pulseBrowser.pulseBrowser import PulseBrowser
 from iplotWidgets.moduleImporter.moduleImporter import ModuleImporter
 from iplotWidgets.consoleWidget.consoleWidget import ConsoleWidget
+from mint.app.dirs import SIGNAL_SETS_FOLDER_KEY, remember_folder, remembered_folder
 from mint.gui.mtErrorHoverPopup import MTErrorHoverPopup
 from mint.gui.mtSignalToolBar import MTSignalsToolBar
 from mint.gui.mtFindReplace import FindReplaceDialog
@@ -147,8 +148,9 @@ def _row_predicate(row: pd.Series, aliases: list, blueprint: dict) -> typing.Tup
             continue
         try:
             p.set_expression(expression)
-            # Check if the expression only uses the row's alias or 'self'
-            expr = all([var == alias or var == 'self' for var in list(p.var_map.keys())])
+            # Whether the expression uses no alias of another row: 'self', the row's own alias or a value of the row
+            # as ${startTime} make it depend on no other row.
+            expr = all(var == alias or var not in aliases for var in p.var_map)
             is_simple &= expr
             if not expr:
                 result_dependencies = p.get_var_expression(expression)
@@ -214,7 +216,7 @@ class MTSignalConfigurator(QWidget):
 
         self._model = MTSignalsModel(blueprint=blueprint)
 
-        self._scsv_dir = scsv_dir
+        self._scsv_dir = remembered_folder(SIGNAL_SETS_FOLDER_KEY, scsv_dir)
         self.data_sources = data_sources
         self._toolbar = MTSignalsToolBar(parent=self)
         self._toolbar.openAction.triggered.connect(self.on_import)
@@ -254,6 +256,8 @@ class MTSignalConfigurator(QWidget):
             widget.view().setItemDelegateForColumn(14, self._cal_delegate)
             widget.view().setItemDelegateForColumn(15, self._pt_delegate)
             widget.view().setSortingEnabled(True)
+            # The rows selected can be dropped on the canvas, to move their signals to another plot.
+            widget.view().setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
             widget.view().setMouseTracking(True)
             widget.view().viewport().setMouseTracking(True)
             widget.view().viewport().installEventFilter(self)
@@ -306,6 +310,10 @@ class MTSignalConfigurator(QWidget):
         view = self._view_for_viewport(obj)
         if view is not None:
             etype = event.type()
+            if etype == QEvent.MouseButtonPress:
+                # A drag starts only from selected rows, so a press elsewhere still selects by dragging.
+                view.setDragEnabled(view.selectionModel().isSelected(view.indexAt(event.position().toPoint())))
+                return False
             if etype == QEvent.MouseMove:
                 self._handle_hover(view, event.position().toPoint(), event.globalPosition().toPoint())
                 return False
@@ -396,19 +404,25 @@ class MTSignalConfigurator(QWidget):
                 file_name = file[0] + '.scsv'
             else:
                 file_name = file[0]
-            self._scsv_dir = os.path.dirname(file_name)
+            self._picked_signal_set(file_name)
             self.export_scsv(file_name)
 
     def on_import(self):
         file = QFileDialog.getOpenFileName(self, "Open SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
-            self._scsv_dir = os.path.dirname(file[0])
+            self._picked_signal_set(file[0])
             self.import_scsv(file[0])
 
     def on_append(self):
         file = QFileDialog.getOpenFileName(self, "Append SCSV", dir=self._scsv_dir, filter='*.scsv')
         if file and file[0]:
+            self._picked_signal_set(file[0])
             self.append_scsv(file[0])
+
+    def _picked_signal_set(self, file_name: str):
+        """The next dialogs of a signal set, in this session and the next ones, open in the folder of `file_name`."""
+        self._scsv_dir = os.path.dirname(file_name)
+        remember_folder(SIGNAL_SETS_FOLDER_KEY, self._scsv_dir)
 
     def on_tree_view(self):
         self.selectVarDialog.show()

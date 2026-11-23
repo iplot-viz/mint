@@ -5,7 +5,7 @@
 #  Sept 2021: Refactored ui design classes [Jaswant Sai Panchumarti]
 
 import weakref
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass, field, fields
 from datetime import datetime
 from functools import partial
@@ -19,8 +19,8 @@ import socket
 import typing
 import pandas as pd
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QMargins, QModelIndex, QTimer, Qt, QItemSelectionModel, \
-    Signal
+from PySide6.QtCore import QCoreApplication, QEventLoop, QMargins, QModelIndex, QSettings, QTimer, Qt, \
+    QItemSelectionModel, Signal
 from PySide6.QtGui import QCloseEvent, QKeySequence, QAction
 from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, \
     QSplitter, QVBoxLayout, QWidget
@@ -29,13 +29,13 @@ from iplotDataAccess.dataAccess import DataAccess
 from iplotlib.core.axis import LinearAxis
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.plot import Plot, PlotXY, PlotContour, PlotXYWithSlider, PlotContourWithSlider, PlotImage
-from iplotlib.core.signal import SignalXY
 import iplotlib.data_access as iplot_data_access
 from iplotlib.data_access import CanvasStreamer
-from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper
+from iplotlib.interface.iplotSignalAdapter import AccessHelper, ParserHelper, Result, Stage
 from iplotlib.qt.gui.iplotQtMainWindow import IplotQtMainWindow
 from iplotWidgets.sizing import clamp_to_screen
 
+from mint.app.dirs import WORKSPACES_FOLDER_KEY, remember_folder, remembered_folder
 from mint.gui.contextHelp import HELP_ANCHOR_PROPERTY, trigger_context_help
 from mint.gui.mtAbout import MTAbout
 from mint.gui.mtAppearance import MTAppearanceMenu, register_scale_listener
@@ -49,6 +49,7 @@ from mint.gui.mtStatusBar import MTStatusBar
 from mint.gui.mtStreamConfigurator import MTStreamConfigurator
 from mint.gui.mtSignalConfigurator import MTSignalConfigurator
 from mint.gui.mtExportConfigurator import MTExportConfigurator
+from mint.models.mtSignalsModel import MAX_SPAN, exp_stack
 from mint.models.utils import mtBlueprintParser
 from mint.tools.data_export import EXPORTED_SOURCE_TYPE, accepts_kwarg, export_data_source, reports_progress
 from mint.tools.map_tricks import delete_keys_from_dict
@@ -73,6 +74,87 @@ class _Export:
     attempts: int = 0
     exported: int = 0
     errors: list = field(default_factory=list)
+
+
+def _stack_place(stack) -> typing.Optional[typing.Tuple[int, int]]:
+    """The row and the column, from 1, of the plot a Stack value puts its signal in; None if it gives no valid one,
+    which a Draw leaves out."""
+    found = exp_stack.match(str(stack).strip())
+    if found is None:
+        return None
+    row, col, stack_id = (int(group or 1) for group in found.groups())
+    return (row, col) if row > 0 and col > 0 and stack_id > 0 else None
+
+
+def _value_of(column: str, text):
+    """What a Stack, Row span or Col span text gives: the row, the column and the stack, or the span; None if it
+    gives nothing valid."""
+    if column != 'Stack':
+        return _accepted_span(text)
+    found = exp_stack.match(str(text).strip())
+    return tuple(int(group or 1) for group in found.groups()) if found else None
+
+
+def _stack_offset(slot) -> int:
+    """The stack offset of a slot of a change of places, which only plots joined into one have (see
+    iplotlib.core.layout.Arrangement.changes)."""
+    return getattr(slot, 'stack_offset', 0)
+
+
+def _left_out(signal) -> bool:
+    """Whether the canvas leaves the signal out, as when its processing failed. One whose data could not be read is
+    drawn empty, so that its plot still shows where it goes."""
+    return signal.status_info.result == Result.FAIL and signal.status_info.stage != Stage.DA
+
+
+def _accepted_span(value) -> typing.Optional[int]:
+    """The rows or the columns a Row span or Col span value gives a plot, if the table accepts the value: an empty
+    one gives 1. None for a value that a Draw refuses."""
+    text = str(value).strip()
+    if not text:
+        return 1
+    return int(text) if text.isdigit() and 1 <= int(text) <= MAX_SPAN else None
+
+
+def _places(df) -> typing.Dict[typing.Tuple[int, int], typing.Tuple[int, int]]:
+    """The place, as the row and the column from 1, of each plot the rows of the table give, with the most rows and
+    columns its rows give it."""
+    places = {}
+    for stack, row_span, col_span in zip(df['Stack'], df['Row span'], df['Col span']):
+        place = _stack_place(stack)
+        if place is not None:
+            rows, cols = places.get(place, (1, 1))
+            places[place] = (max(rows, _accepted_span(row_span) or 1), max(cols, _accepted_span(col_span) or 1))
+    return places
+
+
+def _canvas_of(places: dict) -> typing.Tuple[Canvas, dict]:
+    """A canvas with a plot in each of these places, and the plot of each place: the plots of the table where a Draw
+    puts them, to arrange the rows as the canvas arranges its plots (see iplotlib.core.layout)."""
+    canvas = Canvas(rows=max(row + rows - 1 for (row, col), (rows, cols) in places.items()),
+                    cols=max(col + cols - 1 for (row, col), (rows, cols) in places.items()))
+    canvas.plots = [[None] * canvas.rows for _ in range(canvas.cols)]
+    plots = {}
+    for (row, col), (rows, cols) in places.items():
+        plots[(row, col)] = canvas.plots[col - 1][row - 1] = PlotXY(row_span=rows, col_span=cols)
+    return canvas, plots
+
+
+#: The rows and columns of the grid last picked with the Layout tool, which a new session starts with. Per user
+#: (QSettings): a workspace keeps a grid of its own.
+LAYOUT_ROWS_KEY, LAYOUT_COLS_KEY = 'layout/rows', 'layout/cols'
+
+
+def apply_remembered_layout(canvas: Canvas):
+    """Give the canvas, with no plot yet, the grid last picked with the Layout tool (see MTMainWindow.lay_out)."""
+    settings = QSettings()
+    try:
+        rows, cols = int(settings.value(LAYOUT_ROWS_KEY)), int(settings.value(LAYOUT_COLS_KEY))
+    except (TypeError, ValueError):
+        return
+    if rows > 0 and cols > 0:
+        canvas.layout_rows, canvas.layout_cols = canvas.rows, canvas.cols = rows, cols
+        canvas.plots = [[] for _ in range(cols)]
 
 
 def _ready_at_the_end(method):
@@ -123,8 +205,6 @@ class _Build:
     x_axis_date: bool
     x_axis_follow: bool
     x_axis_window: typing.Optional[int]
-    # The signals of the canvas built before, by uid: the new ones keep their markers.
-    previous_signals: dict
     # What build_canvas() draws, by column and row of the plots.
     plan: dict = field(default_factory=dict)
     rows: typing.Optional[_TableRows] = None
@@ -143,6 +223,8 @@ class _Import:
     file: typing.Optional[str] = None
     # The places of the plots of the canvas drawn, or left empty, from (column, row) from 0.
     done: set = field(default_factory=set)
+    # The ids of the signals of rows that stand where the workspace saved none (see _align_imported_signals).
+    own: set = field(default_factory=set)
 
 
 @dataclass
@@ -215,7 +297,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                                                  data_sources=data_sources)
         self.dataRangeSelector = MTDataRangeSelector(self.model.get("range"), )
 
-        self._data_dir = os.path.join(data_dir, 'workspaces')
+        self._data_dir = remembered_folder(WORKSPACES_FOLDER_KEY, os.path.join(data_dir, 'workspaces'))
         self._data_export_dir = os.path.join(data_dir, 'data_signals')
         self._progressBar = QProgressBar()
         self._statusBar = MTStatusBar()
@@ -308,6 +390,21 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._workers_check.timeout.connect(self._start_data_access_workers)
         for change in (self.sigCfgWidget.model.dataChanged, self.sigCfgWidget.model.layoutChanged):
             change.connect(lambda *_: self._workers_check.start(0))
+        # A Row span or Col span changed by hand moves the plots below as the mouse does, from the places the table
+        # gave the plots, and the spans it gave each row, before the change (see _on_span_changed).
+        self._table_places = {}
+        self._table_spans = {}
+        self._moving_rows = False
+        # The text each row had in the Stack, Row span and Col span it left, by what the text gives (see _text_back).
+        self._texts_left = {}
+        self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
+                                                    self._on_span_changed(top_left, bottom_right))
+        # Also once a change is complete, as the workers above: a Draw reports the status of each row on its own.
+        self._places_check = QTimer(self)
+        self._places_check.setSingleShot(True)
+        self._places_check.timeout.connect(self._remember_places)
+        for reset in (self.sigCfgWidget.model.layoutChanged, self.sigCfgWidget.model.modelReset):
+            reset.connect(lambda *_: self._places_check.start(0))
 
         file_menu = self.menuBar().addMenu("&File")
         view_menu = self.menuBar().addMenu("&View")
@@ -761,7 +858,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             else:
                 file_name = file[0]
             self.export_json(file_name)
-            self._data_dir = os.path.dirname(file_name)
+            self._picked_workspace(file_name)
+
+    def _picked_workspace(self, file_name: str):
+        """The next dialogs of a workspace, in this session and the next ones, open in the folder of `file_name`."""
+        self._data_dir = os.path.dirname(file_name)
+        remember_folder(WORKSPACES_FOLDER_KEY, self._data_dir)
 
     def on_export_data(self):
         directory = self._data_export_dir + f"/DataExport_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -783,7 +885,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             # into the new canvas.
             if self.streamerCfgWidget.is_activated():
                 self.streamerCfgWidget.stop()
-            self._data_dir = os.path.dirname(file[0])
+            self._picked_workspace(file[0])
             self.import_json(file[0])
 
     def on_minimap_toggled(self, checked: bool):
@@ -969,12 +1071,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             yield from batch
         return True
 
-    def _old_signals(self, path: list) -> list:
-        """The signals of the imported canvas at the places of the waypoints (see import_dict)."""
-        return [signal for signal in map(self._old_signal, path) if signal is not None]
+    def _old_signals(self, path: list, own: typing.Collection[int] = ()) -> list:
+        """The signals of the imported canvas at the places of the waypoints (see import_dict), but those of the ids
+        in `own`."""
+        return [signal for signal in (self._old_signal(waypt, own) for waypt in path) if signal is not None]
 
-    def _old_signal(self, waypt):
-        """The signal of the imported canvas at the place of the waypoint, if any (see import_dict)."""
+    def _old_signal(self, waypt, own: typing.Collection[int] = ()):
+        """The signal of the imported canvas at the place of the waypoint, if any and its id is not in `own` (see
+        import_dict)."""
         if not waypt.stack_num or (not waypt.col_num and not waypt.row_num):
             return None
         try:
@@ -982,7 +1086,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         except IndexError:
             return None
         stack_signals = plot.signals.get(waypt.stack_num, []) if plot else []
-        return stack_signals[waypt.signal_stack_id] if waypt.signal_stack_id < len(stack_signals) else None
+        signal = stack_signals[waypt.signal_stack_id] if waypt.signal_stack_id < len(stack_signals) else None
+        return None if signal is None or id(signal) in own else signal
 
     def _report_read_progress(self, done: int, total: int):
         self._progressBar.setRange(0, total)
@@ -1060,7 +1165,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Clear shared parser environment and internal state to prevent memory leaks and ensure a clean rebuild
         ParserHelper.env.clear()
-        self.canvasStack.currentWidget()._parser.clear()
+        canvas_widget = self.canvasStack.currentWidget()
+        # The mini-map and the focus go with the plots, until the workspace is drawn.
+        canvas_widget.unfocus_plot()
+        canvas_widget.reset()
+        self.refresh_minimap_availability()
 
         # Clear shift tracking since workspace import replaces the entire signal table.
         self._init_shift_storage()
@@ -1093,14 +1202,12 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.sigCfgWidget.begin_build()
         self.sigCfgWidget.set_progress(0)
 
-        # Clear markers table before importing new signals
-        self.qtcanvas._marker_window.clear_info()
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
         imported = _Import(path, [waypt.func(*waypt.args, **waypt.kwargs) for waypt in path], file=file_path)
+        self._align_imported_signals(imported)
         if self._draws_in_background():
             self._import_in_background(imported)
             return
@@ -1108,7 +1215,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         # The loop below reads each workspace signal again, with the range it was saved with.
         read_ahead = self._read_ahead(
             [signal for waypt, signal in zip(path, imported.signals) if self.sigCfgWidget.model.fetches_row(waypt.idx)]
-            + self._old_signals(path))
+            + self._old_signals(path, imported.own))
         if read_ahead is None:
             return
 
@@ -1133,6 +1240,42 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.indicate_ready()
         self.sigCfgWidget.resize_views_to_contents()
 
+    def _align_imported_signals(self, imported: _Import):
+        """Put the signals of each stack of the imported canvas at the places of the rows that make them, by uid and
+        name. A workspace keeps no signal for a row that couldn't be drawn when it was saved: by place, that row would
+        take the signal of the next one, and leave the next one out. Such a row stands there with the signal it makes,
+        as a Draw does. A stack with a saved signal that none of its rows makes, as in workspaces saved without uids,
+        keeps its places."""
+        rows = defaultdict(dict)  # (column, row, stack) of the canvas -> {place in the stack: signal of the row}
+        for waypt, signal in zip(imported.path, imported.signals):
+            place = self._imported_place(waypt)
+            if place is not None:
+                rows[place + (waypt.stack_num,)][waypt.signal_stack_id] = signal
+        for (col, row, stack), by_place in rows.items():
+            plot = self.canvas.plots[col - 1][row - 1]
+            saved = plot.signals.get(stack, [])
+            made = Counter((signal.uid, signal.name) for signal in by_place.values())
+            if sorted(by_place) != list(range(len(by_place))) or Counter(
+                    (signal.uid, signal.name) for signal in saved) - made:
+                continue
+            by_key = defaultdict(list)
+            for signal in saved:
+                by_key[(signal.uid, signal.name)].append(signal)
+            aligned = []
+            for k in range(len(by_place)):
+                signal = by_place[k]
+                matches = by_key.get((signal.uid, signal.name))
+                if matches:
+                    aligned.append(matches.pop(0))
+                    continue
+                # In the next colour of the plot, rather than in one of those its saved signals have.
+                signal.parent = weakref.ref(plot)
+                if signal.color is None and isinstance(plot, PlotXY):
+                    signal.color = signal.original_color = plot.get_next_color()
+                imported.own.add(id(signal))
+                aligned.append(signal)
+            plot.signals[stack] = aligned
+
     def _import_row(self, imported: _Import, i: int):
         """Check the row of the i-th waypoint of an import with its data, and put the signal it makes at the place of
         the workspace signal, read again with the range it was saved with (see import_dict())."""
@@ -1147,12 +1290,17 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Check if signal name is valid (Correct signal name and signal has data)
         self._update_row(row_idx, signal_valid)
-        if signal_valid.status_info.result == 'Fail':
+        if _left_out(signal_valid):
+            if id(signal_valid) in imported.own:  # it stood where the workspace saved no signal: it goes
+                self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1].signals[waypt.stack_num][
+                    waypt.signal_stack_id] = None
             return
 
-        plot = self.canvas.plots[waypt.col_num - 1][waypt.row_num - 1]  # type: Plot
-        if not plot:
+        # A workspace saved before a Draw has no plot at the place of its rows.
+        place = self._imported_place(waypt)
+        if place is None:
             return
+        plot = self.canvas.plots[place[0] - 1][place[1] - 1]  # type: Plot
         plot.parent = weakref.ref(self.canvas)
         # Stored positions can exceed the built canvas when sibling
         # signals failed to load; skip them instead of aborting the import.
@@ -1162,24 +1310,27 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                            f"position {waypt.signal_stack_id}: canvas has {len(stack_signals)} signals there")
             return
         old_signal = stack_signals[waypt.signal_stack_id]
+        if old_signal is signal_valid:
+            # The row stands where the workspace saved no signal (see _align_imported_signals).
+            new_signal = signal_valid
+        else:
+            params = dict()
+            for f in fields(old_signal):
+                if f.name == 'children':  # Don't copy children.
+                    continue
+                else:
+                    params.update({f.name: getattr(old_signal, f.name)})
 
-        params = dict()
-        for f in fields(old_signal):
-            if f.name == 'children':  # Don't copy children.
-                continue
-            else:
-                params.update({f.name: getattr(old_signal, f.name)})
+            # Propagate uid from row to signal for workspace without it
+            if 'uid' not in params or params['uid'] is None:
+                params['uid'] = waypt.kwargs['uid']
 
-        # Propagate uid from row to signal for workspace without it
-        if 'uid' not in params or params['uid'] is None:
-            params['uid'] = waypt.kwargs['uid']
-
-        new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
+            new_signal = waypt.func(*waypt.args, signal_class=waypt.kwargs.get('signal_class'), **params)
         new_signal.parent = weakref.ref(plot)
 
         self._update_row(row_idx, new_signal)
         # Check if new signal is valid
-        if new_signal.status_info.result == 'Fail':
+        if _left_out(new_signal):
             plot.signals[waypt.stack_num][waypt.signal_stack_id] = None
             return
 
@@ -1188,10 +1339,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         # Replace signal
         plot.signals[waypt.stack_num][waypt.signal_stack_id] = new_signal
-
-        # Add markers in the markers table when importing, only if the signal is SignalXY and has markers
-        if isinstance(new_signal, SignalXY) and new_signal.markers_list:
-            self.qtcanvas._marker_window.import_table(new_signal)
 
     def _signals_updated(self):
         """Show in the table the status of the rows that an import updated."""
@@ -1232,7 +1379,7 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             waypt = imported.path[i]
             if self.sigCfgWidget.model.fetches_row(waypt.idx):
                 requests[read] += AccessHelper.data_requests(imported.signals[i])
-            old_signal = self._old_signal(waypt)
+            old_signal = self._old_signal(waypt, imported.own)
             if old_signal is not None:
                 requests[read] += AccessHelper.data_requests(old_signal)
         self._read_and_draw(_Drawing(rows, imported.rows, functools.partial(self._import_row, imported),
@@ -1409,6 +1556,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             self._drop_drawing()
             if not self.build():
                 return
+            # The table the canvas is drawn from, for a span changed next (see _on_span_changed).
+            self._remember_places()
         self._show_built_canvas()
 
     def _show_built_canvas(self):
@@ -1419,7 +1568,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self.canvasStack.currentWidget().unfocus_plot()
         self.canvasStack.currentWidget().set_canvas(self.canvas)
         self.canvasStack.refreshLinks()
-        self.canvasStack.currentWidget().check_markers(self.canvas)
         self.canvasStack.currentWidget().stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -1452,6 +1600,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             return
         rows = self._rows_in_reads(created, lambda row: (row[0].col_num, row[0].row_num) if self._plots_row(*row)
                                    else None)
+        # The table the canvas is drawn from, for a span changed next (see _on_span_changed).
+        self._remember_places()
 
         places = {(col, row): (entry["row_span"], entry["col_span"])
                   for col, plan_rows in build.plan.items() for row, entry in plan_rows.items()}
@@ -1652,7 +1802,6 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             canvas_widget.set_canvas(self.canvas)
         # It listed the plots drawn when the Draw began.
         self.canvasStack.refreshLinks()
-        canvas_widget.check_markers(self.canvas)
         canvas_widget.stats(self.canvas)
         self._snapshot_minimap_baseline()
 
@@ -2044,16 +2193,13 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.canvas.auto_refresh = refresh_interval
 
-        # Get signals in order to preserve markers
-        previous_signals = {sig.uid: sig for sig in self.canvasStack.currentWidget().get_signals(self.canvas)}
-
         # Clear alias list to check for fetches row
         self.sigCfgWidget.model._alias_list.clear()
         self.sigCfgWidget.model._alias_checked = False
 
         return _Build(stream=stream, valid=valid, ts=ts, te=te,
                       da_params=dict(ts_start=ts, ts_end=te, pulse_nb=pulse_number), x_axis_date=x_axis_date,
-                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window, previous_signals=previous_signals)
+                      x_axis_follow=x_axis_follow, x_axis_window=x_axis_window)
 
     def _build_row(self, build: _Build, waypt, signal):
         """Read the data of the signal of a waypoint of the table, show the status of its row and add the signal to
@@ -2083,13 +2229,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             if any(conditions):
                 signal.stream_valid = False
 
-        if signal.status_info.result == 'Fail':
+        if _left_out(signal):
             return
-
-        # Preserve markers
-        prev_signal = build.previous_signals.get(signal.uid)
-        if isinstance(signal, SignalXY) and prev_signal and prev_signal.markers_list:
-            signal.markers_list = prev_signal.markers_list
 
         plan = build.plan
         if waypt.col_num not in plan:
@@ -2169,8 +2310,14 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         """Lay the canvas out on the places of its plots, by (column, row) from 1 with their (row span, col span), and
         fill each with plot_at(column, row): a plot, or None. No place leaves the canvas with no plot."""
         canvas = self.canvas
+        # The grid keeps the rows and columns chosen for it with Layout, the empty ones too.
+        layout_rows, layout_cols = getattr(canvas, 'layout_rows', None), getattr(canvas, 'layout_cols', None)
         if not places:
-            canvas.plots = [[]]
+            if layout_rows and layout_cols:
+                canvas.rows, canvas.cols = layout_rows, layout_cols
+                canvas.plots = [[] for _ in range(canvas.cols)]
+            else:
+                canvas.plots = [[]]
             return
         max_col = 0
         max_row = 0
@@ -2178,8 +2325,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
             max_col = max(max_col, col + col_span - 1)
             max_row = max(max_row, row + row_span - 1)
 
-        canvas.cols = max_col
-        canvas.rows = max_row
+        canvas.cols = max(max_col, layout_cols or 0)
+        canvas.rows = max(max_row, layout_rows or 0)
         canvas.plots = [[] for _ in range(canvas.cols)]
 
         rows_of = defaultdict(set)
@@ -2278,14 +2425,246 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
 
         self.indicate_ready()
 
+    def accepts_drop(self, source, mime) -> bool:
+        """The canvas takes the variables dragged from the tree or the list of the variable search, and the rows
+        dragged from the table (see on_drop_plot)."""
+        browser = self.sigCfgWidget.selectVarDialog
+        return source is browser.tree or source is browser.tableView or source in self._table_views()
+
+    def _table_views(self) -> list:
+        return [widget.view() for widget in self.sigCfgWidget.item_widgets]
+
     def on_drop_plot(self, drop_info):
-        dragged_item = drop_info.dragged_item
-        row = drop_info.row
-        col = drop_info.col
-        new_data = pd.DataFrame([['codacuda', f"{dragged_item.key}", f'{col}.{row}']],
-                                columns=['DS', 'Variable', 'Stack'])
-        self.sigCfgWidget.append_dataframe(new_data)
+        """What is dropped on the canvas goes to the plot it was dropped on, in its stack under the mouse, or to a new
+        plot on the empty cell, and the canvas is drawn: the variables dragged from the variable search go to the
+        table there, and the rows dragged from the table move there."""
+        stack = f'{drop_info.row}.{drop_info.col}'
+        # An iplotlib that does not tell the stack takes drops on plots only, for their first stack.
+        stack_id = getattr(drop_info, 'stack', None)
+        if stack_id not in (None, 1):
+            stack += f'.{stack_id}'
+        source = getattr(drop_info, 'source', None)
+        if source in self._table_views():
+            if self._move_rows_to(sorted({index.row() for index in source.selectedIndexes()}), stack):
+                self.draw_clicked()
+            return
+        variables = self._dragged_variables(source)
+        if variables.empty:
+            return
+        variables['Stack'] = stack
+        self.sigCfgWidget.append_dataframe(variables)
         self.draw_clicked()
+
+    def _move_rows_to(self, rows: list, stack: str) -> bool:
+        """Give the rows of the table the Stack `stack` and the spans of the plot there, or none on an empty cell; the
+        plots they leave keep their spans. Whether a row changed."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        place = _stack_place(stack)
+        sizes = _places(df)
+        row_span, col_span = sizes.get(place) or (1, 1)
+        rows = [idx for idx in rows if str(df['Variable'].iloc[idx]).strip()]
+        edits = []
+        for idx in rows:
+            for column, text in (('Stack', stack), ('Row span', str(row_span) if row_span > 1 else ''),
+                                 ('Col span', str(col_span) if col_span > 1 else '')):
+                if _value_of(column, df[column].iloc[idx]) != _value_of(column, text):
+                    edits.append((idx, column, text))
+        # A plot the rows leave keeps its size: its first remaining row takes it if needed.
+        for left in {_stack_place(df['Stack'].iloc[idx]) for idx in rows} - {place, None}:
+            staying = [idx for idx in range(len(df)) if idx not in rows and _stack_place(df['Stack'].iloc[idx]) == left]
+            for column, size in zip(('Row span', 'Col span'), sizes[left]):
+                if staying and max(_accepted_span(df[column].iloc[idx]) or 1 for idx in staying) != size:
+                    edits.append((staying[0], column, str(size) if size > 1 else ''))
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for idx, column, text in edits:
+                model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+        return bool(edits)
+
+    def _dragged_variables(self, source=None) -> pd.DataFrame:
+        """The variables selected in the variable search, which a drag from it takes, with their data source, as its
+        Add to main table gives them: those of the rows selected in its list, or those selected in its tree."""
+        browser = self.sigCfgWidget.selectVarDialog
+        if source is browser.tableView:
+            rows = sorted({index.row() for index in source.selectedIndexes()})
+            return browser.tableView.model.dataframe.iloc[rows][['DS', 'Variable']].reset_index(drop=True)
+        items, seen = [], set()
+        for index in browser.tree.selectedIndexes():
+            item = index.internalPointer()
+            if not item.has_child() and id(item) not in seen:
+                seen.add(id(item))
+                items.append(item)
+        source = browser.get_current_source().name
+        return pd.DataFrame([[source, item.get_table_variable_str()] for item in items], columns=['DS', 'Variable'])
+
+    def reserved_slots(self) -> list:
+        """The places the rows of the table give their plots, each with the most rows and columns its rows give it.
+        The canvas keeps those where it draws no plot, such as those of rows that were not drawn yet, for the plots of
+        those rows (see on_plots_arranged)."""
+        # Only an iplotlib that moves plots asks for them, and it has this module.
+        from iplotlib.core.layout import Slot
+        places = _places(self.sigCfgWidget.model.get_dataframe())
+        return [Slot(row - 1, col - 1, rows, cols) for (row, col), (rows, cols) in sorted(places.items())]
+
+    def reserved_stacks(self) -> dict:
+        """The highest stack the rows of the table give each plot, by its row and column from 0: a layout that joins
+        plots numbers the stacks of the next plot past it, so that the rows of a stack drawn or not keep theirs (see
+        on_plots_arranged)."""
+        stacks = {}
+        for value in self.sigCfgWidget.model.get_dataframe()['Stack']:
+            place = _stack_place(value)
+            if place is not None:
+                key = (place[0] - 1, place[1] - 1)
+                stacks[key] = max(stacks.get(key, 0), int(exp_stack.match(str(value).strip()).group(3) or 1))
+        return stacks
+
+    def max_span(self) -> int:
+        """The most rows or columns a plot spans: the table accepts no bigger Row span or Col span."""
+        return MAX_SPAN
+
+    def lay_out(self, rows: int, cols: int):
+        """Lay the plots out on the grid picked with the Layout tool, which a new session starts with (see
+        apply_remembered_layout)."""
+        super().lay_out(rows, cols)
+        if (getattr(self.canvas, 'layout_rows', None), getattr(self.canvas, 'layout_cols', None)) == (rows, cols):
+            settings = QSettings()
+            settings.setValue(LAYOUT_ROWS_KEY, rows)
+            settings.setValue(LAYOUT_COLS_KEY, cols)
+
+    def on_plots_arranged(self, changes: list):
+        """The rows of the table take the places their plots took on the canvas (see _move_rows)."""
+        self._move_rows(changes)
+        super().on_plots_arranged(changes)
+
+    def _move_rows(self, changes: list):
+        """The rows of the table take the places their plots take in `changes`: the rows of a reserved slot move with
+        it as those of a plot do, and those of plots joined into one take the stacks they have there (see
+        reserved_slots and iplotlib.core.layout.Arrangement.changes). The rows of each plot give it its rows and
+        columns, also when a plot is split, as Unstack does. A row that goes back to a place or a span it had takes
+        back the text it had there (see _text_back)."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        uids = df[model.ROWUID_COLNAME]
+        moves = {}
+        for before, after in changes:
+            moves.setdefault((before.row + 1, before.col + 1), []).append((before, after))
+        texts, going = {}, {}
+        for idx, value in enumerate(df['Stack']):
+            place = _stack_place(value)
+            if place not in moves:
+                continue
+            stack = int(exp_stack.match(str(value).strip()).group(3) or 1)
+            # Of the changes from the place, the one of the highest stack offset below the stack takes it.
+            taken = [change for change in moves[place] if stack > _stack_offset(change[0])]
+            if not taken:
+                continue
+            before, after = max(taken, key=lambda change: _stack_offset(change[0]))
+            new_stack = stack - _stack_offset(before) + _stack_offset(after)
+            parts = str(value).strip().split('.')
+            # A Stack that gives the row only keeps that form while its plot stays in the first column.
+            if len(parts) == 1 and after.col == 0 and new_stack == stack:
+                texts[idx, 'Stack'] = str(after.row + 1)
+            else:
+                tail = parts[2:] if new_stack == stack else [str(new_stack)] if new_stack > 1 else []
+                texts[idx, 'Stack'] = '.'.join([str(after.row + 1), str(after.col + 1)] + tail)
+            going[idx] = (before, after)
+        sizes = _places(df)
+        places = [_stack_place(texts.get((idx, 'Stack'), value)) for idx, value in enumerate(df['Stack'])]
+        new_sizes = dict(sizes)
+        new_sizes.update({(after.row + 1, after.col + 1): (after.row_span, after.col_span)
+                          for _, after in going.values()})
+        rows_at = {}
+        for idx, value in enumerate(df['Stack']):
+            rows_at.setdefault(('before', _stack_place(value)), set()).add(uids.iloc[idx])
+            rows_at.setdefault(('after', places[idx]), set()).add(uids.iloc[idx])
+        involved = {_stack_place(value) for value in df['Stack'].iloc[list(going)]} | {places[idx] for idx in going}
+        for idx, value in enumerate(df['Stack']):
+            if _stack_place(value) not in involved and places[idx] not in involved:
+                continue
+            if idx in going:
+                texts[idx, 'Stack'] = self._text_back(uids.iloc[idx], 'Stack', value, texts[idx, 'Stack'])
+            before, after = going.get(idx, (None, None))
+            resized = after is not None and (after.row_span, after.col_span) != (before.row_span, before.col_span)
+            for column, side in (('Row span', 0), ('Col span', 1)):
+                old, left, size = df[column].iloc[idx], sizes[_stack_place(value)][side], new_sizes[places[idx]][side]
+                new = (str(size) if size > 1 else '') if resized else str(old)
+                # A span text depends on the rows that share the plot, since one of them carries its size.
+                texts[idx, column] = self._text_back(
+                    uids.iloc[idx], column, old, new,
+                    (_value_of('Stack', value), left, frozenset(rows_at['before', _stack_place(value)])),
+                    (_value_of('Stack', texts.get((idx, 'Stack'), value)), size,
+                     frozenset(rows_at['after', places[idx]])))
+        # A plot whose rows do not carry its size, as a part of a split plot, gets it on its first row.
+        for place in involved:
+            rows = [idx for idx in range(len(df)) if places[idx] == place]
+            for column, side in (('Row span', 0), ('Col span', 1)):
+                size = new_sizes[place][side]
+                if rows and max(_accepted_span(texts.get((idx, column), df[column].iloc[idx])) or 1
+                                for idx in rows) != size:
+                    texts[rows[0], column] = str(size) if size > 1 else ''
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for (idx, column), text in texts.items():
+                if text != str(df[column].iloc[idx]):
+                    model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+
+    def _text_back(self, uid, column: str, old, new: str, left=None, going=None) -> str:
+        """`new`, or the text the row of `uid` had in `column` when it last left what `new` gives, so that a row that
+        goes back to a place or a span, as on undo, takes back the text it had there; `old` is the text it leaves.
+        `left` and `going` key what the row leaves and goes to when the value of the texts is not enough."""
+        texts = self._texts_left.setdefault((uid, column), {})
+        texts[_value_of(column, old) if left is None else left] = str(old)
+        return texts.get(_value_of(column, new) if going is None else going, new)
+
+    def _remember_places(self):
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        self._table_places = _places(df)
+        self._table_spans = {uid: (_accepted_span(row_span), _accepted_span(col_span)) for uid, row_span, col_span
+                             in zip(df[model.ROWUID_COLNAME], df['Row span'], df['Col span'])}
+        # The texts of the rows that left the table go with them (see _text_back).
+        self._texts_left = {key: texts for key, texts in self._texts_left.items() if key[0] in self._table_spans}
+
+    def _on_span_changed(self, top_left, bottom_right):
+        """A Row span or Col span changed by hand gives its plot that many rows or columns, and the plots below move
+        as when the mouse resizes the plot (see iplotlib.core.layout.resized): taking the span off a plot that the
+        mouse made taller brings the plots below back up. A size the plots cannot take, or a table whose plots
+        already overlap, moves no other row. Only the span of a row the table had counts, and only if it changes: a
+        new row comes with a span, as the copy of a shifted signal does, and an edit can leave it as it was."""
+        df = self.sigCfgWidget.model.get_dataframe()
+        columns = set(df.columns[top_left.column():bottom_right.column() + 1])
+        if not columns & {'Stack', 'Row span', 'Col span'}:
+            return
+        before, spans = self._table_places, self._table_spans
+        self._remember_places()
+        if self._moving_rows or top_left != bottom_right or not columns & {'Row span', 'Col span'}:
+            return
+        column = df.columns[top_left.column()]
+        place = _stack_place(df['Stack'].iloc[top_left.row()])
+        span = _accepted_span(df[column].iloc[top_left.row()])
+        had = spans.get(df[self.sigCfgWidget.model.ROWUID_COLNAME].iloc[top_left.row()])
+        if place not in before or span is None or had is None or had[column == 'Col span'] == span:
+            return
+        try:
+            from iplotlib.core import layout
+        except ImportError:
+            # An iplotlib that does not move plots: a span changes the size of its plot only.
+            return
+        canvas, plots = _canvas_of(before)
+        slots = [slot for _, slot in layout.slots_of(canvas)]
+        if any(a.overlaps(b) for i, a in enumerate(slots) for b in slots[i + 1:]):
+            return
+        rows, cols = before[place]
+        arrangement = layout.resized(canvas, plots[place], *((span, cols) if column == 'Row span' else (rows, span)))
+        if arrangement is not None:
+            self._move_rows(arrangement.changes)
 
     def show_popup_msg(self, title: str, message: str, icon: QMessageBox.Icon):
         box = QMessageBox()

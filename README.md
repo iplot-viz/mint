@@ -6,7 +6,7 @@ Following features are currently supported:
 
 * Plotting multiple graphs in a row/column layout
 * Plotting multiple signals in one plot (either stacked or not) by using the `ROW.COLUMN.STACK` format
-* Support for Pan/Zoom/Crosshair/Distance/Markers
+* Support for Pan/Zoom/Crosshair/Distance/Rulers
 * Support for automatically downloading UDA data (for continous signals - currently Matplotlib only)
 * Support for basic data processing. See [iplotProcessing](https://github.com/iplot-viz/iplotprocessing)
 * Customize appearance and styling of canvas, plots, axes, fonts, lines in a cascading manner.* 
