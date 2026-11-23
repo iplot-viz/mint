@@ -12,6 +12,10 @@ ABOUT_STATE = re.compile(
     r"empty|blank)\b", re.IGNORECASE)
 ASKING = re.compile(r"\?|^\s*(?:why|what|how come)\b", re.IGNORECASE)
 INVALID = "Invalid|"
+# The Status of a row whose computing failed, then why (see MTSignalsModel._status_of); a count of points alone is
+# what MINT said before it said why.
+COMPUTING = "Processing|"
+POINTS = re.compile(r"\d+ points\b")
 # A request to put the data sources right: "fix the data source of the signals"...
 FIXING = re.compile(r"\b(?:fix|correct|repair|solve|sort out|change|update|switch|replace)\b", re.IGNORECASE)
 SOURCE_WORDS = re.compile(r"\b(?:data ?sources?|sources?|ds)\b", re.IGNORECASE)
@@ -30,13 +34,17 @@ class Problems:
 
 
 def find(snap: Snapshot, sources) -> Problems:
-    """Rows naming a data source that isn't here, then rows whose Status says they are invalid."""
+    """Rows naming a data source that isn't here, then rows whose Status says they are invalid or couldn't be
+    computed, with the reason it gives."""
     problems = Problems(sources=list(sources))
     for row in snap.rows:
         if row.data_source and row.data_source not in problems.sources:
             problems.missing.setdefault(row.data_source, []).append(row)
         elif row.status.startswith(INVALID):
             problems.invalid.append((row, row.status[len(INVALID):].strip()))
+        elif row.status.startswith(COMPUTING):
+            reason = row.status[len(COMPUTING):].strip()
+            problems.invalid.append((row, "Computing it failed" if POINTS.match(reason) else reason))
     return problems
 
 

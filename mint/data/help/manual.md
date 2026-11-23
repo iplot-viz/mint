@@ -147,7 +147,7 @@ Click **Draw** to plot, or **Stream** to follow live data. Streaming needs a tim
 
 Data is read in the background, so the window keeps responding. After *Draw* or a workspace import, all plots appear at once, each showing its progress (*Retrieving data (2/5) ..*), and each is drawn as soon as its data is in; the status bar shows the overall count (*Retrieving data (3/8)*), then *Ready.* once the plots are drawn. Zoom, pan, undo, redo and *Stream* also read in the background: the plots keep their current data, and the status bar says *Retrieving data...*, until the new data arrives. Signals used in another row's x, y or z are read first, and clicks wait until they are in, as during a relative-time refresh. UDA reads run two at a time; `MINT_DATA_ACCESS_WORKERS` changes that (up to 8; 0 turns background reading off, and the window freezes while it reads).
 
-A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why. A row with a value MINT can't use, shown in red, isn't drawn, and its *Status* says why too (*Invalid|The end time isn't after the start time*); hovering it tells what to do.
+A row whose data cannot be read, as when there are none in the range, draws its plot, or its stack, empty, with the name of the signal in the legend; its *Status* says why. A row with a value MINT can't use, shown in red, isn't drawn, and its *Status* says why too (*Invalid|The end time isn't after the start time*); hovering it tells what to do. For an *x*, *y* or *z* expression it says what is wrong in it (*Invalid|The y expression can't be evaluated: mctf.slope_fit takes 2 arguments (t, y), not 3*), and what failed if it fails once computed (*Processing|The y expression failed: slice step cannot be zero*).
 
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_08.png" alt="Draw and Stream action buttons" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 8. Action buttons.</i></p>
 <p style="text-align:center;margin:14px 0;line-height:100%;"><img src="image_09.png" alt="Stream settings dialog" style="border:1px solid #ccc;"/><br/><i style="color:#555;font-size:90%;">Figure 9. After clicking on Stream.</i></p>
@@ -348,7 +348,7 @@ Ask in plain English for processing, plot settings, signals or a time range. Ope
 - *shift MP0111 by 10 s*, *compare MP0111 with itself one hour earlier*: as the Shift of the DIST window.
 - *export the data*, *save a picture of the plots*, *save the workspace*: opens the window where you finish it.
 - *the same for MP0071*: repeats the last change on another signal.
-- *why are these red?*: says why rows aren't drawn, and offers to change a data source that isn't available here.
+- *why are these red?*: says why rows aren't drawn, down to what is wrong in an expression, and offers to change a data source that isn't available here.
 - *disable FAST-TC0*, *show it again*: hides it from the plot as a click on its legend entry does, and back.
 - *what is the last value of MP0111?*, *how many samples per signal?*: the numbers of the data drawn.
 - *open the statistics*, *show the mini-map*, *open Search Vars*: opens them, or says what they are; *how do I add a ruler?* is answered from this manual.
@@ -421,7 +421,7 @@ Until CCS v6.2 the pulse was a number; from CCS v6.3 it is a string with three p
 11. **Specify a start/end time for pulse IDs?** Use *StartTime*/*EndTime* with *Shared time* off. See `CustomizedPulsesPlotsWithStartEnd.json`.
 12. **Compare signals with two different time ranges?** Yes, with *Shared time* off. See `WeekComparison.json`.
 13. **Different time ranges on the same plot, no pulses?** See `WeekComparisonSamePlot.json`.
-14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`; select it in the list to read its functions.
+14. **Load a new Python module?** Click *Load new module* and import e.g. `scipy.fft as sfft`; select it in the list to read its functions. A module of yours must be in a folder of `PYTHONPATH` when MINT starts.
 15. **Examples of self-written modules?** See [RD5].
 16. **Add my own data source?** See [RD6].
 17. **Where are the example workspaces?** On CODAC, `ls $(rpm -ql ${CODAC_RPM_PREFIX}-mint | grep workspaces | head -n 1)`; on SDCC, `ls "$(dirname "$IPLOT_SOURCES_CONFIG")/data/workspaces"`.
@@ -443,7 +443,7 @@ MINT can't reach the server, can't find the variable, or finds no data in the ti
 
 #### Processing {#cat-processing}
 
-An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number instead of a signal. Mixing envelope and non-envelope signals also fails. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell shows the message; hover it for an explanation.
+An expression fails, or the signals can't be lined up before plotting. Most often the signals have different numbers of samples and can't be combined, or the expression gives a single number, or a function gives a tuple, instead of a signal. Mixing envelope and non-envelope signals also fails. The row isn't drawn, and the cell of the expression that fails turns red: *Variable*, *x*, *y* or *z*. The Status cell says which expression failed and what it said (*Processing|The y expression failed: ...*); hover it for an explanation.
 
 #### Export {#cat-export}
 
@@ -455,7 +455,7 @@ At startup or while loading a workspace. Examples: `no data sources found, exiti
 
 #### Table validation {#cat-validation}
 
-MINT rejects a value typed in the table: a wrong date format, a repeated alias, a stack that isn't a number, a value out of range. The message says what is wrong and how to fix it: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all, with the number of the row. A data source that isn't available here is explained below.
+MINT rejects a value typed in the table: a wrong date format, a repeated alias, a stack that isn't a number, a value out of range. The message says what is wrong and how to fix it: the Status cell of the row shows the first one, starting with `Invalid`, and the log keeps them all, with the number of the row. For an *x*, *y* or *z* expression it says what is wrong in it: a Python module that isn't loaded (load it with *Load new module*), a function the module doesn't have, arguments a function doesn't take, a member a signal doesn't have (it has *time* and *data*), or how it is written. A data source that isn't available here is explained below.
 
 #### Streaming {#cat-streaming}
 
