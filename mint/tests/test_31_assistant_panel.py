@@ -570,6 +570,55 @@ class AssistantFlowTest(unittest.TestCase):
         self.assertEqual(self.ctl._cards[cards[0]]["proposal"].commands, ["source r3 to csv"])
         self.assertEqual(len(self.engine.prompts), calls, "none of it needs the model")
 
+    def test_why_rows_are_red_is_told_with_what_their_status_says(self):
+        import pandas as pd
+        from iplotProcessing.tools import Parser
+        # A module of the user, as mctf, not loaded yet; and a y that only fails once computed.
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        with open(os.path.join(folder.name, "mint_test_lana.py"), "w") as f:
+            f.write("def slope_fit(t, y):\n    return t, y\n")
+        sys.path.insert(0, folder.name)
+        self.addCleanup(sys.path.remove, folder.name)
+        self.addCleanup(sys.modules.pop, "mint_test_lana", None)
+        del self.ctl.workspace.draw
+        model = self.win.sigCfgWidget.model
+        model.set_dataframe(pd.DataFrame({
+            "DS": ["csv", "csv"], "Variable": ["MAG-MCTB-F1:VAR1", "MAG-MCTB-F1:VAR2"], "Stack": ["1.1", "2.1"],
+            "Alias": ["MT2611", "MT2611_bis"], "y": ["${self}.data[::0]", ""],
+            "x": ["", "mint_test_lana.slope_fit(${self}.time,${self}.data,3600)[0]"], "Plot type": ["PlotXY"] * 2}))
+        self.win.dataRangeSelector.import_dict({"mode": MTGenericAccessMode.PULSE_NUMBER,
+                                                "pulse_nb": ["ITER:MCTB-TEST/111"], "base": "Second(s)",
+                                                "t_start": "-5", "t_end": "4"})
+
+        status = model.index(0, model.get_dataframe().columns.get_loc("Status"))
+
+        def drawn():
+            # Until the y of MT2611 is computed again: the reads are over.
+            model.setData(status, "")
+            self.ctl.workspace.draw()
+            self.assertTrue(wait_until(lambda: model.get_dataframe().at[0, "Status"].startswith("Processing|")))
+
+        drawn()
+        self.ask("can you tell me what is wrong with my workspace?", 'say "no model here"')
+        self.assertEqual(self.said[-1], "MT2611 isn't drawn. The y expression failed: slice step cannot be zero.\n"
+                                        "MT2611_bis isn't drawn. The x expression can't be evaluated: mint_test_lana "
+                                        "is a Python module that isn't loaded (add it with Load new module).\n"
+                                        "Fix the cells in red, then Draw.")
+        # Load new module, on copies of what expressions use: the next test finds it unloaded.
+        parser = Parser()
+        for name, copy in (("_supported_members", dict(parser._supported_members)),
+                           ("_supported_member_names", set(parser._supported_member_names)),
+                           ("_brought", dict(parser._brought))):
+            patcher = mock.patch.object(parser, name, copy)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        parser.load_modules("mint_test_lana")
+        drawn()
+        self.ask("ok but do you know why it is in red?", 'say "no model here"')
+        self.assertIn("MT2611_bis isn't drawn. The x expression can't be evaluated: mint_test_lana.slope_fit takes 2 "
+                      "arguments (t, y), not 3.", self.said[-1])
+
     def test_undo_of_a_zoom_made_with_the_mouse_is_the_canvas_undo(self):
         planned = []
         self.ctl._plan_direct = lambda cmds, text: planned.append([str(c) for c in cmds])

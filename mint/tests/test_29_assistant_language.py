@@ -624,11 +624,43 @@ class ProblemsTest(unittest.TestCase):
     def test_what_keeps_rows_from_being_drawn_is_asked_in_many_ways(self):
         from mint.assistant import diagnose
         for text in ("in the data source table, all the signals are red. why?", "why is nothing drawn?",
-                     "what's wrong with the table?"):
+                     "what's wrong with the table?", "can you tell me what is wrong with my workspace?",
+                     "ok but do you know why it is in red?"):
             self.assertTrue(diagnose.asks_about_state(text), text)
         for text in ("remove the spikes, they are wrong", "smooth the red one over 30 s", "why not smooth it?",
                      "what is the maximum of MP0111?"):
             self.assertFalse(diagnose.asks_about_state(text), text)
+
+    def test_a_row_whose_computing_failed_says_why(self):
+        from mint.assistant import diagnose
+        from mint.assistant.snapshot import RowInfo, Snapshot
+        failed = RowInfo(id="r1", index=0, variable="MAG:MT2611-C-XI", alias="MT2611_bis", data_source="csv",
+                         uid="u1", status="Processing|The x expression failed: mctf has no slope")
+        # As MINT said it before it said why.
+        before = RowInfo(id="r2", index=1, variable="MAG:MT2611-C-XI", alias="MT2611", data_source="csv",
+                         uid="u2", status="Processing|0 points")
+        drawn = RowInfo(id="r3", index=2, variable="MAG:MT2611-C-XI", data_source="csv", uid="u3",
+                        status="Success|10 points")
+        problems = diagnose.find(Snapshot(rows=[failed, before, drawn]), ["csv"])
+        self.assertEqual(problems.invalid, [(failed, "The x expression failed: mctf has no slope"),
+                                            (before, "Computing it failed")])
+
+    def test_why_a_row_isnt_drawn_reads_as_its_status_says_it(self):
+        from mint.assistant.voice import Voice
+        self.assertEqual(
+            Voice.problems([], {}, [("MT2611_bis", "The x expression can't be evaluated: mctf is a Python module "
+                                                   "that isn't loaded (add it with Load new module)")], ["csv"]),
+            "MT2611_bis isn't drawn. The x expression can't be evaluated: mctf is a Python module that isn't loaded "
+            "(add it with Load new module). Fix the cell in red, then Draw.")
+        # Several, one line each.
+        self.assertEqual(
+            Voice.problems([], {}, [("MT2611", "The y expression failed: slice step cannot be zero"),
+                                    ("v3", "The y expression can't be evaluated: a signal has no tme (did you mean "
+                                           ".time?)")], ["csv"], more=1),
+            "MT2611 isn't drawn. The y expression failed: slice step cannot be zero.\n"
+            "v3 isn't drawn. The y expression can't be evaluated: a signal has no tme (did you mean .time?).\n"
+            "1 more row isn't drawn either: the Status says why.\n"
+            "Fix the cells in red, then Draw.")
 
     def test_a_data_source_no_longer_here_is_replaced_by_the_one_it_became(self):
         from mint.assistant import diagnose

@@ -11,16 +11,22 @@ layer depend on:
 - insertRows seeds new rows with the expected defaults (DataSource, PlotType)
 """
 
+import os
+import sys
+import tempfile
 import unittest
 from contextlib import ExitStack
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 from PySide6.QtCore import QPersistentModelIndex, Qt
 from PySide6.QtGui import QColor
 
 from iplotDataAccess.appDataAccess import AppDataAccess
-from iplotlib.interface.iplotSignalAdapter import Result, Stage, StatusInfo
+from iplotlib.core.signal import SignalXY
+from iplotlib.interface.iplotSignalAdapter import CachingAccessHelper, ParserHelper, Result, Stage, StatusInfo
+from iplotProcessing.tools import Parser
 
 from mint.models.mtSignalsModel import MTSignalsModel
 from mint.tests.fixtures import write_csv_datasource_config
@@ -315,6 +321,152 @@ class TestRowThatCannotBeDrawn(unittest.TestCase):
                          {'title': 'Row not drawn', 'anchor': 'cat-validation',
                           'explanation': "The envelope is 1 to show it, or 0 or empty to hide it. Fix it and Draw "
                                          "again."})
+
+
+class TestExpressionSaysWhy(unittest.TestCase):
+    """An x, y or z expression MINT can't use says why in the Status of its row, as a module that isn't loaded or a
+    function given an argument too many; a row whose computing fails says what it said."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = ensure_qapp()
+        _ensure_data_access()
+
+    def setUp(self):
+        # A module of the user in a folder of the path, as Load new module finds one.
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        with open(os.path.join(folder.name, 'mint_test_fits.py'), 'w') as f:
+            f.write("def slope_fit(t, y):\n    return t, y\n")
+        sys.path.insert(0, folder.name)
+        self.addCleanup(sys.path.remove, folder.name)
+        self.addCleanup(sys.modules.pop, 'mint_test_fits', None)
+
+    def _load_module(self):
+        """Load new module with mint_test_fits, on copies of what expressions use: the next test finds it unloaded."""
+        parser = Parser()
+        for name, copy in (('_supported_members', dict(parser._supported_members)),
+                           ('_supported_member_names', set(parser._supported_member_names)),
+                           ('_brought', dict(parser._brought))):
+            patcher = mock.patch.object(parser, name, copy)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        parser.load_modules('mint_test_fits')
+
+    def _status(self, y: str) -> str:
+        """The Status of a row with ``y`` once checked as Draw does; self.red: its red cells."""
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1'], 'y': [y]}))
+        with ExitStack() as stack:
+            for key in ('PulseNumber', 'StartTime', 'EndTime'):
+                stack.enter_context(mock.patch.dict(model._blueprint[key], default=''))
+            with model.init_create_signals():
+                list(model.create_signals(0, []))
+        fails = model._table_fails.loc[0]
+        self.red = [column for column in fails.index if fails[column]]
+        return model.get_dataframe().at[0, 'Status']
+
+    def test_a_module_of_the_user_that_isnt_loaded_says_to_load_it(self):
+        self.assertEqual(self._status('mint_test_fits.slope_fit(${self}.time,${self}.data,3600)[0]'),
+                         "Invalid|The y expression can't be evaluated: mint_test_fits is a Python module that isn't "
+                         "loaded (add it with Load new module)")
+        self.assertEqual(self.red, ['y'])
+
+    def test_a_function_given_an_argument_too_many_says_what_it_takes(self):
+        self._load_module()
+        self.assertEqual(self._status('mint_test_fits.slope_fit(${self}.time,${self}.data,3600)[0]'),
+                         "Invalid|The y expression can't be evaluated: mint_test_fits.slope_fit takes 2 arguments "
+                         "(t, y), not 3")
+        self.assertEqual(self.red, ['y'])
+
+    def test_a_function_the_module_hasnt_got_is_named(self):
+        self._load_module()
+        self.assertEqual(self._status('mint_test_fits.slope(${self}.time,${self}.data)[0]'),
+                         "Invalid|The y expression can't be evaluated: mint_test_fits has no slope (did you mean "
+                         "mint_test_fits.slope_fit?)")
+
+    def test_expressions_that_can_be_evaluated_are_drawn_as_before(self):
+        self._load_module()
+        for y in ['', '${self}.data * 2', 'np.diff(${self}.data)',
+                  'mint_test_fits.slope_fit(${self}.time,${self}.data)[1]',
+                  "np.convolve(${self}.data, np.ones(5)/5, mode='same')", '${self}.data[::0]']:
+            with self.subTest(y=y):
+                self.assertFalse(self._status(y).startswith('Invalid'))
+                self.assertEqual(self.red, [])
+
+    def test_when_telling_why_fails_the_row_is_judged_as_before(self):
+        with mock.patch('mint.models.mtSignalsModel.call_problem', side_effect=RuntimeError('a bug')):
+            self.assertFalse(self._status('${self}.data * 2').startswith('Invalid'))
+        with mock.patch('mint.models.mtSignalsModel.why_rejected', side_effect=RuntimeError('a bug')):
+            self.assertEqual(self._status('mint_no_module.slope(${self}.data)'),
+                             "Invalid|The y expression can't be evaluated")
+
+    def _computed(self, column: str, said: str):
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': ['MAG-MCTB-F1:VAR1'], 'Stack': ['1']}))
+        model.update_signal_data(0, _FailedComputing(model.get_dataframe().at[0, 'uid'], column, said), fetch_data=True)
+        status = model.createIndex(0, model.get_dataframe().columns.get_loc('Status'))
+        return model.get_dataframe().at[0, 'Status'], model.error_info_for_cell(status)
+
+    def test_a_row_whose_computing_fails_says_what_it_said(self):
+        status, info = self._computed('y', 'the y expression failed: Value error slice step cannot be zero')
+        self.assertEqual(status, "Processing|The y expression failed: slice step cannot be zero")
+        self.assertEqual(info, {'title': 'Row not drawn', 'anchor': 'cat-processing',
+                                'explanation': "The y expression failed: slice step cannot be zero. Fix it and Draw "
+                                               "again."})
+
+    def test_what_the_error_reference_explains_keeps_its_explanation(self):
+        status, info = self._computed('', 'Value error operands could not be broadcast together with shapes (101,) '
+                                          '(5,) ')
+        self.assertEqual(status, "Processing|The variable expression failed: operands could not be broadcast "
+                                 "together with shapes (101,) (5,)")
+        self.assertEqual(info['title'], 'Signal arrays have incompatible shapes')
+
+    def _read(self, y: str):
+        """The Status and the red cells of a row with ``y``, its data read and computed."""
+        model = MTSignalsModel()
+        model.set_dataframe(pd.DataFrame({'DS': ['csv'], 'Variable': ['VAR'], 'Stack': ['1'], 'y': [y]}))
+        ParserHelper.env.clear()
+        ParserHelper.dict_result.clear()
+        signal = SignalXY(name='VAR', data_source='test', ts_start=_START, ts_end=_START + 10 ** 9, y_expr=y)
+        signal.uid = model.get_dataframe().at[0, 'uid']
+        with mock.patch.object(CachingAccessHelper, 'get', return_value=_Reader()):
+            model.update_signal_data(0, signal, fetch_data=True)
+        fails = model._table_fails.loc[0]
+        return model.get_dataframe().at[0, 'Status'], [column for column in fails.index if fails[column]]
+
+    def test_a_function_that_gives_a_tuple_says_so_instead_of_drawing_nothing(self):
+        self._load_module()
+        self.assertEqual(self._read('mint_test_fits.slope_fit(${self}.time,${self}.data)'),
+                         ("Processing|The y expression failed: it gives a tuple of 2, not an array of values", ['y']))
+        self.assertEqual(self._read('mint_test_fits.slope_fit(${self}.time,${self}.data)[1]'),
+                         ("Success|11 points", []))
+
+
+_START = 1_700_000_000_000_000_000
+
+
+class _Reader:
+    """Reads a sample every 0.1 s over the range asked, whose data are its time in seconds."""
+
+    def fetch_data(self, signal):
+        time = np.arange(signal.ts_start, signal.ts_end + 1, 10 ** 8, dtype=np.int64)
+        signal.inject_external(alias_map={'time': {'idx': 0, 'independent': True}, 'data': {'idx': 1}},
+                               d0=time, d1=time / 1e9, d2=np.zeros(0), d3=np.zeros(0))
+
+
+class _FailedComputing:
+    """A signal read whose computing failed, for update_signal_data: at ``column``, '' for the variable."""
+    isDownsampled = False
+    y_data = None
+
+    def __init__(self, uid: str, column: str, said: str):
+        self.uid, self._column, self._said = uid, column, said
+        self.status_info = StatusInfo()
+
+    def get_data(self):
+        self.status_info.result, self.status_info.stage = Result.FAIL, Stage.PROC
+        self.status_info.msg, self.status_info.expression = self._said, self._column
 
 
 class _UnreadableSignal:

@@ -110,13 +110,16 @@ class Voice:
             fix = fixes.get(source)
             said.append(f"Shall I change {them} to {fix}?" if fix else
                         f"Which one should {them} use?" if sources else "")
-        for name, reason in invalid:
-            said.append(f"{name} isn't drawn: {reason}.")
+        # The reason is the Status of the row: a sentence of its own, which may say why after a colon.
+        rows = [f"{name} isn't drawn. {reason.rstrip('.')}." for name, reason in invalid]
         if more:
-            said.append(f"{more} more {'row isn' if more == 1 else 'rows aren'}'t drawn either: the Status says why.")
+            rows.append(f"{more} more {'row isn' if more == 1 else 'rows aren'}'t drawn either: the Status says why.")
+        many = len(invalid) + more > 1
         if invalid and not missing:
-            said.append("Fix the cell in red, then Draw.")
-        return " ".join(part for part in said if part)
+            rows.append(f"Fix the cell{'s' if many else ''} in red, then Draw.")
+        lines = [" ".join(part for part in said if part)] + rows
+        # Several rows, one line each.
+        return ("\n" if many else " ").join(line for line in lines if line)
 
     @staticmethod
     def change_source(old: str, new: str) -> str:
