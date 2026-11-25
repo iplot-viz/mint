@@ -98,7 +98,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
         pulseLayout.addWidget(self.clearPulseBtn)
         pulseLayout.setAlignment(Qt.AlignLeft)
 
-        # The rows of the times share the calendar: it sits between them, where they end.
+        # The rows of the times share the calendar: its button spans them, where they end.
         grid = QGridLayout()
         for row, (label, time, ns) in enumerate((("From time", self.fromTime, self.fromTimeNs),
                                                  ("To time", self.toTime, self.toTimeNs))):
@@ -107,7 +107,7 @@ class MTAbsoluteTime(MTGenericAccessMode):
             grid.addWidget(QLabel(".", parent=self.form), row, 2)
             grid.addWidget(ns, row, 3)
             grid.addWidget(QLabel("ns", parent=self.form), row, 4)
-        grid.addWidget(self.calendarBtn, 0, 5, 2, 1, Qt.AlignmentFlag.AlignVCenter)
+        grid.addWidget(self.calendarBtn, 0, 5, 2, 1)
         grid.addWidget(QLabel("From pulse", parent=self.form), 2, 0)
         grid.addLayout(pulseLayout, 2, 1, 1, 6)
         grid.setColumnStretch(6, 1)
