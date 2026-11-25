@@ -332,7 +332,7 @@ See also: [Reference - Supported data source types](#datasource-types) for the l
 
 ### 2.11 Assistant {#assistant}
 
-Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
+Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Load new module*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
 
 - *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
 - *put the second plot in log scale*, *no grid anywhere*, *markers on the second plot*.
@@ -367,7 +367,7 @@ It runs on this computer, without network. Closing the panel frees the memory th
 | `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card, to retrain the assistant with; a folder of the team to keep them there, encrypted; optional |
 | `MINT_ASSISTANT_RECORD_KEY` | the public key of the team (`.pem`) the records are encrypted with; needed for a folder of the team, optional |
 
-With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it, and only the team to list them. The team takes the files out of it as it reads them.
+With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it and read it, and only the team can decrypt them. The team takes the files out of it as it reads them.
 
 The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
 

@@ -367,7 +367,7 @@ $ mint
 <p>Use the <strong>Pulse Id</strong> access mode. Type the shot number in the pulse field (for example <code>30420</code>). <code>0</code> is the latest shot and <code>-N</code> is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the <em>Variable</em> column. You can use a generic name (<code>ip</code>), a MAST name (<code>ANE_DENSITY</code>) or a MAST-U name (<code>/AMC/PLASMA_CURRENT</code>). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h3 id="assistant">2.11 Assistant</h3>
-<p>Ask in plain English for processing, plot settings, signals or a time range. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
+<p>Ask in plain English for processing, plot settings, signals or a time range. Open it with <strong>AI Assistant</strong> next to <em>Load new module</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
 <ul>
 <li><em>smooth the pirani over 30 s</em>: adds a smoothed copy of the signal to the same plot.</li>
 <li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>, <em>markers on the second plot</em>.</li>
@@ -425,7 +425,7 @@ $ mint
 </tr>
 </tbody>
 </table>
-<p>With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it, and only the team to list them. The team takes the files out of it as it reads them.</p>
+<p>With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it and read it, and only the team can decrypt them. The team takes the files out of it as it reads them.</p>
 <p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>
