@@ -10,7 +10,7 @@
             "manual_anchor": "errors-invalid-data-source",
             "summary": "The DS cell of this row names a data source that MINT can't use here: it isn't one of the data sources of this computer, or it didn't connect. The row isn't drawn until it uses one that is.",
             "what_to_do": [
-                "Pick a data source from the list in the DS cell.",
+                "Pick a data source from the list in the DS cell, or ask the AI Assistant to change it.",
                 "If the data source was renamed (imaspy is now imas, for example), use the new name.",
                 "If it should be here, check the data sources configuration of this computer."
             ],
