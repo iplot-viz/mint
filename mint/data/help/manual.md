@@ -227,11 +227,11 @@ Opens behind the canvas when you activate the RULER tool; click the RULER button
 
 #### Canvas-level preferences
 
-Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, log scale, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), vertical lines (none, solid, dotted or dashed: a line in the signal colour and size through each point while a signal shows 50 points or fewer, as after a zoom), focus all plots on stack.
+Title, font size, shared time, time-range difference, round hours, auto scale, Y min/max batch update, grid, show all ticks, number of ticks, background colour, legend (visibility, position, layout), crosshair labels (X, Y, Val), crosshair colour, font colour, line style (solid / dotted / dashed / none), line size, marker style (+ or o), marker size, line path (linear or last value), vertical lines (none, solid, dotted or dashed: a line in the signal colour and size through each point while a signal shows 50 points or fewer, as after a zoom), focus all plots on stack.
 
 *Shared time* is the time axis common to all plots: a zoom or a pan on one moves them all, and a ruler appears on each. With it off, each plot keeps its own time range.
 
-Plot-level preferences mirror the canvas-level ones. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.
+Plot-level preferences mirror the canvas-level ones and add *Log scale*, set for each plot: a workspace saved with a log scale for the whole canvas opens with it on each plot. Signal-level preferences are a subset; the variable label can also be overridden. Axis x and y0 properties allow custom labels and limits, plus disabling autoscale.
 
 *Draw* keeps most preference changes, but not axis limits. Click *Apply* to apply them and close the panel.
 

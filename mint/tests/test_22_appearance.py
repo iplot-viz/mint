@@ -18,13 +18,20 @@ from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QMainWindow, QStyleFactory, QWidget
 
+from iplotDataAccess.appDataAccess import AppDataAccess
+from iplotlib.core.canvas import Canvas
 from iplotlib.core.display import DisplayScale
+from iplotlib.interface.iplotSignalAdapter import AccessHelper
 from mint.gui.mtAppearance import (MTAppearanceMenu, QT_SCALE_KEY, SCALE_KEY, STYLE_KEY, THEME_KEY,
                                    THEME_NONE, THEMES, apply_style, apply_theme, apply_ui_scale,
                                    base_font_pt, is_dark, register_scale_listener,
                                    remember_detected_qt_scale, restore_appearance,
                                    startup_qt_scale_factor)
+from mint.gui.mtMainWindow import MTMainWindow
 from mint.gui.views.mtSignalItemView import MTSignalItemView
+from mint.models.accessModes.mtGeneric import MTGenericAccessMode
+from mint.models.utils import mtBlueprintParser
+from mint.tests.fixtures import write_csv_datasource_config
 from mint.tests.qAppSingleton import ensure_qapp
 
 
@@ -235,6 +242,46 @@ class SignalTableGridTest(SettingsSandbox):
         grid = QColor(re.search(r'gridline-color: (#[0-9a-f]{6})', view.view().styleSheet()).group(1))
         self.assertLess(grid.lightness(), base.lightness() - 60)
         view.deleteLater()
+
+
+class DrawButtonsIconTest(SettingsSandbox):
+    """The chart of Draw, Stream and Export shows in a dark theme too: there in the light grey of the icons."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        AppDataAccess.initialize(write_csv_datasource_config())
+        AccessHelper.da = AppDataAccess.get_data_access()
+
+    @staticmethod
+    def _colours(button):
+        image = button.icon().pixmap(18, 18).toImage()
+        return [image.pixelColor(x, y) for x in range(image.width()) for y in range(image.height())
+                if image.pixelColor(x, y).alpha() > 200]
+
+    def test_the_chart_of_draw_stream_and_export_follows_the_theme(self):
+        win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {"mode": MTGenericAccessMode.TIME_RANGE,
+                                                                 "value": ["", ""]}},
+                           app_version='test', data_sources=AccessHelper.da.get_connected_data_source_names(),
+                           blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl='matplotlib')
+        self.addCleanup(win.close)
+        buttons = (win.drawBtn, win.streamBtn, win.exportBtn)
+
+        def green(colour):
+            return colour.green() > colour.red() + 40
+
+        for button in buttons:
+            self.assertTrue(any(green(c) for c in self._colours(button)), "its picture, in a light theme")
+        apply_theme('Dark')
+        QApplication.processEvents()  # the window hears of the new palette after the application
+        for button in buttons:
+            colours = self._colours(button)
+            self.assertFalse(any(green(c) for c in colours), button.text())
+            self.assertGreater(min(c.lightness() for c in colours), 150, "light on the dark buttons")
+        apply_theme(THEME_NONE)
+        QApplication.processEvents()
+        for button in buttons:
+            self.assertTrue(any(green(c) for c in self._colours(button)), "its picture again")
 
 
 class UiScaleTest(SettingsSandbox):
