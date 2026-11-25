@@ -166,19 +166,21 @@ def install(window, splitter, signals_toolbar, view_menu):
     controller.toggle_action = action
 
     toolbar = signals_toolbar.findChild(QToolBar)
-    search = getattr(signals_toolbar, "searchVarsBtn", None)
-    if toolbar is not None and search is not None:
+    modules = getattr(signals_toolbar, "loadModules", None)
+    if toolbar is not None and modules is not None:
         button = QPushButton(icon, "AI Assistant")
         button.setCheckable(True)
         button.setToolTip("AI Assistant (Ctrl+Shift+A)")
         button.toggled.connect(action.setChecked)
         action.toggled.connect(button.setChecked)
         actions = toolbar.actions()
-        anchor = next((a for a in actions if toolbar.widgetForAction(a) is search), None)
+        anchor = next((a for a in actions if toolbar.widgetForAction(a) is modules), None)
         following = actions[actions.index(anchor) + 1] if anchor in actions[:-1] else None
         if following is not None:
+            toolbar.insertSeparator(following)
             toolbar.insertWidget(following, button)
         else:
+            toolbar.addSeparator()
             toolbar.addWidget(button)
         controller.toolbar_button = button
     return controller

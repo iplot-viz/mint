@@ -247,7 +247,7 @@ $ mint
 <li><strong>DIST</strong>: click two points to measure the distance between them; the window that opens can also shift a signal by that distance in X (in seconds on a time axis) or Y, or add a shifted copy with <em>Duplicate signal</em>. In SELECT mode, dragging a signal shifts it too.</li>
 <li><strong>RULER</strong>: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the mouse until then. It stays on that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it; right-click it → <em>Remove ruler</em> to delete it. With shared time on, it appears on every plot, has a row per plot in the <em>Rulers window</em>, and is removed from all of them at once. Rulers are listed in the <em>Rulers window</em> (below) and saved with the workspace.</li>
 <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> <strong>Statistics</strong>: min/avg/max, first and last value and time, and sample count of each signal; <em>Hide/Show columns</em> hides the ones you don't need.</li>
-<li>Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. <em>Draw</em>, and each auto-refresh in relative time, clear this history.</li>
+<li>Undo / Redo: roll back or replay the last pan, zoom, shift, move, resize or removal of a plot, or layout. <em>Draw</em>, and each auto-refresh in relative time, clear this history.</li>
 <li><strong>HOME</strong>: reset all plots to the original view, with the data already read. In relative time it also stops the auto-refresh; press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: import / export a workspace (see <a href="#export-import-workspace">2.6</a>).</li>
 <li>Square-with-arrow: save the points drawn for each signal to a CSV file.</li>
@@ -263,6 +263,7 @@ $ mint
 <ul>
 <li><strong>Reset zoom/pan</strong>: like <em>Home</em>, but only for that plot (useful with <em>shared time</em> off).</li>
 <li><strong>Unstack</strong>: put each stack of the plot in a plot of its own, one below the other; the plots below move down to make room. The <em>Stack</em> of the rows follows, and <em>Undo</em> takes it back. Greyed out for a plot of one stack.</li>
+<li><strong>Remove plot</strong>: take the plot off the canvas and leave its place empty. Its rows stay in the table with an empty <em>Stack</em>, so <em>Draw</em> leaves them out, and <em>Undo</em> takes it back. Greyed out for the only plot.</li>
 <li><strong>Set as time window</strong>: copy the visible range of the plot into the time range (as seconds relative to the pulse, in pulse mode), so the next <em>Draw</em> reads exactly what you zoomed into.</li>
 </ul>
 <h4>Legend</h4>
@@ -367,7 +368,7 @@ $ mint
 <p>Use the <strong>Pulse Id</strong> access mode. Type the shot number in the pulse field (for example <code>30420</code>). <code>0</code> is the latest shot and <code>-N</code> is the N-th shot before it. Time is relative to the shot, in seconds. When the start time is empty, MINT starts the plot at 0 s. To see data before 0 s, type a negative start time. Type the signal name in the <em>Variable</em> column. You can use a generic name (<code>ip</code>), a MAST name (<code>ANE_DENSITY</code>) or a MAST-U name (<code>/AMC/PLASMA_CURRENT</code>). The variable browser shows one folder for each source alias, and a GENERIC folder with the generic names. MINT plots only 1D signals from a PYUDA source.</p>
 <p>See also: <a href="#datasource-types">Reference - Supported data source types</a> for the list of source types MINT recognises.</p>
 <h3 id="assistant">2.11 Assistant</h3>
-<p>Ask in plain English for processing, plot settings, signals or a time range. Open it with <strong>AI Assistant</strong> next to <em>Search Vars</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
+<p>Ask in plain English for processing, plot settings, signals or a time range. Open it with <strong>AI Assistant</strong> next to <em>Load new module</em>, or <em>View &gt; AI Assistant</em> (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.</p>
 <ul>
 <li><em>smooth the pirani over 30 s</em>: adds a smoothed copy of the signal to the same plot.</li>
 <li><em>put the second plot in log scale</em>, <em>no grid anywhere</em>, <em>markers on the second plot</em>.</li>
@@ -425,7 +426,7 @@ $ mint
 </tr>
 </tbody>
 </table>
-<p>With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it, and only the team to list them. The team takes the files out of it as it reads them.</p>
+<p>With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it and read it, and only the team can decrypt them. The team takes the files out of it as it reads them.</p>
 <p>The runtime installs with <code>pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu</code>, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.</p>
 <h2 id="iter-environment">3. ITER environment</h2>
 <h3 id="codac">3.1 CODAC</h3>

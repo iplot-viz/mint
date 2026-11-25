@@ -183,7 +183,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **DIST**: click two points to measure the distance between them; the window that opens can also shift a signal by that distance in X (in seconds on a time axis) or Y, or add a shifted copy with *Duplicate signal*. In SELECT mode, dragging a signal shifts it too.
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the mouse until then. It stays on that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it; right-click it → *Remove ruler* to delete it. With shared time on, it appears on every plot, has a row per plot in the *Rulers window*, and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> **Statistics**: min/avg/max, first and last value and time, and sample count of each signal; *Hide/Show columns* hides the ones you don't need.
-- Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
+- Undo / Redo: roll back or replay the last pan, zoom, shift, move, resize or removal of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: reset all plots to the original view, with the data already read. In relative time it also stops the auto-refresh; press *Draw* to resume it.
 - Folder / Floppy: import / export a workspace (see [2.6](#export-import-workspace)).
 - Square-with-arrow: save the points drawn for each signal to a CSV file.
@@ -199,6 +199,7 @@ Right-click a plot for per-plot actions:
 
 - **Reset zoom/pan**: like *Home*, but only for that plot (useful with *shared time* off).
 - **Unstack**: put each stack of the plot in a plot of its own, one below the other; the plots below move down to make room. The *Stack* of the rows follows, and *Undo* takes it back. Greyed out for a plot of one stack.
+- **Remove plot**: take the plot off the canvas and leave its place empty. Its rows stay in the table with an empty *Stack*, so *Draw* leaves them out, and *Undo* takes it back. Greyed out for the only plot.
 - **Set as time window**: copy the visible range of the plot into the time range (as seconds relative to the pulse, in pulse mode), so the next *Draw* reads exactly what you zoomed into.
 
 #### Legend
@@ -332,7 +333,7 @@ See also: [Reference - Supported data source types](#datasource-types) for the l
 
 ### 2.11 Assistant {#assistant}
 
-Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Search Vars*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
+Ask in plain English for processing, plot settings, signals or a time range. Open it with **AI Assistant** next to *Load new module*, or *View > AI Assistant* (Ctrl+Shift+A). The button at the top right of the panel moves it to a window of its own and back.
 
 - *smooth the pirani over 30 s*: adds a smoothed copy of the signal to the same plot.
 - *put the second plot in log scale*, *no grid anywhere*, *markers on the second plot*.
@@ -367,7 +368,7 @@ It runs on this computer, without network. Closing the panel frees the memory th
 | `MINT_ASSISTANT_RECORD` | `1` to keep on this computer what you ask, what it answers and whether you apply each card, to retrain the assistant with; a folder of the team to keep them there, encrypted; optional |
 | `MINT_ASSISTANT_RECORD_KEY` | the public key of the team (`.pem`) the records are encrypted with; needed for a folder of the team, optional |
 
-With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it, and only the team to list them. The team takes the files out of it as it reads them.
+With the record on, the panel says so when it first opens. What is kept from each run of MINT goes to a file of its own, up to 1 MB, named by when it began and a random id, with neither the name of the user nor their folders in it. In a folder of the team, the owner of each file is still its user: everyone should be able to add files to it and read it, and only the team can decrypt them. The team takes the files out of it as it reads them.
 
 The runtime installs with `pip install iter-mint[assistant] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu`, which brings it ready built: without that address pip has to compile it, and CODAC has no compiler.
 

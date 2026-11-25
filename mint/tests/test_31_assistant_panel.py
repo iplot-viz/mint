@@ -1035,17 +1035,21 @@ class AssistantInstallTest(unittest.TestCase):
             self.assertIsNotNone(win.assistant)
             self.assertIn("&AI Assistant", self.menu_texts(win))
             toolbar = win.sigCfgWidget.tool_bar().findChild(QToolBar)
-            widgets = [toolbar.widgetForAction(a) for a in toolbar.actions()]
-            search = widgets.index(win.sigCfgWidget.tool_bar().searchVarsBtn)
-            self.assertIsInstance(widgets[search + 1], QPushButton)
-            self.assertEqual(widgets[search + 1].text(), "AI Assistant")
+            actions = toolbar.actions()
+            widgets = [toolbar.widgetForAction(a) for a in actions]
+            # After Load new module, apart from it as the buttons before it are.
+            modules = widgets.index(win.sigCfgWidget.tool_bar().loadModules)
+            self.assertTrue(actions[modules + 1].isSeparator())
+            button = widgets[modules + 2]
+            self.assertIsInstance(button, QPushButton)
+            self.assertEqual(button.text(), "AI Assistant")
             self.assertEqual(win._centralWidget.count(), 3)
             panel = win.assistant.panel
             self.assertFalse(panel.isVisible())
             win.assistant.toggle_action.setChecked(True)
             win.show()
             self.assertTrue(wait_until(panel.isVisible, 2))
-            self.assertTrue(widgets[search + 1].isChecked())
+            self.assertTrue(button.isChecked())
             # No model runtime or no model file: the panel says why instead of failing.
             self.assertIsNone(win.assistant.engine)
             self.assertFalse(panel.input.isEnabled())

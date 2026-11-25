@@ -404,6 +404,8 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         self._moving_rows = False
         # The text each row had in the Stack, Row span and Col span it left, by what the text gives (see _text_back).
         self._texts_left = {}
+        # By the place of each plot removed, the Stack its rows had, by uid, the last removal last (see _take_out_rows).
+        self._removed_rows = {}
         self.sigCfgWidget.model.dataChanged.connect(lambda top_left, bottom_right, *_:
                                                     self._on_span_changed(top_left, bottom_right))
         # Also once a change is complete, as the workers above: a Draw reports the status of each row on its own.
@@ -2578,7 +2580,11 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
         it as those of a plot do, and those of plots joined into one take the stacks they have there (see
         reserved_slots and iplotlib.core.layout.Arrangement.changes). The rows of each plot give it its rows and
         columns, also when a plot is split, as Unstack does. A row that goes back to a place or a span it had takes
-        back the text it had there (see _text_back)."""
+        back the text it had there (see _text_back). The rows of a plot removed lose their Stack (see
+        _take_out_rows)."""
+        changes = self._take_out_rows(changes)
+        if not changes:
+            return
         model = self.sigCfgWidget.model
         df = model.get_dataframe()
         uids = df[model.ROWUID_COLNAME]
@@ -2647,6 +2653,33 @@ class MTMainWindow(ShiftHandlerMixin, IplotQtMainWindow):
                     model.setData(model.createIndex(idx, df.columns.get_loc(column)), text, Qt.ItemDataRole.EditRole)
         finally:
             self._moving_rows = False
+
+    def _take_out_rows(self, changes: list) -> list:
+        """The rows of a plot removed from the canvas lose their Stack, which leaves them out of the Draw, and take
+        it back when the plot comes back, as on undo (see iplotlib.core.layout.removed). The other changes."""
+        model = self.sigCfgWidget.model
+        df = model.get_dataframe()
+        uids = list(df[model.ROWUID_COLNAME])
+        edits = []
+        for before, after in changes:
+            if after is None:
+                place = (before.row + 1, before.col + 1)
+                taken = {uids[idx]: str(value) for idx, value in enumerate(df['Stack']) if _stack_place(value) == place}
+                self._removed_rows.setdefault(place, []).append(taken)
+                edits += [(uids.index(uid), '') for uid in taken]
+            elif before is None:
+                taken = self._removed_rows.get((after.row + 1, after.col + 1))
+                if taken:
+                    edits += [(uids.index(uid), text) for uid, text in taken.pop().items() if uid in uids]
+        column = df.columns.get_loc('Stack')
+        # Edits that move the rows, not spans changed by hand (see _on_span_changed).
+        self._moving_rows = True
+        try:
+            for idx, text in edits:
+                model.setData(model.createIndex(idx, column), text, Qt.ItemDataRole.EditRole)
+        finally:
+            self._moving_rows = False
+        return [(before, after) for before, after in changes if before is not None and after is not None]
 
     def _text_back(self, uid, column: str, old, new: str, left=None, going=None) -> str:
         """`new`, or the text the row of `uid` had in `column` when it last left what `new` gives, so that a row that
