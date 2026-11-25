@@ -184,7 +184,7 @@ Above the canvas sits a toolbar (movable when the canvas is detached). Buttons:
 - **DIST**: Euclidean distance between two clicks. Also shifts a signal along Y or X, in seconds along a time axis, or with *Duplicate signal* adds a shifted copy of it next to the original; in SELECT mode, dragging a signal shifts it too.
 - **RULER**: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → *Remove ruler*. With shared time on, the ruler appears on every plot, gets a row per plot in the *Rulers window* and is removed from all of them at once. Rulers are listed in the *Rulers window* (below) and saved with the workspace.
 - <img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via *Hide/Show columns*.
-- Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
+- Undo / Redo: roll back or replay the last pan, zoom, shift, move, resize or removal of a plot, or layout. *Draw*, and each auto-refresh in relative time, clear this history.
 - **HOME**: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press *Draw* to resume it.
 - Folder / Floppy: open / save preferences.
 - Square-with-arrow: export the points of each signal currently rendered.
@@ -199,6 +199,7 @@ Right-click a plot for per-plot actions:
 
 - **Reset zoom/pan** — the same reset as *Home* but limited to that plot, which is how you reset a single plot when *shared time* is off.
 - **Unstack** — puts each stack of the plot in a plot of its own, one below the other, and the plots below move down to make room. The *Stack* of the rows follows, and *Undo* takes it back. Greyed out for a plot of one stack.
+- **Remove plot** — takes the plot off the canvas and leaves its place empty. Its rows stay in the table with an empty *Stack*, so *Draw* leaves them out, and *Undo* takes it back. Greyed out for the only plot.
 - **Set as time window** — copies the plot's visible range into the query time range (switching to the *Time Range* tab, or keeping relative seconds in pulse mode), so the next *Draw* fetches exactly what you zoomed into.
 
 #### Legend

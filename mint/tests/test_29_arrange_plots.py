@@ -19,7 +19,7 @@ import pandas as pd
 from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, QSettings, Qt
 from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QMouseEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QAbstractItemView, QApplication
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QMenu
 from iplotDataAccess.appDataAccess import AppDataAccess
 from iplotlib.core.canvas import Canvas
 from iplotlib.core.drop_info import DropInfo
@@ -614,6 +614,75 @@ class ArrangePlotsTest(unittest.TestCase):
                 win.redo()
                 self.app.processEvents()
                 self.assertEqual(_table(win), unstacked)
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'remove_plot'), "the installed iplotlib does not remove plots")
+    def test_the_rows_of_a_plot_removed_lose_their_stack_and_undo_and_redo_take_it_back_and_forth(self):
+        win = self._window(['1', '2', '2.1.2', '4'], spans={'Row span': ['', '2', '', ''], 'Col span': [''] * 4})
+        # A row of the plot added since the Draw goes with it.
+        self._append(win, VARS[4], '2.1.3')
+        before = _table(win)
+
+        win.canvasStack.currentWidget().remove_plot(_plot_with(win, VARS[1]))
+        self.app.processEvents()
+
+        removed = [(VARS[0], '1', '', ''), (VARS[1], '', '2', ''), (VARS[2], '', '', ''), (VARS[3], '4', '', ''),
+                   (VARS[4], '', '', '')]
+        self.assertEqual(_table(win), removed)
+        self.assertEqual(win.canvasStack.currentWidget().get_next_undo_cmd_name(), 'Remove plot')
+        win.undo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), before)
+        win.redo()
+        self.app.processEvents()
+        self.assertEqual(_table(win), removed)
+        win.draw_clicked()
+        self.assertEqual([(plot.row, [signal.name for signals in plot.signals.values() for signal in signals])
+                          for plot, _ in layout.slots_of(win.canvas)], [(1, [VARS[0]]), (4, [VARS[3]])])
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'remove_plot'), "the installed iplotlib does not remove plots")
+    def test_plots_removed_one_after_the_other_from_the_same_place_take_back_their_own_rows(self):
+        win = self._window(['1', '2', '3'])
+        before = _table(win)
+        qt_canvas = win.canvasStack.currentWidget()
+
+        qt_canvas.remove_plot(_plot_with(win, VARS[1]))
+        self._arrange(win, layout.moved(win.canvas, _plot_with(win, VARS[2]), 1, 0))
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '', '2'])
+        qt_canvas.remove_plot(_plot_with(win, VARS[2]))
+        self.app.processEvents()
+        self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1', '', ''])
+
+        for stacks in (['1', '', '2'], ['1', '', '3'], ['1', '2', '3']):
+            win.undo()
+            self.app.processEvents()
+            self.assertEqual([stack for _, stack, _, _ in _table(win)], stacks)
+        self.assertEqual(_table(win), before)
+
+    @unittest.skipUnless(hasattr(IplotQtCanvas, 'remove_plot'), "the installed iplotlib does not remove plots")
+    def test_remove_plot_in_the_menu_of_a_plot_removes_it_in_both_backends(self):
+        for impl in ('matplotlib', 'pyqt'):
+            with self.subTest(impl):
+                win = self._window(['1.1', '2.1', '3.1'], impl=impl)
+                win.resize(1200, 900)
+                win.show()
+                self.app.processEvents()
+                qt_canvas = win.canvasStack.currentWidget()
+                widget = qt_canvas._arranger._widget
+                rows, cols = qt_canvas._grid_bounds()
+                at = widget.mapFrom(qt_canvas, QPoint(round(cols[0] + (cols[1] - cols[0]) * 0.15),
+                                                      round(rows[1] + (rows[2] - rows[1]) * 0.2)))
+                QTest.mousePress(widget, Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, at)
+                QTest.mouseRelease(widget, Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, at)
+                self.app.processEvents()
+                menu, = [widget for widget in QApplication.topLevelWidgets() if isinstance(widget, QMenu)
+                         and widget.isVisible()]
+                self.addCleanup(menu.close)
+
+                next(action for action in menu.actions() if action.text() == 'Remove plot').trigger()
+                self.app.processEvents()
+
+                self.assertEqual([stack for _, stack, _, _ in _table(win)], ['1.1', '', '3.1'])
+                self.assertEqual([plot is None for plot in win.canvas.plots[0]], [False, True, False])
 
     def test_a_draw_keeps_the_empty_cells_of_the_grid_picked_and_a_workspace_saves_them(self):
         win = self._window(['1', '2'])

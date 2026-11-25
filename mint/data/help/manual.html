@@ -246,7 +246,7 @@ $ mint
 <li><strong>DIST</strong>: Euclidean distance between two clicks. Also shifts a signal along Y or X, in seconds along a time axis, or with <em>Duplicate signal</em> adds a shifted copy of it next to the original; in SELECT mode, dragging a signal shifts it too.</li>
 <li><strong>RULER</strong>: double-click to drop a ruler (A, B, C…) on a data point; a preview follows the cursor beforehand. The ruler stays pinned to that point as you zoom and pan, and shows the value of every signal it crosses. Drag it to move it, or right-click it → <em>Remove ruler</em>. With shared time on, the ruler appears on every plot, gets a row per plot in the <em>Rulers window</em> and is removed from all of them at once. Rulers are listed in the <em>Rulers window</em> (below) and saved with the workspace.</li>
 <li><img src="image_13.png" class="inline-icon" alt="Stats icon" /> Stats icon: min/avg/max, first/last value and time, sample count. Hide unused columns via <em>Hide/Show columns</em>.</li>
-<li>Undo / Redo: roll back or replay the last pan, zoom, shift, move or resize of a plot, or layout. <em>Draw</em>, and each auto-refresh in relative time, clear this history.</li>
+<li>Undo / Redo: roll back or replay the last pan, zoom, shift, move, resize or removal of a plot, or layout. <em>Draw</em>, and each auto-refresh in relative time, clear this history.</li>
 <li><strong>HOME</strong>: resets all plots to the original view. The data is served from cache. In relative time it also stops the auto-refresh — press <em>Draw</em> to resume it.</li>
 <li>Folder / Floppy: open / save preferences.</li>
 <li>Square-with-arrow: export the points of each signal currently rendered.</li>
@@ -261,6 +261,7 @@ $ mint
 <ul>
 <li><strong>Reset zoom/pan</strong> — the same reset as <em>Home</em> but limited to that plot, which is how you reset a single plot when <em>shared time</em> is off.</li>
 <li><strong>Unstack</strong> — puts each stack of the plot in a plot of its own, one below the other, and the plots below move down to make room. The <em>Stack</em> of the rows follows, and <em>Undo</em> takes it back. Greyed out for a plot of one stack.</li>
+<li><strong>Remove plot</strong> — takes the plot off the canvas and leaves its place empty. Its rows stay in the table with an empty <em>Stack</em>, so <em>Draw</em> leaves them out, and <em>Undo</em> takes it back. Greyed out for the only plot.</li>
 <li><strong>Set as time window</strong> — copies the plot's visible range into the query time range (switching to the <em>Time Range</em> tab, or keeping relative seconds in pulse mode), so the next <em>Draw</em> fetches exactly what you zoomed into.</li>
 </ul>
 <h4>Legend</h4>
