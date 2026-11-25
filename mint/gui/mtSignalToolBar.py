@@ -7,6 +7,7 @@
 from PySide6.QtCore import QMargins
 from PySide6.QtGui import QAction
 
+from iplotlib.qt.utils.icon_loader import create_icon as canvas_icon
 from mint.tools.icon_loader import create_icon
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QToolBar, QWidget
 
@@ -19,9 +20,10 @@ class MTSignalsToolBar(QWidget):
         self.setLayout(QHBoxLayout())
         self.layout().setContentsMargins(QMargins())
 
-        self.openAction = QAction(create_icon('open_file'), "&Open Signal Sets")
-        self.appendAction = QAction(create_icon('append_file'), "&Append Signal Sets")
-        self.saveAction = QAction(create_icon('save_as'), "&Save Signal Sets")
+        # The canvas tool bar's own open and save, so the File menu and both tool bars look alike.
+        self.openAction = QAction(canvas_icon('open_file', 'svg'), "&Open Signal Sets")
+        self.appendAction = QAction(create_icon('append_file', 'svg'), "&Append Signal Sets")
+        self.saveAction = QAction(canvas_icon('save_as', 'svg'), "&Save Signal Sets")
         self.configureColsBtn = QPushButton("Hide/Show &Columns")
         self.searchVarsBtn = QPushButton("&Search Vars")
         self.loadModules = QPushButton("&Load new module")

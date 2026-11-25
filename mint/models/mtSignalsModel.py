@@ -17,11 +17,12 @@ from PySide6.QtGui import QBrush, QColor
 
 from iplotProcessing.common import InvalidExpression
 from iplotlib.core import SignalXY, SignalContour
-from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, ParserHelper
+from iplotlib.interface.iplotSignalAdapter import IplotSignalAdapter, Result, ParserHelper, Stage
 from iplotProcessing.tools import Parser
 
 from mint.gui.mtErrorCatalog import ErrorCatalog
 from mint.models.utils import mtBlueprintParser as mtBP
+from mint.models.utils.mtExpressionCheck import call_problem, why_failed, why_rejected, without_values
 from mint.tools.table_parser import get_value, str_to_arr
 
 from iplotDataAccess.appDataAccess import AppDataAccess
@@ -57,6 +58,19 @@ MAX_SPAN = 10
 
 # The time columns as a row's Status names them.
 TIME_NAMES = {'StartTime': 'start time', 'EndTime': 'end time'}
+
+# The x, y and z expressions that read a signal as it is.
+DEFAULT_EXPRESSIONS = {'x': IplotSignalAdapter.x_expr, 'y': IplotSignalAdapter.y_expr, 'z': IplotSignalAdapter.z_expr}
+
+
+def _said(check: typing.Callable[..., str], *args) -> str:
+    """What a check of an expression says; '' if the check itself fails, and the expression is then judged as it was
+    before there was one."""
+    try:
+        return check(*args)
+    except Exception:
+        logger.warning("Could not tell what is wrong with an expression of the table", exc_info=True)
+        return ""
 
 
 class MTSignalsModel(QAbstractItemModel):
@@ -103,10 +117,11 @@ class MTSignalsModel(QAbstractItemModel):
         return QModelIndex()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.index.size
+        # A table: its cells have no children of their own. Find & Replace asks with None.
+        return 0 if parent is not None and parent.isValid() else self._table.index.size
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
-        return self._table.columns.size
+        return 0 if parent is not None and parent.isValid() else self._table.columns.size
 
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
@@ -165,9 +180,9 @@ class MTSignalsModel(QAbstractItemModel):
                 'anchor': entry.get('manual_anchor'),
             }
         result, _, reason = status_msg.partition('|')
-        if result == Result.INVALID and reason:
+        if result in (Result.INVALID, Stage.PROC) and reason:
             return {'title': 'Row not drawn', 'explanation': f"{reason}. Fix it and Draw again.",
-                    'anchor': 'cat-validation'}
+                    'anchor': 'cat-validation' if result == Result.INVALID else 'cat-processing'}
         return {
             'title': 'Error',
             'explanation': status_msg,
@@ -243,6 +258,7 @@ class MTSignalsModel(QAbstractItemModel):
                     Qt.ItemFlag.ItemIsDragEnabled
             else:
                 return Qt.ItemFlag.ItemIsEnabled
+        return Qt.ItemFlag.NoItemFlags
 
     def mimeTypes(self) -> typing.List[str]:
         return ['text/plain']
@@ -255,7 +271,10 @@ class MTSignalsModel(QAbstractItemModel):
         return mime
 
     def insertRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginInsertRows(parent, row, row + count)
+        # Qt's last row is inclusive; one more, or a layout change while the rows go in, can leave views behind.
+        # A layout change follows once they are in, not while they go in: what waits for a complete table (the
+        # data access workers) listens to it.
+        self.beginInsertRows(parent, row, row + count - 1)
 
         for new_row in range(row, row + count):
             # Create empty row
@@ -276,24 +295,27 @@ class MTSignalsModel(QAbstractItemModel):
             self._table_fails = pd.concat(
                 [self._table_fails.iloc[:new_row], empty_row_fails, self._table_fails.iloc[new_row:]]).reset_index(
                 drop=True)
-        self.layoutChanged.emit()
 
         self.endInsertRows()
+        self.layoutAboutToBeChanged.emit()
+        self.layoutChanged.emit()
 
         return super().insertRows(row, count, parent=parent)
 
     def removeRows(self, row: int, count: int, parent: QModelIndex = QModelIndex()) -> bool:
-        self.beginRemoveRows(parent, row, row + count)
+        self.beginRemoveRows(parent, row, row + count - 1)
 
         try:
             self._table = self._table.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
             self._table_fails = self._table_fails.drop(list(range(row, row + count)), axis=0).reset_index(drop=True)
-            self.layoutChanged.emit()
             success = True
         except KeyError:
             success = False
 
         self.endRemoveRows()
+        if success:
+            self.layoutAboutToBeChanged.emit()
+            self.layoutChanged.emit()
 
         return success
 
@@ -486,6 +508,7 @@ class MTSignalsModel(QAbstractItemModel):
 
                 self.setData(model_idx, Result.BUSY, Qt.ItemDataRole.DisplayRole)
                 signal.get_data()
+                self._fail_without_values(signal)
 
                 # Check Signal status
                 if signal.status_info.result == 'Fail':
@@ -497,7 +520,7 @@ class MTSignalsModel(QAbstractItemModel):
                     column = getattr(signal.status_info, 'expression', '') or 'Variable'
                     self._table_fails.loc[index, column] = 1
 
-            self.setData(model_idx, str(signal.status_info), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
+            self.setData(model_idx, self._status_of(signal), Qt.ItemDataRole.DisplayRole, signal.isDownsampled)
 
             # Update Output Datatype column after data is fetched
             output_dtype_col = mtBP.get_column_name(self._blueprint, 'OutputDatatype')
@@ -505,6 +528,28 @@ class MTSignalsModel(QAbstractItemModel):
                 dtype_idx = self.createIndex(row_idx, self._table.columns.get_loc(output_dtype_col))
                 output_dtype_str = self._get_signal_output_datatype(signal)
                 self.setData(dtype_idx, output_dtype_str, Qt.ItemDataRole.DisplayRole)
+
+    @staticmethod
+    def _fail_without_values(signal: IplotSignalAdapter):
+        """A signal read but computed with nothing to draw, as an expression gave a tuple instead of an array, fails as
+        other expressions that fail: its row says which and what it gave."""
+        try:
+            status = signal.status_info
+            if status.result != Result.SUCCESS or status.num_points or not len(signal.data_store[0]):
+                return
+            column, gives = without_values(signal, DEFAULT_EXPRESSIONS)
+            if column:
+                signal.set_proc_fail(f"the {column} expression failed: {gives}", expression=column)
+        except Exception:
+            logger.debug("Could not tell why a signal has nothing to draw", exc_info=True)
+
+    @staticmethod
+    def _status_of(signal: IplotSignalAdapter) -> str:
+        """The Status of a row once read; for a row whose computing failed, which expression and what it said."""
+        status = signal.status_info
+        if status.result == Result.FAIL and status.stage == Stage.PROC:
+            return f"{Stage.PROC}|{why_failed(getattr(status, 'expression', ''), status.msg)}"
+        return str(status)
 
     def _get_signal_output_datatype(self, signal: IplotSignalAdapter) -> str:
         """Get a string representation of the signal's output data type."""
@@ -530,6 +575,18 @@ class MTSignalsModel(QAbstractItemModel):
         """The Status of a row that can't be drawn: why."""
         reason = self._row_reasons.get(row_idx + 1)
         return f"{Result.INVALID}|{reason}" if reason else Result.READY
+
+    def _expression_problem(self, parser: Parser, expression: str) -> typing.Optional[str]:
+        """None for an x, y or z expression that can be evaluated; else why it can't, '' when that can't be said. What
+        would fail for certain once computed, as a function given arguments it doesn't take, is said before."""
+        known = parser.supported_members
+        try:
+            parser.set_expression(expression)
+        except InvalidExpression as e:
+            return _said(why_rejected, expression, str(e), known, self._table['Alias'])
+        if not parser.is_valid:
+            return _said(why_rejected, expression, "", known, self._table['Alias'])
+        return _said(call_problem, expression, known) or None
 
     def create_signals(self, row_idx: int, stack) -> typing.Iterator[Waypoint]:
         signal_params = dict()
@@ -894,16 +951,13 @@ class MTSignalsModel(QAbstractItemModel):
 
                         # X - Y - Z
                         elif column_name == 'x' or column_name == 'y' or column_name == 'z':
-                            try:
-                                p.set_expression(value)
-                                if p.is_valid:
-                                    fls[column_name] = 0
-                                else:
-                                    fls[column_name] = 1
-                                    self._invalid(table_row, f"The {column_name} expression can't be evaluated")
-                            except InvalidExpression:
+                            problem = self._expression_problem(p, value)
+                            if problem is None:
+                                fls[column_name] = 0
+                            else:
                                 fls[column_name] = 1
-                                self._invalid(table_row, f"The {column_name} expression can't be evaluated")
+                                self._invalid(table_row, f"The {column_name} expression can't be evaluated" +
+                                              (f": {problem}" if problem else ""))
 
                         # Plot Type
                         elif column_name == 'Plot type':
