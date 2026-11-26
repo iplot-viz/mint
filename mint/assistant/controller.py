@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from PySide6.QtCore import QObject, QThreadPool, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QThreadPool, Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QToolBar
 
@@ -183,7 +183,35 @@ def install(window, splitter, signals_toolbar, view_menu):
             toolbar.addSeparator()
             toolbar.addWidget(button)
         controller.toolbar_button = button
+
+    def draw_icon(colour):
+        icon = assistant_icon(colour)
+        floating.setWindowIcon(icon)
+        action.setIcon(icon)
+        if controller.toolbar_button is not None:
+            controller.toolbar_button.setIcon(icon)
+
+    # A theme chosen in View > Appearance changes the palette: the icon is drawn again in its text colour.
+    controller.icon_watch = _TextColourWatch(window, draw_icon)
     return controller
+
+
+class _TextColourWatch(QObject):
+    """Calls back with the text colour of a widget whenever a new palette changes it."""
+
+    def __init__(self, widget, changed):
+        super().__init__(widget)
+        self._colour = widget.palette().windowText().color()
+        self._changed = changed
+        widget.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.PaletteChange:
+            colour = watched.palette().windowText().color()
+            if colour != self._colour:
+                self._colour = colour
+                self._changed(colour)
+        return False
 
 
 class AssistantController(QObject):
@@ -211,6 +239,7 @@ class AssistantController(QObject):
         self._pending_card = None
         self.toggle_action = None
         self.toolbar_button = None
+        self.icon_watch = None
         self.splitter = None
         self.floating = None
         self.engine = None

@@ -117,7 +117,9 @@ def run_app(q_app: QApplication, args=None):
         # The workers start once the table holds a signal of their data sources (see MTMainWindow).
         AccessHelper.pool = access_pool(workers)
         q_app.aboutToQuit.connect(AccessHelper.pool.shutdown)
-    logger.info(f"Data access worker threads: {workers}")
+        logger.info(f"Data is read in {workers} background thread{'s' if workers > 1 else ''}")
+    elif access_pool is not None:
+        logger.info("Data is read in the GUI thread")
 
     data_sources = AccessHelper.da.get_connected_data_source_names()
 
