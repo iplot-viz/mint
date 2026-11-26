@@ -39,12 +39,12 @@ def data_access_workers() -> int:
         workers = int(value)
     except ValueError:
         logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is not a number, "
-                       f"{DEFAULT_DATA_ACCESS_WORKERS} worker threads read the data")
+                       f"{DEFAULT_DATA_ACCESS_WORKERS} is used instead")
         return DEFAULT_DATA_ACCESS_WORKERS
     if not 0 <= workers <= MAX_DATA_ACCESS_WORKERS:
         workers = min(max(workers, 0), MAX_DATA_ACCESS_WORKERS)
         logger.warning(f"MINT_DATA_ACCESS_WORKERS={value!r} is out of 0-{MAX_DATA_ACCESS_WORKERS}, "
-                       f"{workers} worker threads read the data")
+                       f"{workers} is used instead")
     return workers
 
 
