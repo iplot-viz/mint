@@ -13,6 +13,7 @@ import os
 import re
 import tempfile
 import unittest
+from unittest import mock
 
 from PySide6.QtCore import QSettings, QStandardPaths, Qt
 from PySide6.QtGui import QColor, QPalette
@@ -282,6 +283,48 @@ class DrawButtonsIconTest(SettingsSandbox):
         QApplication.processEvents()
         for button in buttons:
             self.assertTrue(any(green(c) for c in self._colours(button)), "its picture again")
+
+
+class ToolBarIconsThemeTest(SettingsSandbox):
+    """The icons of the tool bar of the table and of the assistant follow a theme chosen with MINT open."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        AppDataAccess.initialize(write_csv_datasource_config())
+        AccessHelper.da = AppDataAccess.get_data_access()
+
+    @staticmethod
+    def _lightness(icon):
+        image = icon.pixmap(18, 18).toImage()
+        return [image.pixelColor(x, y).lightness() for x in range(image.width()) for y in range(image.height())
+                if image.pixelColor(x, y).alpha() > 200]
+
+    def test_the_icons_are_drawn_again_in_the_colours_of_the_new_theme(self):
+        env = {"MINT_ASSISTANT": "1", "MINT_ASSISTANT_MODEL": os.path.join(tempfile.gettempdir(), "missing.gguf")}
+        with mock.patch.dict(os.environ, env):
+            win = MTMainWindow(Canvas(), AccessHelper.da, {"range": {"mode": MTGenericAccessMode.TIME_RANGE,
+                                                                     "value": ["", ""]}},
+                               app_version='test', data_sources=AccessHelper.da.get_connected_data_source_names(),
+                               blueprint=mtBlueprintParser.DEFAULT_BLUEPRINT, impl='matplotlib')
+        self.addCleanup(win.close)
+        bar = win.sigCfgWidget.tool_bar()
+        icons = {'Open': bar.openAction.icon, 'Append': bar.appendAction.icon, 'Save': bar.saveAction.icon}
+        if win.assistant is not None:
+            icons.update({'AI Assistant button': win.assistant.toolbar_button.icon,
+                          'AI Assistant in the View menu': win.assistant.toggle_action.icon,
+                          'AI Assistant window': win.assistant.floating.windowIcon})
+
+        for name, icon in icons.items():
+            self.assertLess(max(self._lightness(icon())), 128, f"{name}: dark on the light buttons")
+        apply_theme('Dark')
+        QApplication.processEvents()
+        for name, icon in icons.items():
+            self.assertGreater(min(self._lightness(icon())), 150, f"{name}: light on the dark buttons")
+        apply_theme(THEME_NONE)
+        QApplication.processEvents()
+        for name, icon in icons.items():
+            self.assertLess(max(self._lightness(icon())), 128, f"{name}: dark again")
 
 
 class UiScaleTest(SettingsSandbox):
